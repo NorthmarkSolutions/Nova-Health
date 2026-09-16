@@ -148,3 +148,17 @@ This document provides step-by-step operating instructions for hospital clinical
 1. Switch to the **Cashier Day-End Handover** tab.
 2. Review drawer reconciliations across Physical Cash, Card POS, and UPI.
 3. Click **Print Shift Handover Summary** and **Close Shift & Lock Drawer**.
+
+---
+
+## 7. Hospital Administrator & Enterprise Setup
+**URL**: [http://localhost:5173/admin](http://localhost:5173/admin)
+
+### A. Hospital Profile Master Configuration (7 Tabs)
+1. **General Information**: Maintain hospital legal identity, code, classification (Super Specialty, Private, Teaching Hospital), and capacity metrics (Beds, Departments, Doctors, OT Rooms, ICU Beds). Supports Save, Update, Archive, and Audit Trail history.
+2. **Contact Details**: Configure direct hotlines for Reception, Emergency, Ambulance, Billing, HR, and IT Support, with one-click Primary line selection and departmental email routing.
+3. **Address & Location**: Manage street address, GIS latitude/longitude, direct Google Maps navigation link, and emergency coverage radius (e.g., 15 KM) for rapid ambulance dispatch.
+4. **Branding & Documents**: Upload and manage Hospital Logo, Official Seal, Hospital Stamp, and Digital Signature keys. Configure and preview document templates (Prescription, Invoice, Lab Report, Discharge Summary) with A4, Thermal, and Letterhead print formats.
+5. **Regulatory & Licenses**: Track mandatory compliance licenses (NABH, JCI, Fire Safety, Biomedical Waste, Pollution Board CTO, Pharmacy License) with document PDF attachments and smart expiry alerts (90, 60, 30 days, Expired).
+6. **Operational Settings**: Configure timezone, working shifts, fiscal year, UHID patient prefix (`PAT-000001`), appointment slot durations (15, 20, 30 min), walk-in policies, IPD deposit requirements, and GST billing rules.
+7. **Hospital Documents (Central Repository)**: Centralized legal archive for Hospital Registration, NABH Dossiers, Fire NOCs, Insurance/TPA Agreements, Vendor Contracts, SOPs, and Policies with category filtering, upload modals, download actions, and archiving.
