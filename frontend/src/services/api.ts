@@ -1,7 +1,18 @@
 import axios from 'axios';
 
+const rawBaseURL =
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.PROD
+    ? 'https://harsh410.pythonanywhere.com/api/v1'
+    : 'http://localhost:8000/api/v1');
+
+const cleanBaseURL = rawBaseURL.replace(/\/+$/, '');
+const baseURL = cleanBaseURL.endsWith('/api/v1')
+  ? cleanBaseURL
+  : `${cleanBaseURL}/api/v1`;
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 'https://your-username.pythonanywhere.com/api/v1' : 'http://localhost:8000/api/v1'),
+  baseURL,
   headers: {
     'Content-Type': 'application/json',
   },

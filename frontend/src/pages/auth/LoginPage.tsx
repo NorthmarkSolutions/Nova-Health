@@ -145,7 +145,7 @@ export const LoginPage: React.FC = () => {
 
     try {
       // Attempt backend authentication
-      const res = await api.post('/auth/login', {
+      const res = await api.post('/auth/login/', {
         emailOrUsername: dept.email,
         password: 'Password123!',
       });
@@ -177,7 +177,7 @@ export const LoginPage: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const res = await api.post('/auth/login', {
+      const res = await api.post('/auth/login/', {
         emailOrUsername,
         password,
       });
