@@ -613,6 +613,7 @@ export const RegisterDepartmentWizardModal: React.FC<Props> = ({
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '0.5rem' }}>
                           {floor.wards.map((ward) => {
                             const isChecked = selectedWardIds.includes(ward.id);
+                            const isOccupiedByOther = ward.departmentName && ward.departmentName !== name;
                             return (
                               <label
                                 key={ward.id}
@@ -621,8 +622,18 @@ export const RegisterDepartmentWizardModal: React.FC<Props> = ({
                                   alignItems: 'flex-start',
                                   gap: '0.625rem',
                                   padding: '0.625rem 0.75rem',
-                                  backgroundColor: isChecked ? 'rgba(37, 99, 235, 0.08)' : 'var(--bg-subtle, #f9fafb)',
-                                  border: `1px solid ${isChecked ? 'var(--primary)' : 'var(--border-color)'}`,
+                                  backgroundColor: isChecked
+                                    ? 'rgba(37, 99, 235, 0.08)'
+                                    : isOccupiedByOther
+                                    ? 'rgba(234, 88, 12, 0.04)'
+                                    : 'var(--bg-subtle, #f9fafb)',
+                                  border: `1px solid ${
+                                    isChecked
+                                      ? 'var(--primary)'
+                                      : isOccupiedByOther
+                                      ? '#fdba74'
+                                      : 'var(--border-color)'
+                                  }`,
                                   borderRadius: '8px',
                                   cursor: 'pointer',
                                 }}
@@ -639,9 +650,38 @@ export const RegisterDepartmentWizardModal: React.FC<Props> = ({
                                   }}
                                   style={{ marginTop: '2px' }}
                                 />
-                                <div>
-                                  <div style={{ fontSize: '0.8125rem', fontWeight: 600 }}>{ward.name}</div>
-                                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+                                    <span style={{ fontSize: '0.8125rem', fontWeight: 600 }}>{ward.name}</span>
+                                    {ward.departmentName ? (
+                                      <span
+                                        style={{
+                                          fontSize: '0.6875rem',
+                                          padding: '0.15rem 0.4rem',
+                                          borderRadius: '4px',
+                                          backgroundColor: '#ffedd5',
+                                          color: '#c2410c',
+                                          fontWeight: 600,
+                                        }}
+                                      >
+                                        In Use: {ward.departmentName}
+                                      </span>
+                                    ) : (
+                                      <span
+                                        style={{
+                                          fontSize: '0.6875rem',
+                                          padding: '0.15rem 0.4rem',
+                                          borderRadius: '4px',
+                                          backgroundColor: '#dcfce7',
+                                          color: '#15803d',
+                                          fontWeight: 600,
+                                        }}
+                                      >
+                                        🟢 Available
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
                                     {ward.wardType} • <strong>{ward.beds.length} Beds</strong> • Sister {ward.supervisorNurse}
                                   </div>
                                 </div>
@@ -661,6 +701,7 @@ export const RegisterDepartmentWizardModal: React.FC<Props> = ({
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.5rem' }}>
                           {floor.rooms.map((room) => {
                             const isChecked = selectedRoomIds.includes(room.id);
+                            const isOccupiedByOther = room.departmentName && room.departmentName !== name;
                             return (
                               <label
                                 key={room.id}
@@ -669,8 +710,18 @@ export const RegisterDepartmentWizardModal: React.FC<Props> = ({
                                   alignItems: 'flex-start',
                                   gap: '0.625rem',
                                   padding: '0.5rem 0.75rem',
-                                  backgroundColor: isChecked ? 'rgba(14, 165, 233, 0.08)' : 'var(--bg-subtle, #f9fafb)',
-                                  border: `1px solid ${isChecked ? '#0ea5e9' : 'var(--border-color)'}`,
+                                  backgroundColor: isChecked
+                                    ? 'rgba(14, 165, 233, 0.08)'
+                                    : isOccupiedByOther
+                                    ? 'rgba(234, 88, 12, 0.04)'
+                                    : 'var(--bg-subtle, #f9fafb)',
+                                  border: `1px solid ${
+                                    isChecked
+                                      ? '#0ea5e9'
+                                      : isOccupiedByOther
+                                      ? '#fdba74'
+                                      : 'var(--border-color)'
+                                  }`,
                                   borderRadius: '8px',
                                   cursor: 'pointer',
                                 }}
@@ -687,9 +738,38 @@ export const RegisterDepartmentWizardModal: React.FC<Props> = ({
                                   }}
                                   style={{ marginTop: '2px' }}
                                 />
-                                <div>
-                                  <div style={{ fontSize: '0.8125rem', fontWeight: 600 }}>{room.roomNumber}</div>
-                                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+                                    <span style={{ fontSize: '0.8125rem', fontWeight: 600 }}>{room.roomNumber}</span>
+                                    {room.departmentName ? (
+                                      <span
+                                        style={{
+                                          fontSize: '0.6875rem',
+                                          padding: '0.15rem 0.35rem',
+                                          borderRadius: '4px',
+                                          backgroundColor: '#ffedd5',
+                                          color: '#c2410c',
+                                          fontWeight: 600,
+                                        }}
+                                      >
+                                        In Use
+                                      </span>
+                                    ) : (
+                                      <span
+                                        style={{
+                                          fontSize: '0.6875rem',
+                                          padding: '0.15rem 0.35rem',
+                                          borderRadius: '4px',
+                                          backgroundColor: '#dcfce7',
+                                          color: '#15803d',
+                                          fontWeight: 600,
+                                        }}
+                                      >
+                                        🟢 Free
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
                                     {room.roomType} (Cap: {room.capacity})
                                   </div>
                                 </div>

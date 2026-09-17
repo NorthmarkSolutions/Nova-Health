@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   LayoutGrid,
   Stethoscope,
@@ -17,9 +17,17 @@ import {
   Layers,
   FileText,
   SlidersHorizontal,
+  Sparkles,
+  Building2,
+  AlertTriangle,
+  CheckCircle2,
+  BedDouble,
 } from 'lucide-react';
 import { DepartmentProfileView, DepartmentProfileData } from './DepartmentProfileView';
 import { RegisterDepartmentWizardModal } from './RegisterDepartmentWizardModal';
+import { OnboardingStarterPacksModal } from './OnboardingStarterPacksModal';
+import { CampusSpaceAllocationModal } from './CampusSpaceAllocationModal';
+import { getCampusBuildings } from './CampusInfrastructureSection';
 
 export const DepartmentsSection: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState<
@@ -29,8 +37,17 @@ export const DepartmentsSection: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeViewDept, setActiveViewDept] = useState<DepartmentProfileData | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isStarterPacksOpen, setIsStarterPacksOpen] = useState(false);
+  const [isCampusMatrixOpen, setIsCampusMatrixOpen] = useState(false);
 
-  const [departments, setDepartments] = useState<DepartmentProfileData[]>([
+  const [departments, setDepartments] = useState<DepartmentProfileData[]>(() => {
+    try {
+      const saved = localStorage.getItem('north_hospital_departments_master');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error(e);
+    }
+    return [
     // Clinical
     {
       id: '1',
@@ -667,21 +684,33 @@ export const DepartmentsSection: React.FC = () => {
       wardsCount: 0,
       bedsCount: 0,
     },
-  ]);
+    ];
+  });
+
+  const saveDepartments = (depts: DepartmentProfileData[]) => {
+    setDepartments(depts);
+    try {
+      localStorage.setItem('north_hospital_departments_master', JSON.stringify(depts));
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const handleOpenAdd = () => {
     setIsAddModalOpen(true);
   };
 
   const handleSaveAdd = (newDept: DepartmentProfileData) => {
-    setDepartments([newDept, ...departments]);
+    const updated = [newDept, ...departments];
+    saveDepartments(updated);
     setIsAddModalOpen(false);
     setActiveViewDept(newDept);
   };
 
   const handleDelete = (id: string) => {
     if (window.confirm('Are you sure you want to remove this department?')) {
-      setDepartments(departments.filter((d) => d.id !== id));
+      const updated = departments.filter((d) => d.id !== id);
+      saveDepartments(updated);
       if (activeViewDept?.id === id) {
         setActiveViewDept(null);
       }
@@ -689,9 +718,74 @@ export const DepartmentsSection: React.FC = () => {
   };
 
   const handleUpdateDept = (updated: DepartmentProfileData) => {
-    setDepartments(departments.map((d) => (d.id === updated.id ? updated : d)));
+    const nextList = departments.map((d) => (d.id === updated.id ? updated : d));
+    saveDepartments(nextList);
     setActiveViewDept(updated);
   };
+
+  const handleDeployPack = (newDepts: DepartmentProfileData[], mode: 'replace' | 'append') => {
+    let nextList: DepartmentProfileData[];
+    if (mode === 'replace') {
+      nextList = newDepts;
+    } else {
+      const existingCodes = new Set(departments.map((d) => d.code));
+      nextList = [...departments, ...newDepts.filter((nd) => !existingCodes.has(nd.code))];
+    }
+    saveDepartments(nextList);
+  };
+
+  const campusBuildings = useMemo(
+    () => getCampusBuildings(),
+    [isAddModalOpen, isCampusMatrixOpen, isStarterPacksOpen, departments]
+  );
+
+  const campusStats = useMemo(() => {
+    let totalWards = 0;
+    let assignedWards = 0;
+    let totalRooms = 0;
+    let assignedRooms = 0;
+    let totalBeds = 0;
+    let assignedBeds = 0;
+
+    campusBuildings.forEach((b) => {
+      b.floors.forEach((f) => {
+        f.wards.forEach((w) => {
+          totalWards++;
+          totalBeds += w.beds.length;
+          if (w.departmentName) {
+            assignedWards++;
+            assignedBeds += w.beds.length;
+          }
+        });
+        f.rooms.forEach((r) => {
+          totalRooms++;
+          if (r.departmentName) {
+            assignedRooms++;
+          }
+        });
+      });
+    });
+
+    const unassignedWards = totalWards - assignedWards;
+    const unassignedBeds = totalBeds - assignedBeds;
+    const unassignedRooms = totalRooms - assignedRooms;
+    const allocationPercent = totalBeds > 0 ? Math.round((assignedBeds / totalBeds) * 100) : 0;
+
+    return {
+      totalBuildings: campusBuildings.length,
+      totalWards,
+      assignedWards,
+      unassignedWards,
+      totalRooms,
+      assignedRooms,
+      unassignedRooms,
+      totalBeds,
+      assignedBeds,
+      unassignedBeds,
+      allocationPercent,
+    };
+  }, [campusBuildings]);
+
 
   // If a department is selected for deep profile view/configuration, render DepartmentProfileView!
   if (activeViewDept) {
@@ -708,6 +802,94 @@ export const DepartmentsSection: React.FC = () => {
 
   return (
     <div>
+      {/* Executive Campus Space & Onboarding Allocation Banner */}
+      <div
+        style={{
+          background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.05) 0%, rgba(249, 115, 22, 0.05) 100%)',
+          border: '1px solid var(--border-color)',
+          borderRadius: '12px',
+          padding: '1.25rem 1.5rem',
+          marginBottom: '1.5rem',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '1.25rem',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem', maxWidth: '650px' }}>
+          <span
+            style={{
+              padding: '0.625rem',
+              borderRadius: '10px',
+              backgroundColor: campusStats.unassignedBeds > 0 ? 'rgba(234, 88, 12, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+              color: campusStats.unassignedBeds > 0 ? '#ea580c' : '#10b981',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginTop: '2px',
+            }}
+          >
+            {campusStats.unassignedBeds > 0 ? <AlertTriangle size={24} /> : <CheckCircle2 size={24} />}
+          </span>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', flexWrap: 'wrap' }}>
+              <strong style={{ fontSize: '1rem', fontWeight: 700 }}>
+                Campus Physical Footprint Allocation
+              </strong>
+              <span
+                style={{
+                  fontSize: '0.75rem',
+                  padding: '0.15rem 0.5rem',
+                  borderRadius: '12px',
+                  backgroundColor: campusStats.unassignedBeds > 0 ? '#ffedd5' : '#dcfce7',
+                  color: campusStats.unassignedBeds > 0 ? '#c2410c' : '#15803d',
+                  fontWeight: 600,
+                }}
+              >
+                {campusStats.assignedBeds} / {campusStats.totalBeds} Beds Governed ({campusStats.allocationPercent}%)
+              </span>
+            </div>
+            <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: '0.375rem 0 0 0', lineHeight: 1.4 }}>
+              {campusStats.unassignedBeds > 0 ? (
+                <>
+                  Campus Infrastructure has <strong>{campusStats.unassignedBeds} Beds</strong> across {campusStats.unassignedWards} Wards and {campusStats.unassignedRooms} Consultation Chambers that are currently <strong>unassigned</strong> to any department.
+                </>
+              ) : (
+                <>All {campusStats.totalBeds} hospital beds and clinical wards are fully assigned and governed by active departments.</>
+              )}
+            </p>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setIsCampusMatrixOpen(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8125rem' }}
+          >
+            <Building2 size={16} /> Campus Space Matrix
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setIsStarterPacksOpen(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              fontSize: '0.8125rem',
+              borderColor: '#ea580c',
+              color: '#ea580c',
+              backgroundColor: 'rgba(234, 88, 12, 0.05)',
+            }}
+          >
+            <Sparkles size={16} /> ⚡ Onboarding Starter Packs
+          </button>
+        </div>
+      </div>
+
       {/* Category Filter Pills */}
       <div className="subtab-bar" style={{ marginBottom: '1.25rem', overflowX: 'auto', paddingBottom: '0.25rem' }}>
         <button
@@ -757,9 +939,29 @@ export const DepartmentsSection: React.FC = () => {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        <button className="btn btn-primary" onClick={handleOpenAdd}>
-          <Plus size={16} /> + Register Department
-        </button>
+        <div style={{ display: 'flex', gap: '0.625rem', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setIsStarterPacksOpen(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', borderColor: '#ea580c', color: '#c2410c' }}
+            title="1-Click deploy archetype packs for Multi-Specialty, Maternity, or Cardiac hospitals"
+          >
+            <Sparkles size={15} /> ⚡ Starter Packs
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setIsCampusMatrixOpen(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}
+            title="View full campus allocation matrix and assign rooms/wards"
+          >
+            <Building2 size={15} /> Space Matrix
+          </button>
+          <button className="btn btn-primary" onClick={handleOpenAdd}>
+            <Plus size={16} /> + Custom Department
+          </button>
+        </div>
       </div>
 
       <div className="table-container">
@@ -874,6 +1076,22 @@ export const DepartmentsSection: React.FC = () => {
           </tbody>
         </table>
       </div>
+
+      {/* 1-Click Hospital Onboarding Archetype Starter Packs */}
+      <OnboardingStarterPacksModal
+        isOpen={isStarterPacksOpen}
+        onClose={() => setIsStarterPacksOpen(false)}
+        onDeployPack={handleDeployPack}
+        currentCount={departments.length}
+      />
+
+      {/* Campus Space Allocation Matrix Modal */}
+      <CampusSpaceAllocationModal
+        isOpen={isCampusMatrixOpen}
+        onClose={() => setIsCampusMatrixOpen(false)}
+        departments={departments}
+        onDepartmentUpdated={saveDepartments}
+      />
 
       {/* 5-Step Hospital Admin Provisioning Wizard */}
       <RegisterDepartmentWizardModal
