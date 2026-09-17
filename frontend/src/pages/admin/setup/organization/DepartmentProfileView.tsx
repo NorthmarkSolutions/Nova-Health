@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   ArrowLeft,
   Building2,
@@ -31,7 +31,22 @@ import {
   DollarSign,
   Activity,
   Sparkles,
+  ArrowRightLeft,
+  ChevronRight,
+  ShieldCheck,
+  Zap,
+  Info,
 } from 'lucide-react';
+import {
+  BuildingNode,
+  FloorNode,
+  WardNode,
+  RoomNode,
+  BedNode,
+  getCampusBuildings,
+  saveCampusBuildings,
+  syncDepartmentToCampus,
+} from './CampusInfrastructureSection';
 
 export interface DepartmentProfileData {
   id: string;
@@ -71,13 +86,32 @@ export interface DepartmentProfileData {
   receptionistsCount?: number;
   onCallRoster?: string;
 
-  // 6. Infrastructure
+  // 6. Infrastructure & Physical Campus Allocation
   buildingAssigned?: string;
   floorAssigned?: string;
   roomsCount?: number;
   wardsCount?: number;
   bedsCount?: number;
   hasDedicatedWaitingArea?: boolean;
+
+  assignedBuildingId?: string;
+  assignedFloorIds?: string[];
+  assignedWardIds?: string[];
+  assignedRoomIds?: string[];
+  allocatedWards?: Array<{
+    wardId: string;
+    wardName: string;
+    wardType: string;
+    floorNumber: string;
+    bedCount: number;
+    supervisorNurse?: string;
+  }>;
+  allocatedRooms?: Array<{
+    roomId: string;
+    roomNumber: string;
+    roomType: string;
+    floorNumber: string;
+  }>;
 
   // 7. Documents & SOPs
   documents?: Array<{
@@ -126,6 +160,7 @@ export const DepartmentProfileView: React.FC<Props> = ({
   >('basic');
 
   // Initialize editable form with fallback defaults
+  const [campusBuildings, setCampusBuildings] = useState<BuildingNode[]>(() => getCampusBuildings());
   const [profile, setProfile] = useState<DepartmentProfileData>({
     ...department,
     shortName: department.shortName || department.code.replace('DEPT-', ''),
@@ -156,13 +191,17 @@ export const DepartmentProfileView: React.FC<Props> = ({
     receptionistsCount: department.receptionistsCount || 2,
     onCallRoster: department.onCallRoster || 'Duty Registrar (Ext: 104) • Senior Consultant on SMS Page',
 
-    // Infrastructure
-    buildingAssigned: department.buildingAssigned || (department.category === 'clinical' ? 'Main Inpatient Tower' : 'Diagnostic & Pavilion'),
+    // Infrastructure & Campus links
+    buildingAssigned: department.buildingAssigned || (department.category === 'clinical' ? 'North Central Hospital Tower' : 'Diagnostic & Oncology Pavilion'),
     floorAssigned: department.floorAssigned || 'Floor 1 - Wing A',
     roomsCount: department.roomsCount || 6,
     wardsCount: department.wardsCount || (['DEPT-IPD', 'DEPT-ICU', 'DEPT-NICU'].includes(department.code) ? 2 : 0),
     bedsCount: department.bedsCount || (['DEPT-IPD', 'DEPT-ICU', 'DEPT-NICU'].includes(department.code) ? 36 : 0),
     hasDedicatedWaitingArea: department.hasDedicatedWaitingArea !== undefined ? department.hasDedicatedWaitingArea : true,
+    assignedBuildingId: department.assignedBuildingId || 'bld-main-1',
+    assignedFloorIds: department.assignedFloorIds || [],
+    assignedWardIds: department.assignedWardIds || [],
+    assignedRoomIds: department.assignedRoomIds || [],
 
     // Documents
     documents: department.documents || [
@@ -186,14 +225,130 @@ export const DepartmentProfileView: React.FC<Props> = ({
   const [mergeConfirmationText, setMergeConfirmationText] = useState('');
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
 
+  // Campus Space Reallocation Modal
+  const [isReallocateModalOpen, setIsReallocateModalOpen] = useState(false);
+  const [tempBuildingId, setTempBuildingId] = useState('bld-main-1');
+  const [tempWardIds, setTempWardIds] = useState<string[]>([]);
+  const [tempRoomIds, setTempRoomIds] = useState<string[]>([]);
+
+  // Calculate live departmental assets from the real campus master
+  const { departmentalWards, departmentalRooms, liveBedStats } = useMemo(() => {
+    const wardsList: Array<{ ward: WardNode; floor: FloorNode; building: BuildingNode }> = [];
+    const roomsList: Array<{ room: RoomNode; floor: FloorNode; building: BuildingNode }> = [];
+
+    campusBuildings.forEach((b) => {
+      b.floors.forEach((f) => {
+        f.wards.forEach((w) => {
+          const isAssigned =
+            (profile.assignedWardIds && profile.assignedWardIds.includes(w.id)) ||
+            (w.departmentName && (w.departmentName === profile.name || w.departmentName.toLowerCase() === profile.name.toLowerCase()));
+          if (isAssigned) {
+            wardsList.push({ ward: w, floor: f, building: b });
+          }
+        });
+        f.rooms.forEach((r) => {
+          const isAssigned =
+            (profile.assignedRoomIds && profile.assignedRoomIds.includes(r.id)) ||
+            (r.departmentName && (r.departmentName === profile.name || r.departmentName.toLowerCase() === profile.name.toLowerCase()));
+          if (isAssigned) {
+            roomsList.push({ room: r, floor: f, building: b });
+          }
+        });
+      });
+    });
+
+    const totalBeds = wardsList.reduce((sum, item) => sum + item.ward.beds.length, 0);
+    const occupiedBeds = wardsList.reduce(
+      (sum, item) => sum + item.ward.beds.filter((b) => b.status === 'OCCUPIED').length,
+      0
+    );
+    const availableBeds = wardsList.reduce(
+      (sum, item) => sum + item.ward.beds.filter((b) => b.status === 'AVAILABLE').length,
+      0
+    );
+    const sanitizedBeds = wardsList.reduce(
+      (sum, item) => sum + item.ward.beds.filter((b) => b.cleanlinessStatus === 'SANITIZED').length,
+      0
+    );
+
+    return {
+      departmentalWards: wardsList,
+      departmentalRooms: roomsList,
+      liveBedStats: {
+        totalBeds: totalBeds > 0 ? totalBeds : (profile.bedsCount || 0),
+        occupiedBeds,
+        availableBeds: totalBeds > 0 ? availableBeds : Math.max(0, (profile.bedsCount || 0) - occupiedBeds),
+        sanitizedBeds,
+      },
+    };
+  }, [campusBuildings, profile.assignedWardIds, profile.assignedRoomIds, profile.name, profile.bedsCount]);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
   };
 
   const handleSaveAll = () => {
+    syncDepartmentToCampus(
+      profile.name,
+      profile.assignedBuildingId || 'bld-main-1',
+      profile.assignedWardIds || [],
+      profile.assignedRoomIds || []
+    );
     onSave(profile);
     showToast(`✓ Department profile for "${profile.name}" saved successfully!`);
+  };
+
+  const handleOpenReallocateModal = () => {
+    const currentBuildingId = profile.assignedBuildingId || campusBuildings[0]?.id || 'bld-main-1';
+    setTempBuildingId(currentBuildingId);
+    setTempWardIds(departmentalWards.map((item) => item.ward.id));
+    setTempRoomIds(departmentalRooms.map((item) => item.room.id));
+    setIsReallocateModalOpen(true);
+  };
+
+  const handleSaveReallocation = () => {
+    const targetBuilding = campusBuildings.find((b) => b.id === tempBuildingId) || campusBuildings[0];
+    let totalBeds = 0;
+    let totalWards = 0;
+    let totalRooms = 0;
+    const floorNumbers = new Set<string>();
+
+    targetBuilding.floors.forEach((f) => {
+      f.wards.forEach((w) => {
+        if (tempWardIds.includes(w.id)) {
+          totalWards += 1;
+          totalBeds += w.beds.length;
+          floorNumbers.add(f.floorNumber);
+        }
+      });
+      f.rooms.forEach((r) => {
+        if (tempRoomIds.includes(r.id)) {
+          totalRooms += 1;
+          floorNumbers.add(f.floorNumber);
+        }
+      });
+    });
+
+    const updated: DepartmentProfileData = {
+      ...profile,
+      assignedBuildingId: tempBuildingId,
+      buildingAssigned: targetBuilding.name,
+      floorAssigned: Array.from(floorNumbers).join(', ') || profile.floorAssigned,
+      assignedWardIds: tempWardIds,
+      assignedRoomIds: tempRoomIds,
+      wardsCount: totalWards,
+      bedsCount: totalBeds,
+      roomsCount: totalRooms,
+    };
+
+    setProfile(updated);
+    syncDepartmentToCampus(profile.name, tempBuildingId, tempWardIds, tempRoomIds);
+    setCampusBuildings(getCampusBuildings());
+    setIsReallocateModalOpen(false);
+    showToast(
+      `✓ Campus infrastructure reallocated: ${totalWards} wards (${totalBeds} beds) & ${totalRooms} rooms allocated to ${profile.name}!`
+    );
   };
 
   const handleMergeSubmit = (e: React.FormEvent) => {
@@ -333,11 +488,11 @@ export const DepartmentProfileView: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* Quick Summary KPIs */}
+      {/* Executive Administrative KPI Command Overview */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
           gap: '1rem',
         }}
       >
@@ -354,12 +509,27 @@ export const DepartmentProfileView: React.FC<Props> = ({
           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
             Active Personnel
           </span>
-          <span style={{ fontSize: '1.5rem', fontWeight: 700, marginTop: '0.25rem', color: 'var(--primary)' }}>
-            {(profile.doctorsCount || 0) + (profile.nursesCount || 0) + (profile.techsCount || 0) + (profile.receptionistsCount || 0)} Staff
+          <span style={{ fontSize: '1.375rem', fontWeight: 700, marginTop: '0.25rem', color: 'var(--primary)' }}>
+            {(profile.doctorsCount || 0) + (profile.nursesCount || 0) + (profile.techsCount || 0) + (profile.receptionistsCount || 0)} Deployed Staff
           </span>
           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-            {profile.doctorsCount || 0} Doctors • {profile.nursesCount || 0} Nurses
+            {profile.doctorsCount || 0} Doctors • {profile.nursesCount || 0} Nurses • {profile.techsCount || 0} Techs
           </span>
+          <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+            <span
+              className="badge"
+              style={{
+                fontSize: '0.6875rem',
+                backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                color: 'var(--primary)',
+                padding: '0.125rem 0.375rem',
+              }}
+            >
+              {liveBedStats.totalBeds > 0 && (profile.nursesCount || 0) > 0
+                ? `1 Nurse : ${(liveBedStats.totalBeds / (profile.nursesCount || 1)).toFixed(1)} Beds`
+                : 'Ambulatory OPD Model'}
+            </span>
+          </div>
         </div>
 
         <div
@@ -375,12 +545,26 @@ export const DepartmentProfileView: React.FC<Props> = ({
           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
             Physical Footprint
           </span>
-          <span style={{ fontSize: '1.5rem', fontWeight: 700, marginTop: '0.25rem', color: 'var(--secondary)' }}>
-            {profile.roomsCount || 0} Rooms / {profile.bedsCount || 0} Beds
+          <span style={{ fontSize: '1.375rem', fontWeight: 700, marginTop: '0.25rem', color: 'var(--secondary)' }}>
+            {profile.roomsCount || departmentalRooms.length || 0} Rooms • {liveBedStats.totalBeds} Beds
           </span>
           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-            {profile.buildingAssigned}
+            {profile.buildingAssigned} ({departmentalWards.length || profile.wardsCount || 0} Wards)
           </span>
+          <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+            <span
+              className="badge badge-success"
+              style={{ fontSize: '0.6875rem', padding: '0.125rem 0.375rem' }}
+            >
+              {liveBedStats.availableBeds} Available
+            </span>
+            <span
+              className="badge badge-warning"
+              style={{ fontSize: '0.6875rem', padding: '0.125rem 0.375rem' }}
+            >
+              {liveBedStats.occupiedBeds} Occupied
+            </span>
+          </div>
         </div>
 
         <div
@@ -394,14 +578,42 @@ export const DepartmentProfileView: React.FC<Props> = ({
           }}
         >
           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-            Operating Hours
+            Operating Schedule
           </span>
           <span style={{ fontSize: '1.125rem', fontWeight: 700, marginTop: '0.25rem', color: '#10b981' }}>
-            {profile.isOpen24Hours ? '24/7 Uninterrupted' : profile.hours}
+            {profile.isOpen24Hours ? '24/7 Continuous Care' : profile.hours}
           </span>
           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
             {profile.shiftPattern}
           </span>
+          <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+            {profile.emergencyEnabled && (
+              <span
+                className="badge"
+                style={{
+                  fontSize: '0.6875rem',
+                  backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                  color: '#dc2626',
+                  padding: '0.125rem 0.375rem',
+                }}
+              >
+                Trauma ER Triage
+              </span>
+            )}
+            {profile.walkInAllowed && (
+              <span
+                className="badge"
+                style={{
+                  fontSize: '0.6875rem',
+                  backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                  color: '#10b981',
+                  padding: '0.125rem 0.375rem',
+                }}
+              >
+                Walk-Ins Allowed
+              </span>
+            )}
+          </div>
         </div>
 
         <div
@@ -415,14 +627,22 @@ export const DepartmentProfileView: React.FC<Props> = ({
           }}
         >
           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-            Financial Allocation
+            Financial Ledger
           </span>
           <span style={{ fontSize: '1.25rem', fontWeight: 700, marginTop: '0.25rem', color: '#0ea5e9' }}>
-            ${(profile.budget || 0).toLocaleString()}
+            ${(profile.budget || 0).toLocaleString()} <span style={{ fontSize: '0.75rem', fontWeight: 400, color: 'var(--text-muted)' }}>/ yr</span>
           </span>
           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-            Cost: {profile.costCenter} • Rev: {profile.revenueCenter}
+            Cost: {profile.costCenter} • Rev: {profile.revenueCenter || 'N/A'}
           </span>
+          <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+            <span
+              className={`badge ${profile.billingEnabled !== false ? 'badge-success' : 'badge-secondary'}`}
+              style={{ fontSize: '0.6875rem', padding: '0.125rem 0.375rem' }}
+            >
+              {profile.billingEnabled !== false ? '✓ Direct Patient Billing' : 'Non-Billing Ledger'}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -997,63 +1217,172 @@ export const DepartmentProfileView: React.FC<Props> = ({
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
             <div>
               <h3 style={{ fontSize: '1.125rem', fontWeight: 700, margin: '0 0 0.25rem 0' }}>
-                Department Staffing Roster & Headcount
+                Department Staffing Deployment & Clinical Roster
               </h3>
               <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: 0 }}>
-                Maintain roster distribution across doctors, nurses, technicians, and front desk coordinators.
+                Assign accountable medical leadership, doctor/nurse headcount, and monitor bed-to-nurse clinical safety ratios.
               </p>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem' }}>
-              <div className="form-group">
-                <label className="form-label">Consultant Doctors</label>
+            {/* HOD Accountability Card */}
+            <div
+              style={{
+                backgroundColor: 'var(--card-bg, #ffffff)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '10px',
+                padding: '1.25rem',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                gap: '1.25rem',
+                alignItems: 'center',
+              }}
+            >
+              <div className="form-group" style={{ margin: 0 }}>
+                <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <User size={16} color="var(--primary)" /> Head of Department (HOD) / Chief Clinician
+                </label>
+                <input
+                  className="form-input"
+                  value={profile.head}
+                  onChange={(e) => setProfile({ ...profile, head: e.target.value })}
+                  placeholder="e.g. Dr. Sarah Jenkins, MD"
+                />
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  Primary physician legally and clinically accountable for departmental protocols.
+                </span>
+              </div>
+
+              <div className="form-group" style={{ margin: 0 }}>
+                <label className="form-label">Duty Shift Pattern</label>
+                <select
+                  className="form-select"
+                  value={profile.shiftPattern || ''}
+                  onChange={(e) => setProfile({ ...profile, shiftPattern: e.target.value })}
+                >
+                  <option value="3-Shift 24x7 (Rotational)">3-Shift 24x7 (Rotational Morning / Evening / Night)</option>
+                  <option value="General 2-Shift (08:00 - 20:00)">General 2-Shift (08:00 - 20:00 OPD / Daycare)</option>
+                  <option value="Single Day Shift (09:00 - 17:00)">Single Day Shift (09:00 - 17:00 Administrative)</option>
+                  <option value="On-Call Emergency Rotation">On-Call Emergency Rotation (Trauma Roster)</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Staff Deployment Headcount */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+              <div className="form-group" style={{ backgroundColor: 'var(--card-bg, #ffffff)', padding: '1rem', borderRadius: '10px', border: '1px solid var(--border-color)', margin: 0 }}>
+                <label className="form-label" style={{ fontWeight: 600 }}>Consultant Doctors</label>
                 <input
                   type="number"
                   className="form-input"
                   value={profile.doctorsCount || 0}
                   onChange={(e) => setProfile({ ...profile, doctorsCount: parseInt(e.target.value) || 0 })}
                 />
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Attending & resident specialists</span>
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Registered Nurses</label>
+              <div className="form-group" style={{ backgroundColor: 'var(--card-bg, #ffffff)', padding: '1rem', borderRadius: '10px', border: '1px solid var(--border-color)', margin: 0 }}>
+                <label className="form-label" style={{ fontWeight: 600 }}>Registered Nurses</label>
                 <input
                   type="number"
                   className="form-input"
                   value={profile.nursesCount || 0}
                   onChange={(e) => setProfile({ ...profile, nursesCount: parseInt(e.target.value) || 0 })}
                 />
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Ward sisters & staff nurses</span>
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Technicians & Paramedics</label>
+              <div className="form-group" style={{ backgroundColor: 'var(--card-bg, #ffffff)', padding: '1rem', borderRadius: '10px', border: '1px solid var(--border-color)', margin: 0 }}>
+                <label className="form-label" style={{ fontWeight: 600 }}>Technicians & Paramedics</label>
                 <input
                   type="number"
                   className="form-input"
                   value={profile.techsCount || 0}
                   onChange={(e) => setProfile({ ...profile, techsCount: parseInt(e.target.value) || 0 })}
                 />
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Lab, OT & dialysis assistants</span>
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Receptionists & Billing Clerks</label>
+              <div className="form-group" style={{ backgroundColor: 'var(--card-bg, #ffffff)', padding: '1rem', borderRadius: '10px', border: '1px solid var(--border-color)', margin: 0 }}>
+                <label className="form-label" style={{ fontWeight: 600 }}>Front Desk & Queue Handlers</label>
                 <input
                   type="number"
                   className="form-input"
                   value={profile.receptionistsCount || 0}
                   onChange={(e) => setProfile({ ...profile, receptionistsCount: parseInt(e.target.value) || 0 })}
                 />
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Token coordinators & clerks</span>
+              </div>
+            </div>
+
+            {/* Nurse-to-Bed Clinical Safety Metric */}
+            <div
+              style={{
+                backgroundColor: 'var(--bg-subtle, #f9fafb)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '10px',
+                padding: '1.25rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '1rem',
+              }}
+            >
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <ShieldCheck size={20} color={liveBedStats.totalBeds > 0 ? '#10b981' : 'var(--primary)'} />
+                  <strong style={{ fontSize: '0.9375rem' }}>Staff-to-Bed Clinical Safety Threshold</strong>
+                </div>
+                <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: '0.25rem 0 0 0' }}>
+                  {liveBedStats.totalBeds > 0
+                    ? `Currently ${profile.nursesCount || 0} Nurses assigned to ${liveBedStats.totalBeds} inpatient beds (${(departmentalWards.length || profile.wardsCount || 0)} wards).`
+                    : 'This department operates on an ambulatory outpatient model without overnight inpatient ward beds.'}
+                </p>
+              </div>
+
+              <div>
+                {liveBedStats.totalBeds > 0 ? (
+                  <div
+                    style={{
+                      padding: '0.5rem 1rem',
+                      borderRadius: '8px',
+                      backgroundColor:
+                        (profile.nursesCount || 0) >= liveBedStats.totalBeds / 2
+                          ? 'rgba(16, 185, 129, 0.12)'
+                          : 'rgba(245, 158, 11, 0.12)',
+                      border: `1px solid ${
+                        (profile.nursesCount || 0) >= liveBedStats.totalBeds / 2
+                          ? '#10b981'
+                          : '#f59e0b'
+                      }`,
+                      textAlign: 'right',
+                    }}
+                  >
+                    <span style={{ fontSize: '0.8125rem', fontWeight: 700, display: 'block', color: (profile.nursesCount || 0) >= liveBedStats.totalBeds / 2 ? '#047857' : '#b45309' }}>
+                      Ratio: 1 Nurse per {(liveBedStats.totalBeds / (profile.nursesCount || 1)).toFixed(1)} Beds
+                    </span>
+                    <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
+                      {(profile.nursesCount || 0) >= liveBedStats.totalBeds / 2
+                        ? '✓ Meets NABH / JCI Acute Safety Standard'
+                        : '⚠ Consider deploying additional ward nurses'}
+                    </span>
+                  </div>
+                ) : (
+                  <span className="badge badge-info" style={{ padding: '0.5rem 0.875rem', fontSize: '0.8125rem' }}>
+                    Ambulatory OPD / Daycare Footprint
+                  </span>
+                )}
               </div>
             </div>
 
             <div className="form-group">
-              <label className="form-label">On-Call Emergency Specialist Roster & Pager</label>
+              <label className="form-label">On-Call Emergency Specialist Roster & Emergency Pager</label>
               <textarea
                 className="form-textarea"
                 rows={3}
                 value={profile.onCallRoster || ''}
                 onChange={(e) => setProfile({ ...profile, onCallRoster: e.target.value })}
-                placeholder="e.g. Night On-Call: Dr. Neil Patrick (Ext 104) • Secondary: Dr. Emily Thorne (Pager #881)"
+                placeholder="e.g. Primary On-Call: Dr. Neil Patrick (Ext: 104) • Secondary Consultant: Dr. Emily Thorne (Pager #881)"
               />
             </div>
           </div>
@@ -1062,95 +1391,294 @@ export const DepartmentProfileView: React.FC<Props> = ({
         {/* ================= 6. INFRASTRUCTURE & SPACE ALLOCATION ================= */}
         {activeTab === 'infrastructure' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            <div>
-              <h3 style={{ fontSize: '1.125rem', fontWeight: 700, margin: '0 0 0.25rem 0' }}>
-                Campus Infrastructure & Physical Space Allocation
-              </h3>
-              <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: 0 }}>
-                Assign building wings, floor suites, consultation rooms, wards, and beds established in the Campus Infrastructure tab.
-              </p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+              <div>
+                <h3 style={{ fontSize: '1.125rem', fontWeight: 700, margin: '0 0 0.25rem 0' }}>
+                  Campus Infrastructure & Physical Space Allocation
+                </h3>
+                <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: 0 }}>
+                  Real-time physical asset mapping from North Central Hospital Tower master blueprint.
+                </p>
+              </div>
+              <button
+                className="btn btn-primary"
+                onClick={handleOpenReallocateModal}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+              >
+                <ArrowRightLeft size={16} /> Reallocate Campus Space
+              </button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem' }}>
-              <div className="form-group">
-                <label className="form-label">Building Assigned</label>
-                <select
-                  className="form-select"
-                  value={profile.buildingAssigned || ''}
-                  onChange={(e) => setProfile({ ...profile, buildingAssigned: e.target.value })}
+            {/* Campus Physical Footprint Summary Banner */}
+            <div
+              style={{
+                backgroundColor: 'var(--card-bg, #ffffff)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '12px',
+                padding: '1.25rem',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                gap: '1.25rem',
+              }}
+            >
+              <div>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                  Assigned Hospital Building
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.25rem' }}>
+                  <Building2 size={18} color="var(--primary)" />
+                  <strong style={{ fontSize: '1rem' }}>{profile.buildingAssigned}</strong>
+                </div>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
+                  Floor Location: <strong>{profile.floorAssigned || 'Level 0 & 1'}</strong>
+                </span>
+              </div>
+
+              <div>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                  Wards & Aggregate Bed Capacity
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.25rem' }}>
+                  <BedDouble size={18} color="var(--secondary)" />
+                  <strong style={{ fontSize: '1rem' }}>
+                    {departmentalWards.length || profile.wardsCount || 0} Wards • {liveBedStats.totalBeds} Beds
+                  </strong>
+                </div>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
+                  {liveBedStats.occupiedBeds} Occupied • {liveBedStats.availableBeds} Available • {liveBedStats.sanitizedBeds} Sanitized
+                </span>
+              </div>
+
+              <div>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                  Consultation Chambers
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.25rem' }}>
+                  <DoorClosed size={18} color="#0ea5e9" />
+                  <strong style={{ fontSize: '1rem' }}>
+                    {departmentalRooms.length || profile.roomsCount || 0} Rooms / Suites
+                  </strong>
+                </div>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
+                  OPD Consulting Chambers & Minor Procedure Suites
+                </span>
+              </div>
+            </div>
+
+            {/* Direct Allocated Clinical Wards */}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                <h4 style={{ fontSize: '0.9375rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <BedDouble size={16} /> Allocated Inpatient Wards ({departmentalWards.length})
+                </h4>
+                <button
+                  className="btn btn-secondary"
+                  onClick={handleOpenReallocateModal}
+                  style={{ fontSize: '0.75rem', padding: '0.375rem 0.625rem' }}
                 >
-                  <option value="Main Inpatient Tower">Main Inpatient Tower (BLD-TWR-A)</option>
-                  <option value="Emergency & Trauma Pavilion">Emergency & Trauma Pavilion (BLD-EMRG-01)</option>
-                  <option value="Diagnostic & Oncology Pavilion">Diagnostic & Oncology Pavilion (BLD-DIAG-02)</option>
-                  <option value="Administration & Support Block">Administration & Support Block (BLD-ADM-03)</option>
-                </select>
+                  Manage Wards Allocation
+                </button>
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Floor & Wing Location</label>
+              {departmentalWards.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  {departmentalWards.map((item) => (
+                    <div
+                      key={item.ward.id}
+                      style={{
+                        backgroundColor: 'var(--card-bg, #ffffff)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '10px',
+                        padding: '1.25rem',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <h5 style={{ fontSize: '1rem', fontWeight: 700, margin: 0 }}>{item.ward.name}</h5>
+                            <span className="badge badge-info">{item.ward.wardType}</span>
+                          </div>
+                          <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                            {item.floor.floorNumber} • Supervisor: <strong>{item.ward.supervisorNurse}</strong> • Station: {item.ward.nursingStation}
+                          </span>
+                        </div>
+                        <span className="badge badge-secondary" style={{ fontSize: '0.8125rem' }}>
+                          {item.ward.beds.length} Assigned Beds ({item.ward.beds.filter((b) => b.status === 'OCCUPIED').length} Occupied)
+                        </span>
+                      </div>
+
+                      {/* Beds Grid for this ward */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '0.75rem' }}>
+                        {item.ward.beds.map((bed) => (
+                          <div
+                            key={bed.id}
+                            style={{
+                              border: '1px solid var(--border-color)',
+                              borderRadius: '8px',
+                              padding: '0.75rem',
+                              backgroundColor:
+                                bed.status === 'OCCUPIED'
+                                  ? 'rgba(239, 68, 68, 0.04)'
+                                  : 'rgba(16, 185, 129, 0.04)',
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <strong style={{ fontSize: '0.875rem' }}>{bed.bedNumber}</strong>
+                              <span
+                                className={`badge ${
+                                  bed.status === 'OCCUPIED'
+                                    ? 'badge-warning'
+                                    : bed.status === 'AVAILABLE'
+                                    ? 'badge-success'
+                                    : 'badge-secondary'
+                                }`}
+                                style={{ fontSize: '0.6875rem', padding: '0.125rem 0.375rem' }}
+                              >
+                                {bed.status}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                              {bed.bedType} • ${bed.dailyTariff}/day
+                            </div>
+                            {bed.inpatientDetails && (
+                              <div
+                                style={{
+                                  marginTop: '0.5rem',
+                                  paddingTop: '0.5rem',
+                                  borderTop: '1px dashed var(--border-color)',
+                                  fontSize: '0.75rem',
+                                }}
+                              >
+                                <div>Pt: <strong>{bed.inpatientDetails.patientName}</strong></div>
+                                <div style={{ color: 'var(--text-muted)', fontSize: '0.6875rem' }}>
+                                  {bed.inpatientDetails.uhid} • Dr: {bed.inpatientDetails.primaryDoctor.name}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div
+                  style={{
+                    padding: '1.5rem',
+                    border: '1px dashed var(--border-color)',
+                    borderRadius: '10px',
+                    textAlign: 'center',
+                    backgroundColor: 'var(--bg-subtle, #f9fafb)',
+                  }}
+                >
+                  <BedDouble size={28} color="var(--text-muted)" style={{ margin: '0 auto 0.5rem auto', display: 'block' }} />
+                  <strong style={{ display: 'block', fontSize: '0.9375rem' }}>No Inpatient Wards Currently Bound</strong>
+                  <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: '0.25rem 0 0.75rem 0' }}>
+                    This department currently operates on an ambulatory model or has not claimed physical inpatient wards from the campus blueprint.
+                  </p>
+                  <button className="btn btn-secondary" onClick={handleOpenReallocateModal}>
+                    <ArrowRightLeft size={14} /> Allocate Wards from Campus Infrastructure
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Direct Allocated Consultation Rooms */}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                <h4 style={{ fontSize: '0.9375rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <DoorClosed size={16} /> Allocated Consultation & Procedure Chambers ({departmentalRooms.length})
+                </h4>
+                <button
+                  className="btn btn-secondary"
+                  onClick={handleOpenReallocateModal}
+                  style={{ fontSize: '0.75rem', padding: '0.375rem 0.625rem' }}
+                >
+                  Manage Chambers
+                </button>
+              </div>
+
+              {departmentalRooms.length > 0 ? (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '0.75rem' }}>
+                  {departmentalRooms.map((item) => (
+                    <div
+                      key={item.room.id}
+                      style={{
+                        backgroundColor: 'var(--card-bg, #ffffff)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '8px',
+                        padding: '1rem',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <strong style={{ fontSize: '0.9375rem' }}>{item.room.roomNumber}</strong>
+                        <span className="badge badge-info" style={{ fontSize: '0.6875rem' }}>
+                          {item.room.roomType}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                        {item.floor.floorNumber} • Capacity: {item.room.capacity}
+                      </div>
+                      <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span
+                          className={`badge ${
+                            item.room.status === 'OCCUPIED' ? 'badge-warning' : 'badge-success'
+                          }`}
+                          style={{ fontSize: '0.6875rem' }}
+                        >
+                          {item.room.status}
+                        </span>
+                        {item.room.attendingStaff?.doctorName && (
+                          <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
+                            {item.room.attendingStaff.doctorName}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div
+                  style={{
+                    padding: '1.25rem',
+                    border: '1px dashed var(--border-color)',
+                    borderRadius: '8px',
+                    textAlign: 'center',
+                    backgroundColor: 'var(--bg-subtle, #f9fafb)',
+                  }}
+                >
+                  <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                    No consultation chambers or procedure suites currently allocated.
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Dedicated Waiting Lounge */}
+            <div
+              style={{
+                padding: '1.25rem',
+                border: '1px solid var(--border-color)',
+                borderRadius: '10px',
+                backgroundColor: 'var(--bg-subtle, #f9fafb)',
+                display: 'flex',
+                alignItems: 'center',
+              }}
+            >
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}>
                 <input
-                  className="form-input"
-                  value={profile.floorAssigned || ''}
-                  onChange={(e) => setProfile({ ...profile, floorAssigned: e.target.value })}
-                  placeholder="e.g. Floor 2 - East Wing"
+                  type="checkbox"
+                  checked={profile.hasDedicatedWaitingArea || false}
+                  onChange={(e) => setProfile({ ...profile, hasDedicatedWaitingArea: e.target.checked })}
+                  style={{ width: '18px', height: '18px' }}
                 />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Total Consultation / Procedure Rooms</label>
-                <input
-                  type="number"
-                  className="form-input"
-                  value={profile.roomsCount || 0}
-                  onChange={(e) => setProfile({ ...profile, roomsCount: parseInt(e.target.value) || 0 })}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Total Assigned Inpatient Wards</label>
-                <input
-                  type="number"
-                  className="form-input"
-                  value={profile.wardsCount || 0}
-                  onChange={(e) => setProfile({ ...profile, wardsCount: parseInt(e.target.value) || 0 })}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Total Bed Allocation</label>
-                <input
-                  type="number"
-                  className="form-input"
-                  value={profile.bedsCount || 0}
-                  onChange={(e) => setProfile({ ...profile, bedsCount: parseInt(e.target.value) || 0 })}
-                />
-              </div>
-
-              <div
-                style={{
-                  padding: '1.25rem',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '10px',
-                  backgroundColor: 'var(--bg-subtle, #f9fafb)',
-                  display: 'flex',
-                  alignItems: 'center',
-                }}
-              >
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={profile.hasDedicatedWaitingArea || false}
-                    onChange={(e) => setProfile({ ...profile, hasDedicatedWaitingArea: e.target.checked })}
-                    style={{ width: '18px', height: '18px' }}
-                  />
-                  <div>
-                    <strong style={{ fontSize: '0.9375rem', display: 'block' }}>Dedicated Patient Waiting Lounge</strong>
-                    <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-                      Includes digital token display queue screen and attendant seating.
-                    </span>
-                  </div>
-                </label>
-              </div>
+                <div>
+                  <strong style={{ fontSize: '0.9375rem', display: 'block' }}>Dedicated Patient Waiting Lounge & Token Display</strong>
+                  <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                    Includes digital LED token display queue screen, attendant seating, and patient check-in kiosk.
+                  </span>
+                </div>
+              </label>
             </div>
           </div>
         )}
@@ -1725,6 +2253,282 @@ export const DepartmentProfileView: React.FC<Props> = ({
                   style={{ backgroundColor: '#dc2626', color: '#ffffff' }}
                 >
                   Archive Department
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= CAMPUS SPACE REALLOCATION MODAL ================= */}
+      {isReallocateModalOpen && (
+        <div className="modal-overlay">
+          <div
+            className="modal-content"
+            style={{
+              maxWidth: '840px',
+              maxHeight: '90vh',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            <div className="modal-header" style={{ flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+                <Building2 size={20} color="var(--primary)" />
+                <div>
+                  <h3 className="modal-title" style={{ margin: 0, fontSize: '1.125rem' }}>
+                    Reallocate Campus Space — {profile.name}
+                  </h3>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    Assign or release clinical wards, beds, and consultation rooms from campus infrastructure.
+                  </span>
+                </div>
+              </div>
+              <button className="action-btn" onClick={() => setIsReallocateModalOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div
+              style={{
+                flex: 1,
+                minHeight: 0,
+                overflowY: 'auto',
+                padding: '1.25rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '1.25rem',
+              }}
+            >
+              <div className="form-group">
+                <label className="form-label">Select Hospital Campus Building</label>
+                <select
+                  className="form-select"
+                  value={tempBuildingId}
+                  onChange={(e) => setTempBuildingId(e.target.value)}
+                >
+                  {campusBuildings.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name} ({b.code}) — {b.totalFloorsCount} Floors • {b.buildingType}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Floors, Wards, and Rooms Selection */}
+              {(() => {
+                const bldg = campusBuildings.find((b) => b.id === tempBuildingId) || campusBuildings[0];
+                if (!bldg) return <div>No building blueprint found.</div>;
+
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    {bldg.floors.map((floor) => (
+                      <div
+                        key={floor.id}
+                        style={{
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '10px',
+                          padding: '1rem',
+                          backgroundColor: 'var(--bg-subtle, #f9fafb)',
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            marginBottom: '0.75rem',
+                          }}
+                        >
+                          <div>
+                            <strong style={{ fontSize: '0.9375rem', display: 'block' }}>
+                              {floor.floorNumber} — {floor.wing}
+                            </strong>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                              Code: {floor.code} • Access Zone: {floor.accessZone}
+                            </span>
+                          </div>
+                          <span className="badge badge-secondary" style={{ fontSize: '0.75rem' }}>
+                            {floor.wards.length} Wards • {floor.rooms.length} Rooms
+                          </span>
+                        </div>
+
+                        {/* Wards on this floor */}
+                        {floor.wards.length > 0 && (
+                          <div style={{ marginBottom: '0.75rem' }}>
+                            <div
+                              style={{
+                                fontSize: '0.8125rem',
+                                fontWeight: 600,
+                                color: 'var(--text-color)',
+                                marginBottom: '0.5rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.375rem',
+                              }}
+                            >
+                              <BedDouble size={14} /> Inpatient Clinical Wards & Beds:
+                            </div>
+                            <div
+                              style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                                gap: '0.5rem',
+                              }}
+                            >
+                              {floor.wards.map((ward) => {
+                                const isChecked = tempWardIds.includes(ward.id);
+                                return (
+                                  <label
+                                    key={ward.id}
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'flex-start',
+                                      gap: '0.625rem',
+                                      padding: '0.625rem 0.75rem',
+                                      backgroundColor: isChecked
+                                        ? 'rgba(37, 99, 235, 0.08)'
+                                        : 'var(--card-bg, #ffffff)',
+                                      border: `1px solid ${isChecked ? 'var(--primary)' : 'var(--border-color)'}`,
+                                      borderRadius: '8px',
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          setTempWardIds([...tempWardIds, ward.id]);
+                                        } else {
+                                          setTempWardIds(tempWardIds.filter((id) => id !== ward.id));
+                                        }
+                                      }}
+                                      style={{ marginTop: '2px' }}
+                                    />
+                                    <div style={{ flex: 1 }}>
+                                      <div style={{ fontSize: '0.8125rem', fontWeight: 600 }}>{ward.name}</div>
+                                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                        {ward.wardType} • <strong>{ward.beds.length} Beds</strong> • Nurse:{' '}
+                                        {ward.supervisorNurse}
+                                      </div>
+                                    </div>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Rooms on this floor */}
+                        {floor.rooms.length > 0 && (
+                          <div>
+                            <div
+                              style={{
+                                fontSize: '0.8125rem',
+                                fontWeight: 600,
+                                color: 'var(--text-color)',
+                                marginBottom: '0.5rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.375rem',
+                              }}
+                            >
+                              <DoorClosed size={14} /> Consultation Chambers & Procedure Rooms:
+                            </div>
+                            <div
+                              style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                                gap: '0.5rem',
+                              }}
+                            >
+                              {floor.rooms.map((room) => {
+                                const isChecked = tempRoomIds.includes(room.id);
+                                return (
+                                  <label
+                                    key={room.id}
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'flex-start',
+                                      gap: '0.625rem',
+                                      padding: '0.5rem 0.75rem',
+                                      backgroundColor: isChecked
+                                        ? 'rgba(14, 165, 233, 0.08)'
+                                        : 'var(--card-bg, #ffffff)',
+                                      border: `1px solid ${isChecked ? '#0ea5e9' : 'var(--border-color)'}`,
+                                      borderRadius: '8px',
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          setTempRoomIds([...tempRoomIds, room.id]);
+                                        } else {
+                                          setTempRoomIds(tempRoomIds.filter((id) => id !== room.id));
+                                        }
+                                      }}
+                                      style={{ marginTop: '2px' }}
+                                    />
+                                    <div style={{ flex: 1 }}>
+                                      <div style={{ fontSize: '0.8125rem', fontWeight: 600 }}>{room.roomNumber}</div>
+                                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                        {room.roomType} (Capacity: {room.capacity})
+                                      </div>
+                                    </div>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Fixed Footer with dynamic totals */}
+            <div
+              className="modal-footer"
+              style={{
+                flexShrink: 0,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '0.875rem 1.25rem',
+                borderTop: '1px solid var(--border-color)',
+                backgroundColor: 'var(--bg-subtle, #f9fafb)',
+              }}
+            >
+              {(() => {
+                const bldg = campusBuildings.find((b) => b.id === tempBuildingId) || campusBuildings[0];
+                let bedsSum = 0;
+                bldg?.floors.forEach((f) => {
+                  f.wards.forEach((w) => {
+                    if (tempWardIds.includes(w.id)) {
+                      bedsSum += w.beds.length;
+                    }
+                  });
+                });
+                return (
+                  <div style={{ fontSize: '0.8125rem', color: 'var(--text-color)' }}>
+                    Allocating: <strong>{tempWardIds.length} Wards</strong> (<strong>{bedsSum} Beds</strong>) •{' '}
+                    <strong>{tempRoomIds.length} Rooms</strong>
+                  </div>
+                );
+              })()}
+
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setIsReallocateModalOpen(false)}>
+                  Cancel
+                </button>
+                <button type="button" className="btn btn-primary" onClick={handleSaveReallocation}>
+                  Save & Apply Space Allocation
                 </button>
               </div>
             </div>

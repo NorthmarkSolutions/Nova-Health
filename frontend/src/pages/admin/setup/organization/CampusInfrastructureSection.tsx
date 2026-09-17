@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Building2,
   Building,
@@ -187,9 +187,8 @@ export interface FloorDraft {
   supervisorNurse: string;
 }
 
-export const CampusInfrastructureSection: React.FC = () => {
-  // 1 Primary Hospital Complex default template
-  const defaultCampusTemplate: BuildingNode[] = [
+// 1 Primary Hospital Complex default template
+export const defaultCampusTemplate: BuildingNode[] = [
     {
       id: 'bld-main-1',
       code: 'BLD-MAIN-01',
@@ -687,7 +686,65 @@ export const CampusInfrastructureSection: React.FC = () => {
     },
   ];
 
-  const [buildings, setBuildings] = useState<BuildingNode[]>(defaultCampusTemplate);
+export const getCampusBuildings = (): BuildingNode[] => {
+  try {
+    const saved = localStorage.getItem('north_hospital_campus_buildings');
+    if (saved) return JSON.parse(saved);
+  } catch (e) {
+    console.error(e);
+  }
+  return defaultCampusTemplate;
+};
+
+export const saveCampusBuildings = (buildings: BuildingNode[]) => {
+  try {
+    localStorage.setItem('north_hospital_campus_buildings', JSON.stringify(buildings));
+  } catch (e) {
+    console.error(e);
+  }
+};
+
+export const syncDepartmentToCampus = (
+  deptName: string,
+  buildingId: string,
+  wardIds: string[],
+  roomIds: string[]
+) => {
+  const currentBuildings = getCampusBuildings();
+  const updated = currentBuildings.map((b) => {
+    if (b.id !== buildingId) return b;
+    return {
+      ...b,
+      floors: b.floors.map((f) => ({
+        ...f,
+        wards: f.wards.map((w) => {
+          if (wardIds.includes(w.id)) {
+            return { ...w, departmentName: deptName };
+          } else if (w.departmentName === deptName) {
+            return { ...w, departmentName: undefined };
+          }
+          return w;
+        }),
+        rooms: f.rooms.map((r) => {
+          if (roomIds.includes(r.id)) {
+            return { ...r, departmentName: deptName };
+          } else if (r.departmentName === deptName) {
+            return { ...r, departmentName: undefined };
+          }
+          return r;
+        }),
+      })),
+    };
+  });
+  saveCampusBuildings(updated);
+};
+
+export const CampusInfrastructureSection: React.FC = () => {
+  const [buildings, setBuildings] = useState<BuildingNode[]>(() => getCampusBuildings());
+
+  useEffect(() => {
+    saveCampusBuildings(buildings);
+  }, [buildings]);
   const [expandedBuildings, setExpandedBuildings] = useState<Record<string, boolean>>({ 'bld-main-1': true });
   const [expandedFloors, setExpandedFloors] = useState<Record<string, boolean>>({ 'fl-main-0': true, 'fl-main-1': true, 'fl-main-2': true });
   const [expandedWards, setExpandedWards] = useState<Record<string, boolean>>({ 'wd-0-1': true, 'wd-1-1': true, 'wd-1-2': true, 'wd-2-1': true });

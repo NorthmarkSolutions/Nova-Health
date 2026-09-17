@@ -19,6 +19,7 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 import { DepartmentProfileView, DepartmentProfileData } from './DepartmentProfileView';
+import { RegisterDepartmentWizardModal } from './RegisterDepartmentWizardModal';
 
 export const DepartmentsSection: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState<
@@ -28,7 +29,6 @@ export const DepartmentsSection: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeViewDept, setActiveViewDept] = useState<DepartmentProfileData | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [formData, setFormData] = useState<any>({});
 
   const [departments, setDepartments] = useState<DepartmentProfileData[]>([
     // Clinical
@@ -50,9 +50,13 @@ export const DepartmentsSection: React.FC = () => {
       nursesCount: 8,
       techsCount: 2,
       receptionistsCount: 2,
-      buildingAssigned: 'Main Inpatient Tower',
-      floorAssigned: 'Ground Floor - Wing A',
-      roomsCount: 12,
+      assignedBuildingId: 'bld-main-1',
+      buildingAssigned: 'North Central Hospital Tower',
+      floorAssigned: 'Ground Floor (Level 0)',
+      assignedFloorIds: ['fl-main-0'],
+      assignedWardIds: [],
+      assignedRoomIds: ['rm-005', 'rm-006'],
+      roomsCount: 2,
       wardsCount: 0,
       bedsCount: 0,
       hasDedicatedWaitingArea: true,
@@ -80,11 +84,15 @@ export const DepartmentsSection: React.FC = () => {
       nursesCount: 30,
       techsCount: 4,
       receptionistsCount: 2,
-      buildingAssigned: 'Main Inpatient Tower',
-      floorAssigned: 'Floors 2, 3, 4',
-      roomsCount: 40,
-      wardsCount: 8,
-      bedsCount: 120,
+      assignedBuildingId: 'bld-main-1',
+      buildingAssigned: 'North Central Hospital Tower',
+      floorAssigned: 'First Floor (Level 1)',
+      assignedFloorIds: ['fl-main-1'],
+      assignedWardIds: ['wd-1-1', 'wd-1-2'],
+      assignedRoomIds: ['rm-101', 'rm-102'],
+      roomsCount: 2,
+      wardsCount: 2,
+      bedsCount: 5,
       hasDedicatedWaitingArea: true,
       consultationEnabled: true,
       admissionEnabled: true,
@@ -110,11 +118,15 @@ export const DepartmentsSection: React.FC = () => {
       nursesCount: 14,
       techsCount: 4,
       receptionistsCount: 2,
-      buildingAssigned: 'Emergency & Trauma Pavilion',
-      floorAssigned: 'Ground Floor Triage',
-      roomsCount: 8,
-      wardsCount: 2,
-      bedsCount: 24,
+      assignedBuildingId: 'bld-main-1',
+      buildingAssigned: 'North Central Hospital Tower',
+      floorAssigned: 'Ground Floor (Level 0)',
+      assignedFloorIds: ['fl-main-0'],
+      assignedWardIds: ['wd-0-1'],
+      assignedRoomIds: ['rm-001', 'rm-002', 'rm-003', 'rm-004'],
+      roomsCount: 4,
+      wardsCount: 1,
+      bedsCount: 4,
       hasDedicatedWaitingArea: true,
       consultationEnabled: true,
       admissionEnabled: true,
@@ -142,11 +154,15 @@ export const DepartmentsSection: React.FC = () => {
       nursesCount: 16,
       techsCount: 4,
       receptionistsCount: 0,
-      buildingAssigned: 'Main Inpatient Tower',
-      floorAssigned: 'Floor 3 - Critical Wing',
-      roomsCount: 4,
-      wardsCount: 2,
-      bedsCount: 18,
+      assignedBuildingId: 'bld-main-1',
+      buildingAssigned: 'North Central Hospital Tower',
+      floorAssigned: 'Second Floor (Level 2)',
+      assignedFloorIds: ['fl-main-2'],
+      assignedWardIds: ['wd-2-1'],
+      assignedRoomIds: [],
+      roomsCount: 0,
+      wardsCount: 1,
+      bedsCount: 2,
       consultationEnabled: true,
       admissionEnabled: true,
       procedureEnabled: true,
@@ -172,11 +188,15 @@ export const DepartmentsSection: React.FC = () => {
       nursesCount: 8,
       techsCount: 2,
       receptionistsCount: 0,
-      buildingAssigned: 'Main Inpatient Tower',
-      floorAssigned: 'Floor 2 - Surgical Wing',
-      roomsCount: 6,
+      assignedBuildingId: 'bld-main-1',
+      buildingAssigned: 'North Central Hospital Tower',
+      floorAssigned: 'Second Floor (Level 2)',
+      assignedFloorIds: ['fl-main-2'],
+      assignedWardIds: [],
+      assignedRoomIds: ['rm-201'],
+      roomsCount: 1,
       wardsCount: 0,
-      bedsCount: 6,
+      bedsCount: 0,
       procedureEnabled: true,
       consultationEnabled: false,
     },
@@ -650,29 +670,13 @@ export const DepartmentsSection: React.FC = () => {
   ]);
 
   const handleOpenAdd = () => {
-    setFormData({ category: 'clinical', status: 'ACTIVE', staffCount: 1 });
     setIsAddModalOpen(true);
   };
 
-  const handleSaveAdd = (e: React.FormEvent) => {
-    e.preventDefault();
-    const newDept: DepartmentProfileData = {
-      id: Date.now().toString(),
-      code: formData.code || 'DEPT-NEW',
-      name: formData.name || 'New Department',
-      shortName: formData.shortName || formData.name,
-      category: formData.category || 'clinical',
-      head: formData.head || 'Dr. Assigned',
-      hours: formData.hours || '08:00 - 18:00',
-      costCenter: formData.costCenter || 'CC-NEW-01',
-      revenueCenter: formData.revenueCenter || 'RC-NEW-01',
-      budget: formData.budget || 250000,
-      billingEnabled: true,
-      staffCount: 1,
-      status: 'ACTIVE',
-    };
-    setDepartments([...departments, newDept]);
+  const handleSaveAdd = (newDept: DepartmentProfileData) => {
+    setDepartments([newDept, ...departments]);
     setIsAddModalOpen(false);
+    setActiveViewDept(newDept);
   };
 
   const handleDelete = (id: string) => {
@@ -871,96 +875,12 @@ export const DepartmentsSection: React.FC = () => {
         </table>
       </div>
 
-      {/* Add Department Modal */}
-      {isAddModalOpen && (
-        <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '640px' }}>
-            <div className="modal-header">
-              <h3 className="modal-title">Register Hospital Department</h3>
-              <button className="action-btn" onClick={() => setIsAddModalOpen(false)}>
-                <X size={18} />
-              </button>
-            </div>
-            <form onSubmit={handleSaveAdd} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-              <div className="form-group">
-                <label className="form-label">Department Code</label>
-                <input
-                  className="form-input"
-                  placeholder="e.g. DEPT-PULM"
-                  onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Department Name</label>
-                <input
-                  className="form-input"
-                  placeholder="e.g. Pulmonology & Sleep Lab"
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Classification Category</label>
-                <select
-                  className="form-select"
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                >
-                  <option value="clinical">Clinical Care</option>
-                  <option value="diagnostic">Diagnostic & Imaging</option>
-                  <option value="revenue">Revenue & Patient Billing</option>
-                  <option value="admin">Administration & HR</option>
-                  <option value="support">Support & Facilities</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Head of Department</label>
-                <input
-                  className="form-input"
-                  placeholder="e.g. Dr. Jennifer Wu"
-                  onChange={(e) => setFormData({ ...formData, head: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Working Hours</label>
-                <input
-                  className="form-input"
-                  placeholder="e.g. 08:00 - 18:00 or 24/7"
-                  onChange={(e) => setFormData({ ...formData, hours: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Cost Center Code</label>
-                <input
-                  className="form-input"
-                  placeholder="e.g. CC-CLN-09"
-                  onChange={(e) => setFormData({ ...formData, costCenter: e.target.value })}
-                  required
-                />
-              </div>
-
-              <div
-                style={{
-                  gridColumn: 'span 2',
-                  display: 'flex',
-                  justifyContent: 'flex-end',
-                  gap: '0.75rem',
-                  marginTop: '1rem',
-                }}
-              >
-                <button type="button" className="btn btn-secondary" onClick={() => setIsAddModalOpen(false)}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  Save Department
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* 5-Step Hospital Admin Provisioning Wizard */}
+      <RegisterDepartmentWizardModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onSave={handleSaveAdd}
+      />
     </div>
   );
 };
