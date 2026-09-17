@@ -16,14 +16,11 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { OrganizationSetup } from './setup/OrganizationSetup';
-import { StaffSetup } from './setup/StaffSetup';
-import { ClinicalSetup } from './setup/ClinicalSetup';
-import { FinancialSetup } from './setup/FinancialSetup';
 import { SystemSetup } from './setup/SystemSetup';
 
 export const AdminDashboard: React.FC = () => {
   const [activeMainTab, setActiveMainTab] = useState<
-    'overview' | 'organization' | 'staff' | 'clinical' | 'financial' | 'system'
+    'overview' | 'organization' | 'system'
   >('overview');
 
   return (
@@ -38,7 +35,7 @@ export const AdminDashboard: React.FC = () => {
             </span>
           </div>
           <p className="page-subtitle">
-            Hospital-wide KPIs, clinical throughput, role permissions, and full organization setup
+            Hospital-wide KPIs, clinical throughput, role permissions, and full 0% to 100% onboarding setup
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem' }}>
@@ -50,14 +47,14 @@ export const AdminDashboard: React.FC = () => {
           </button>
           <button
             className="btn btn-primary"
-            onClick={() => setActiveMainTab('staff')}
+            onClick={() => setActiveMainTab('organization')}
           >
-            <Plus size={16} /> + Onboard Staff
+            <CheckCircle2 size={16} /> Hospital Setup & Onboarding
           </button>
         </div>
       </div>
 
-      {/* Main Top Tab Navigation (Directly Mapping Level 2 Setup Hierarchy) */}
+      {/* Main Top Tab Navigation (3 Focused Admin Pillars) */}
       <div className="tab-bar">
         <button
           className={`tab-item ${activeMainTab === 'overview' ? 'active' : ''}`}
@@ -69,25 +66,7 @@ export const AdminDashboard: React.FC = () => {
           className={`tab-item ${activeMainTab === 'organization' ? 'active' : ''}`}
           onClick={() => setActiveMainTab('organization')}
         >
-          <Building2 size={18} /> Organization Setup
-        </button>
-        <button
-          className={`tab-item ${activeMainTab === 'staff' ? 'active' : ''}`}
-          onClick={() => setActiveMainTab('staff')}
-        >
-          <Users size={18} /> Staff Setup
-        </button>
-        <button
-          className={`tab-item ${activeMainTab === 'clinical' ? 'active' : ''}`}
-          onClick={() => setActiveMainTab('clinical')}
-        >
-          <Stethoscope size={18} /> Clinical Setup
-        </button>
-        <button
-          className={`tab-item ${activeMainTab === 'financial' ? 'active' : ''}`}
-          onClick={() => setActiveMainTab('financial')}
-        >
-          <Coins size={18} /> Financial Setup
+          <Building2 size={18} /> Hospital Setup (Onboarding 0-100%)
         </button>
         <button
           className={`tab-item ${activeMainTab === 'system' ? 'active' : ''}`}
@@ -130,7 +109,7 @@ export const AdminDashboard: React.FC = () => {
               <div
                 className="stat-card"
                 style={{ cursor: 'pointer' }}
-                onClick={() => setActiveMainTab('financial')}
+                onClick={() => setActiveMainTab('organization')}
               >
                 <div className="stat-icon" style={{ backgroundColor: 'var(--warning-light)', color: 'var(--warning)' }}>
                   <DollarSign size={24} />
@@ -144,7 +123,7 @@ export const AdminDashboard: React.FC = () => {
               <div
                 className="stat-card"
                 style={{ cursor: 'pointer' }}
-                onClick={() => setActiveMainTab('staff')}
+                onClick={() => setActiveMainTab('organization')}
               >
                 <div className="stat-icon" style={{ backgroundColor: 'var(--teal-light)', color: 'var(--teal)' }}>
                   <Activity size={24} />
@@ -249,19 +228,10 @@ export const AdminDashboard: React.FC = () => {
           </>
         )}
 
-        {/* Tab 2: Organization Setup */}
+        {/* Tab 2: Hospital Setup (Onboarding) */}
         {activeMainTab === 'organization' && <OrganizationSetup />}
 
-        {/* Tab 3: Staff Setup */}
-        {activeMainTab === 'staff' && <StaffSetup />}
-
-        {/* Tab 4: Clinical Setup */}
-        {activeMainTab === 'clinical' && <ClinicalSetup />}
-
-        {/* Tab 5: Financial Setup */}
-        {activeMainTab === 'financial' && <FinancialSetup />}
-
-        {/* Tab 6: System Setup */}
+        {/* Tab 3: System Setup */}
         {activeMainTab === 'system' && <SystemSetup />}
       </div>
     </div>
