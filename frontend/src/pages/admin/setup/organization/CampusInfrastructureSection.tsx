@@ -117,6 +117,7 @@ export interface WardStaffRoster {
 
 export interface WardNode {
   id: string;
+  code?: string;
   name: string;
   wardType:
     | 'General Ward'
@@ -134,6 +135,19 @@ export interface WardNode {
   beds: BedNode[];
   staffRoster?: WardStaffRoster;
 }
+
+// Utility to generate automatic standard Ward Code: building code - ward code - floor code - index
+export const generateWardCode = (
+  buildingCode: string,
+  floorCode: string,
+  wardIndex: number,
+  wardPrefix: string = 'WD'
+): string => {
+  const cleanBuilding = (buildingCode || 'BLD').trim().toUpperCase().replace(/\s+/g, '');
+  const cleanWard = (wardPrefix || 'WD').trim().toUpperCase().replace(/\s+/g, '');
+  const cleanFloor = (floorCode || 'FL').trim().toUpperCase().replace(/\s+/g, '');
+  return `${cleanBuilding}-${cleanWard}-${cleanFloor}-${wardIndex}`;
+};
 
 export interface FloorNode {
   id: string;
@@ -170,21 +184,27 @@ export interface BuildingNode {
   floors: FloorNode[];
 }
 
+// Ward Blueprint Draft used inside Floor Blueprint Draft
+export interface WardDraft {
+  id: string;
+  wardName: string;
+  wardCode: string;
+  wardType: WardNode['wardType'] | string;
+  roomCount: number;
+  bedType: BedNode['bedType'] | string;
+  bedCount: number;
+  dailyTariff: number;
+}
+
 // Floor Blueprint Draft used during Building Provisioning
 export interface FloorDraft {
   id: string;
   floorNumber: string;
   code: string;
   wing: string;
-  roomCount: number;
-  roomType: RoomNode['roomType'];
   roomDept: string;
-  wardName: string;
-  wardType: WardNode['wardType'];
-  bedCount: number;
-  bedType: BedNode['bedType'];
-  dailyTariff: number;
   supervisorNurse: string;
+  wards: WardDraft[];
 }
 
 // 1 Primary Hospital Complex default template
@@ -757,7 +777,7 @@ export const CampusInfrastructureSection: React.FC = () => {
   const [showAddFloorModal, setShowAddFloorModal] = useState<string | null>(null);
   const [showAddWardModal, setShowAddWardModal] = useState<{ buildingId: string; floorId: string } | null>(null);
   const [showAddRoomModal, setShowAddRoomModal] = useState<{ buildingId: string; floorId: string } | null>(null);
-  const [showAddBedModal, setShowAddBedModal] = useState<{ buildingId: string; floorId: string; wardId: string } | null>(null);
+  const [showAddBedModal, setShowAddBedModal] = useState<{ buildingId: string; floorId: string; wardId: string; wardName?: string; wardCode?: string } | null>(null);
 
   // Deep Care & Staff Activity Inspection Modal
   const [selectedBedForCare, setSelectedBedForCare] = useState<{
@@ -1638,6 +1658,23 @@ export const CampusInfrastructureSection: React.FC = () => {
                                               </button>
                                               <BedDouble size={16} color="#0284c7" />
                                               <strong style={{ fontSize: '0.875rem' }}>{ward.name}</strong>
+                                              {ward.code && (
+                                                <span
+                                                  style={{
+                                                    fontSize: '0.6875rem',
+                                                    fontFamily: 'monospace',
+                                                    fontWeight: 700,
+                                                    backgroundColor: '#e0f2fe',
+                                                    color: '#0369a1',
+                                                    padding: '0.1rem 0.45rem',
+                                                    borderRadius: '4px',
+                                                    border: '1px solid #bae6fd',
+                                                  }}
+                                                  title="Ward Code"
+                                                >
+                                                  {ward.code}
+                                                </span>
+                                              )}
                                               <span className="badge badge-info" style={{ fontSize: '0.6875rem' }}>
                                                 {ward.wardType}
                                               </span>
@@ -1660,7 +1697,7 @@ export const CampusInfrastructureSection: React.FC = () => {
                                                 type="button"
                                                 className="btn btn-secondary btn-sm"
                                                 style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
-                                                onClick={() => setShowAddBedModal({ buildingId: bld.id, floorId: floor.id, wardId: ward.id })}
+                                                onClick={() => setShowAddBedModal({ buildingId: bld.id, floorId: floor.id, wardId: ward.id, wardName: ward.name, wardCode: ward.code })}
                                               >
                                                 <Plus size={11} /> Add Bed
                                               </button>
@@ -2299,7 +2336,31 @@ export const CampusInfrastructureSection: React.FC = () => {
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
           <div style={{ backgroundColor: '#ffffff', borderRadius: '8px', width: '100%', maxWidth: '460px', padding: '1.5rem', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-              <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Add Bed to Ward</h4>
+              <div>
+                <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Add Bed to Ward</h4>
+                {showAddBedModal?.wardName && (
+                  <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.2rem' }}>
+                    Target Ward: <strong>{showAddBedModal.wardName}</strong>
+                    {showAddBedModal.wardCode && (
+                      <span
+                        style={{
+                          marginLeft: '0.4rem',
+                          fontFamily: 'monospace',
+                          fontWeight: 700,
+                          backgroundColor: '#e0f2fe',
+                          color: '#0369a1',
+                          padding: '1px 5px',
+                          borderRadius: '3px',
+                          fontSize: '0.6875rem',
+                          border: '1px solid #bae6fd',
+                        }}
+                      >
+                        {showAddBedModal.wardCode}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
               <button onClick={() => setShowAddBedModal(null)} style={{ border: 'none', background: 'none', cursor: 'pointer' }}><X size={18} /></button>
             </div>
             <form onSubmit={handleAddBedSubmit}>
@@ -2452,45 +2513,60 @@ const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProv
       floorNumber: 'Ground Floor (Level 0)',
       code: 'FL-0',
       wing: 'Emergency Triage & Ambulatory Care',
-      roomCount: 4,
-      roomType: 'Consultation Room',
       roomDept: 'General Medicine & Emergency',
-      wardName: 'Emergency Observation Unit',
-      wardType: 'General Ward' as WardNode['wardType'],
-      bedCount: 6,
-      bedType: 'Emergency Stretcher' as BedNode['bedType'],
-      dailyTariff: 180,
       supervisorNurse: 'Sister Clara Oswald, RN',
+      wards: [
+        {
+          id: 'wd-fld-1-1',
+          wardName: 'Emergency Observation Unit',
+          wardCode: generateWardCode('', 'FL-0', 1),
+          wardType: 'General Ward' as WardNode['wardType'],
+          roomCount: 4,
+          bedType: 'Emergency Stretcher' as BedNode['bedType'],
+          bedCount: 6,
+          dailyTariff: 180,
+        },
+      ],
     },
     {
       id: 'fld-2',
       floorNumber: 'Floor 1 (Level 1)',
       code: 'FL-1',
-      wing: 'General Inpatient Medical Wards',
-      roomCount: 2,
-      roomType: 'Doctor Chamber',
-      roomDept: 'Inpatient Care',
-      wardName: 'General Medical Inpatient Ward',
-      wardType: 'Male Ward' as WardNode['wardType'],
-      bedCount: 15,
-      bedType: 'Standard Ward Bed' as BedNode['bedType'],
-      dailyTariff: 150,
+      wing: 'General Medical Wards',
+      roomDept: 'General Medicine',
       supervisorNurse: 'Marcus Bell, BSN',
+      wards: [
+        {
+          id: 'wd-fld-2-1',
+          wardName: 'General Medical Ward A',
+          wardCode: generateWardCode('', 'FL-1', 1),
+          wardType: 'Male Ward' as WardNode['wardType'],
+          roomCount: 2,
+          bedType: 'Standard Ward Bed' as BedNode['bedType'],
+          bedCount: 15,
+          dailyTariff: 150,
+        },
+      ],
     },
     {
       id: 'fld-3',
       floorNumber: 'Floor 2 (Level 2)',
       code: 'FL-2',
       wing: 'Critical Care & Surgical Suites',
-      roomCount: 2,
-      roomType: 'OT Suite',
       roomDept: 'Surgery & OT',
-      wardName: 'Intensive Critical Care Unit (ICU)',
-      wardType: 'ICU Ward' as WardNode['wardType'],
-      bedCount: 10,
-      bedType: 'Motorized ICU Ventilator' as BedNode['bedType'],
-      dailyTariff: 450,
       supervisorNurse: 'Sister Miriam Cruz, CCRN',
+      wards: [
+        {
+          id: 'wd-fld-3-1',
+          wardName: 'Intensive Critical Care Unit (ICU)',
+          wardCode: generateWardCode('', 'FL-2', 1),
+          wardType: 'ICU Ward' as WardNode['wardType'],
+          roomCount: 2,
+          bedType: 'Motorized ICU Ventilator' as BedNode['bedType'],
+          bedCount: 10,
+          dailyTariff: 450,
+        },
+      ],
     },
   ]);
 
@@ -2541,7 +2617,7 @@ const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProv
     }
   };
 
-  const handleSelectWardType = (floorId: string, val: string) => {
+  const handleSelectWardType = (floorId: string, wardId: string, val: string) => {
     if (val === '__ADD_NEW__') {
       const customName = window.prompt('Enter new custom Ward Classification Type (e.g. "Burn Care ICU", "Dialysis Daycare", "Post-Op Recovery"):');
       if (customName && customName.trim()) {
@@ -2549,14 +2625,14 @@ const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProv
         if (!availableWardTypes.includes(trimmed)) {
           setAvailableWardTypes([...availableWardTypes, trimmed]);
         }
-        handleUpdateFloorDraft(floorId, 'wardType', trimmed);
+        handleUpdateWardDraft(floorId, wardId, 'wardType', trimmed);
       }
     } else {
-      handleUpdateFloorDraft(floorId, 'wardType', val);
+      handleUpdateWardDraft(floorId, wardId, 'wardType', val);
     }
   };
 
-  const handleSelectBedType = (floorId: string, val: string) => {
+  const handleSelectBedType = (floorId: string, wardId: string, val: string) => {
     if (val === '__ADD_NEW__') {
       const customName = window.prompt('Enter new custom Bed Type (e.g. "Bariatric Heavy Duty Bed", "Dialysis Recliner", "Birthing Bed"):');
       if (customName && customName.trim()) {
@@ -2564,29 +2640,101 @@ const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProv
         if (!availableBedTypes.includes(trimmed)) {
           setAvailableBedTypes([...availableBedTypes, trimmed]);
         }
-        handleUpdateFloorDraft(floorId, 'bedType', trimmed);
+        handleUpdateWardDraft(floorId, wardId, 'bedType', trimmed);
       }
     } else {
-      handleUpdateFloorDraft(floorId, 'bedType', val);
+      handleUpdateWardDraft(floorId, wardId, 'bedType', val);
     }
+  };
+
+  const handleBuildingCodeChange = (newCode: string) => {
+    const oldCode = buildingData.code;
+    setBuildingData((prev) => ({ ...prev, code: newCode }));
+
+    // Dynamically update default-pattern ward codes when building code is modified
+    setFloorDrafts((prevFloors) =>
+      prevFloors.map((f) => {
+        const updatedWards = f.wards.map((w, wIdx) => {
+          const defaultOldCode = generateWardCode(oldCode, f.code, wIdx + 1);
+          if (!w.wardCode || w.wardCode === defaultOldCode) {
+            return { ...w, wardCode: generateWardCode(newCode, f.code, wIdx + 1) };
+          }
+          return w;
+        });
+        return { ...f, wards: updatedWards };
+      })
+    );
+  };
+
+  const handleAddWardToFloor = (floorId: string) => {
+    setFloorDrafts((prev) =>
+      prev.map((f) => {
+        if (f.id !== floorId) return f;
+        const newWardIndex = f.wards.length + 1;
+        const autoCode = generateWardCode(buildingData.code, f.code, newWardIndex);
+        const newWard: WardDraft = {
+          id: `wd-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          wardName: `Ward ${newWardIndex}`,
+          wardCode: autoCode,
+          wardType: 'General Ward',
+          roomCount: 2,
+          bedType: 'Standard Ward Bed',
+          bedCount: 10,
+          dailyTariff: 150,
+        };
+        return { ...f, wards: [...f.wards, newWard] };
+      })
+    );
+  };
+
+  const handleRemoveWardFromFloor = (floorId: string, wardId: string) => {
+    setFloorDrafts((prev) =>
+      prev.map((f) => {
+        if (f.id !== floorId) return f;
+        if (f.wards.length <= 1) {
+          alert('A floor must have at least one ward configured.');
+          return f;
+        }
+        return { ...f, wards: f.wards.filter((w) => w.id !== wardId) };
+      })
+    );
+  };
+
+  const handleUpdateWardDraft = (floorId: string, wardId: string, field: keyof WardDraft, value: any) => {
+    setFloorDrafts((prev) =>
+      prev.map((f) => {
+        if (f.id !== floorId) return f;
+        return {
+          ...f,
+          wards: f.wards.map((w) => (w.id === wardId ? { ...w, [field]: value } : w)),
+        };
+      })
+    );
   };
 
   const handleAddBlankFloor = () => {
     const floorIndex = floorDrafts.length;
+    const newFloorId = `fld-${Date.now()}`;
+    const floorCode = `FL-${floorIndex}`;
     const newFloor: FloorDraft = {
-      id: `fld-${Date.now()}`,
+      id: newFloorId,
       floorNumber: `Floor ${floorIndex} (Level ${floorIndex})`,
-      code: `FL-${floorIndex}`,
-      wing: 'Clinical Inpatient Wing',
-      roomCount: 2,
-      roomType: 'Consultation Room',
+      code: floorCode,
+      wing: 'Clinical Wing',
       roomDept: 'General Medicine',
-      wardName: `General Care Ward ${floorIndex}`,
-      wardType: 'General Ward',
-      bedCount: 10,
-      bedType: 'Standard Ward Bed',
-      dailyTariff: 150,
       supervisorNurse: 'Sister In-Charge, RN',
+      wards: [
+        {
+          id: `wd-${newFloorId}-1`,
+          wardName: `General Care Ward ${floorIndex}`,
+          wardCode: generateWardCode(buildingData.code, floorCode, 1),
+          wardType: 'General Ward',
+          roomCount: 2,
+          bedType: 'Standard Ward Bed',
+          bedCount: 10,
+          dailyTariff: 150,
+        },
+      ],
     };
     setFloorDrafts([...floorDrafts, newFloor]);
   };
@@ -2595,92 +2743,156 @@ const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProv
   const applyPreset = (type: 'emergency' | 'inpatient' | 'icu' | 'maternity') => {
     const newId = `fld-${Date.now()}-${Math.floor(Math.random() * 100)}`;
     const floorIndex = floorDrafts.length;
+    const bldCode = buildingData.code;
 
     let preset: FloorDraft;
     switch (type) {
-      case 'emergency':
+      case 'emergency': {
+        const pCode = `FL-ER-${floorIndex}`;
         preset = {
           id: newId,
           floorNumber: `Floor ${floorIndex} - Emergency Triage`,
-          code: `FL-ER-${floorIndex}`,
+          code: pCode,
           wing: 'Emergency & Acute Trauma',
-          roomCount: 4,
-          roomType: 'Procedure Room',
           roomDept: 'Emergency & Trauma',
-          wardName: 'Acute Emergency Triage Bay',
-          wardType: 'General Ward' as WardNode['wardType'],
-          bedCount: 8,
-          bedType: 'Emergency Stretcher' as BedNode['bedType'],
-          dailyTariff: 200,
           supervisorNurse: 'Lead Trauma Nurse, RN',
+          wards: [
+            {
+              id: `wd-${newId}-1`,
+              wardName: 'Acute Emergency Triage Bay',
+              wardCode: generateWardCode(bldCode, pCode, 1),
+              wardType: 'General Ward' as WardNode['wardType'],
+              roomCount: 4,
+              bedType: 'Emergency Stretcher' as BedNode['bedType'],
+              bedCount: 8,
+              dailyTariff: 200,
+            },
+          ],
         };
         break;
-      case 'inpatient':
+      }
+      case 'inpatient': {
+        const pCode = `FL-MED-${floorIndex}`;
         preset = {
           id: newId,
-          floorNumber: `Floor ${floorIndex} - Inpatient Wards`,
-          code: `FL-MED-${floorIndex}`,
-          wing: 'General Inpatient Medicine',
-          roomCount: 2,
-          roomType: 'Consultation Room',
+          floorNumber: `Floor ${floorIndex} - Medical Care Floor`,
+          code: pCode,
+          wing: 'General Medicine',
           roomDept: 'Internal Medicine',
-          wardName: 'Medical Inpatient Ward',
-          wardType: 'Male Ward' as WardNode['wardType'],
-          bedCount: 20,
-          bedType: 'Standard Ward Bed' as BedNode['bedType'],
-          dailyTariff: 150,
           supervisorNurse: 'Ward Nurse Incharge, RN',
+          wards: [
+            {
+              id: `wd-${newId}-1`,
+              wardName: 'Medical Ward A (Male)',
+              wardCode: generateWardCode(bldCode, pCode, 1),
+              wardType: 'Male Ward' as WardNode['wardType'],
+              roomCount: 2,
+              bedType: 'Standard Ward Bed' as BedNode['bedType'],
+              bedCount: 12,
+              dailyTariff: 150,
+            },
+            {
+              id: `wd-${newId}-2`,
+              wardName: 'Medical Ward B (Female)',
+              wardCode: generateWardCode(bldCode, pCode, 2),
+              wardType: 'Female Ward' as WardNode['wardType'],
+              roomCount: 2,
+              bedType: 'Standard Ward Bed' as BedNode['bedType'],
+              bedCount: 12,
+              dailyTariff: 150,
+            },
+          ],
         };
         break;
-      case 'icu':
+      }
+      case 'icu': {
+        const pCode = `FL-ICU-${floorIndex}`;
         preset = {
           id: newId,
           floorNumber: `Floor ${floorIndex} - Critical Care (ICU)`,
-          code: `FL-ICU-${floorIndex}`,
+          code: pCode,
           wing: 'Intensive Care & Surgical OT',
-          roomCount: 2,
-          roomType: 'OT Suite',
           roomDept: 'Operation Theatre Complex',
-          wardName: 'Intensive Critical Care Unit (ICU)',
-          wardType: 'ICU Ward' as WardNode['wardType'],
-          bedCount: 12,
-          bedType: 'Motorized ICU Ventilator' as BedNode['bedType'],
-          dailyTariff: 500,
           supervisorNurse: 'Critical Care Sister Incharge, CCRN',
+          wards: [
+            {
+              id: `wd-${newId}-1`,
+              wardName: 'Intensive Critical Care Unit (ICU)',
+              wardCode: generateWardCode(bldCode, pCode, 1),
+              wardType: 'ICU Ward' as WardNode['wardType'],
+              roomCount: 2,
+              bedType: 'Motorized ICU Ventilator' as BedNode['bedType'],
+              bedCount: 12,
+              dailyTariff: 500,
+            },
+          ],
         };
         break;
-      case 'maternity':
+      }
+      case 'maternity': {
+        const pCode = `FL-MAT-${floorIndex}`;
         preset = {
           id: newId,
           floorNumber: `Floor ${floorIndex} - Maternity & Neonatal`,
-          code: `FL-MAT-${floorIndex}`,
+          code: pCode,
           wing: 'Mother & Child Care Wing',
-          roomCount: 3,
-          roomType: 'Consultation Room',
           roomDept: 'Obstetrics & Gynecology',
-          wardName: 'Postnatal Maternity Ward',
-          wardType: 'Maternity Ward' as WardNode['wardType'],
-          bedCount: 14,
-          bedType: 'Semi-Fowler' as BedNode['bedType'],
-          dailyTariff: 220,
           supervisorNurse: 'Senior Midwife Nurse, RMN',
+          wards: [
+            {
+              id: `wd-${newId}-1`,
+              wardName: 'Postnatal Care Ward',
+              wardCode: generateWardCode(bldCode, pCode, 1),
+              wardType: 'Maternity Ward' as WardNode['wardType'],
+              roomCount: 3,
+              bedType: 'Semi-Fowler' as BedNode['bedType'],
+              bedCount: 14,
+              dailyTariff: 220,
+            },
+          ],
         };
         break;
+      }
     }
 
     setFloorDrafts([...floorDrafts, preset]);
   };
 
   const handleUpdateFloorDraft = (id: string, field: string, value: any) => {
-    setFloorDrafts(floorDrafts.map((f) => (f.id === id ? { ...f, [field]: value } : f)));
+    setFloorDrafts(
+      floorDrafts.map((f) => {
+        if (f.id !== id) return f;
+        if (field === 'code') {
+          const oldFloorCode = f.code;
+          const newFloorCode = value;
+          const updatedWards = f.wards.map((w, wIdx) => {
+            const defaultOldCode = generateWardCode(buildingData.code, oldFloorCode, wIdx + 1);
+            // If the wardCode was using the default pattern or empty, update dynamically to match the new floor code
+            if (!w.wardCode || w.wardCode === defaultOldCode) {
+              return { ...w, wardCode: generateWardCode(buildingData.code, newFloorCode, wIdx + 1) };
+            }
+            return w;
+          });
+          return { ...f, code: newFloorCode, wards: updatedWards };
+        }
+        return { ...f, [field]: value };
+      })
+    );
   };
 
   const handleRemoveFloorDraft = (id: string) => {
     setFloorDrafts(floorDrafts.filter((f) => f.id !== id));
   };
 
-  const totalBedsProvisioned = floorDrafts.reduce((acc, f) => acc + (Number(f.bedCount) || 0), 0);
-  const totalRoomsProvisioned = floorDrafts.reduce((acc, f) => acc + (Number(f.roomCount) || 0), 0);
+  const totalWardsProvisioned = floorDrafts.reduce((acc, f) => acc + (f.wards?.length || 0), 0);
+  const totalBedsProvisioned = floorDrafts.reduce(
+    (acc, f) => acc + (f.wards?.reduce((wAcc, w) => wAcc + (Number(w.bedCount) || 0), 0) || 0),
+    0
+  );
+  const totalRoomsProvisioned = floorDrafts.reduce(
+    (acc, f) => acc + (f.wards?.reduce((wAcc, w) => wAcc + (Number(w.roomCount) || 0), 0) || 0),
+    0
+  );
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -2697,43 +2909,53 @@ const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProv
     const generatedFloors: FloorNode[] = floorDrafts.map((fDraft, fIdx) => {
       const flId = `fl-${bldId}-${fIdx}`;
 
-      const rooms: RoomNode[] = Array.from({ length: fDraft.roomCount }, (_, rIdx) => ({
-        id: `rm-${flId}-${rIdx + 1}`,
-        roomNumber: `${codeUpper}-${fDraft.code}-R${rIdx + 1}`,
-        roomType: fDraft.roomType,
-        capacity: 1,
-        departmentName: fDraft.roomDept,
-        status: 'AVAILABLE',
-        attendingStaff: { doctorName: 'Attending Consultant', nurseOrCompounder: 'Floor Assistant' },
-      }));
+      const allRooms: RoomNode[] = [];
+      const allWards: WardNode[] = fDraft.wards.map((wDraft, wIdx) => {
+        const wardId = `wd-${flId}-${wIdx + 1}`;
+        const finalWardCode = (wDraft.wardCode || generateWardCode(buildingData.code, fDraft.code, wIdx + 1)).trim().toUpperCase();
 
-      const beds: BedNode[] = Array.from({ length: fDraft.bedCount }, (_, bIdx) => ({
-        id: `b-${flId}-${bIdx + 1}`,
-        bedNumber: `${codeUpper}-${fDraft.code}-B${(bIdx + 1).toString().padStart(2, '0')}`,
-        bedType: fDraft.bedType,
-        dailyTariff: fDraft.dailyTariff,
-        status: 'AVAILABLE',
-        cleanlinessStatus: 'SANITIZED',
-        lastCleanedAt: 'Provisioned Clean & Ready',
-        assignedCleaner: 'Housekeeping Desk',
-      }));
+        // Generate rooms for this ward
+        const wardRooms: RoomNode[] = Array.from({ length: wDraft.roomCount }, (_, rIdx) => ({
+          id: `rm-${wardId}-${rIdx + 1}`,
+          roomNumber: `${finalWardCode}-R${rIdx + 1}`,
+          roomType: 'Procedure Room' as RoomNode['roomType'],
+          capacity: 1,
+          departmentName: fDraft.roomDept,
+          status: 'AVAILABLE',
+          attendingStaff: { doctorName: 'Attending Consultant', nurseOrCompounder: 'Floor Assistant' },
+        }));
+        allRooms.push(...wardRooms);
 
-      const ward: WardNode = {
-        id: `wd-${flId}-1`,
-        name: fDraft.wardName,
-        wardType: fDraft.wardType,
-        supervisorNurse: fDraft.supervisorNurse,
-        nursingStation: `Station ${fDraft.code}`,
-        departmentName: fDraft.roomDept,
-        beds,
-        staffRoster: {
+        // Generate beds for this ward - incorporating the unique Ward Code
+        const wardBeds: BedNode[] = Array.from({ length: wDraft.bedCount }, (_, bIdx) => ({
+          id: `b-${wardId}-${bIdx + 1}`,
+          bedNumber: `${finalWardCode}-B${(bIdx + 1).toString().padStart(2, '0')}`,
+          bedType: wDraft.bedType as BedNode['bedType'],
+          dailyTariff: wDraft.dailyTariff,
+          status: 'AVAILABLE',
+          cleanlinessStatus: 'SANITIZED',
+          lastCleanedAt: 'Provisioned Clean & Ready',
+          assignedCleaner: 'Housekeeping Desk',
+        }));
+
+        return {
+          id: wardId,
+          code: finalWardCode,
+          name: wDraft.wardName,
+          wardType: wDraft.wardType as WardNode['wardType'],
           supervisorNurse: fDraft.supervisorNurse,
-          onDutyNurses: [{ name: fDraft.supervisorNurse, shift: 'Day Shift (Lead)', grade: 'RN' }],
-          compounders: [{ name: 'Assigned Compounder', duty: 'General Patient Care' }],
-          cleaners: [{ name: 'Assigned Housekeeper', shift: 'Day Shift', lastRound: 'Just now' }],
-          roundingDoctors: [{ name: 'Attending Physician', department: fDraft.roomDept, roundTime: 'Morning' }],
-        },
-      };
+          nursingStation: `Station ${fDraft.code} - ${wDraft.wardName}`,
+          departmentName: fDraft.roomDept,
+          beds: wardBeds,
+          staffRoster: {
+            supervisorNurse: fDraft.supervisorNurse,
+            onDutyNurses: [{ name: fDraft.supervisorNurse, shift: 'Day Shift (Lead)', grade: 'RN' }],
+            compounders: [{ name: 'Assigned Compounder', duty: 'General Patient Care' }],
+            cleaners: [{ name: 'Assigned Housekeeper', shift: 'Day Shift', lastRound: 'Just now' }],
+            roundingDoctors: [{ name: 'Attending Physician', department: fDraft.roomDept, roundTime: 'Morning' }],
+          },
+        };
+      });
 
       return {
         id: flId,
@@ -2741,8 +2963,8 @@ const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProv
         code: fDraft.code,
         wing: fDraft.wing,
         accessZone: 'Standard Clinical Access',
-        rooms,
-        wards: [ward],
+        rooms: allRooms,
+        wards: allWards,
       };
     });
 
@@ -2848,7 +3070,7 @@ const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProv
               onClick={() => setActiveStep('floors_wards')}
               style={{ fontSize: '0.8125rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
             >
-              <Layers size={14} /> 2. Floors, Wards & Beds Blueprint ({floorDrafts.length} Floors • {totalBedsProvisioned} Beds)
+              <Layers size={14} /> 2. Floors, Wards & Beds Blueprint ({floorDrafts.length} Floors • {totalWardsProvisioned} Wards • {totalBedsProvisioned} Beds)
             </button>
           </div>
         </div>
@@ -2885,7 +3107,7 @@ const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProv
                     className="form-input"
                     placeholder="e.g. BLD-SURG-02"
                     value={buildingData.code}
-                    onChange={(e) => setBuildingData({ ...buildingData, code: e.target.value })}
+                    onChange={(e) => handleBuildingCodeChange(e.target.value)}
                     required
                   />
                 </div>
@@ -3042,7 +3264,7 @@ const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProv
                     style={{ backgroundColor: '#ffffff', border: '1px solid #86efac', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
                     onClick={() => applyPreset('inpatient')}
                   >
-                    🛏️ + Inpatient Floor (20 beds)
+                    🛏️ + Medical Care Floor (24 beds)
                   </button>
                   <button
                     type="button"
@@ -3157,95 +3379,300 @@ const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProv
                       </div>
                     </div>
 
-                    {/* Row 3: Inpatient Ward & Beds Specifications Box (Matching 1.4fr 1.2fr 1fr Column Alignment) */}
+                    {/* Row 3: Wards & Beds Configuration (Supports Multiple Wards per Floor) */}
                     <div
                       style={{
-                        padding: '0.875rem 1rem',
-                        backgroundColor: '#f8fafc',
-                        borderRadius: '8px',
-                        border: '1px solid #e2e8f0',
                         display: 'flex',
                         flexDirection: 'column',
                         gap: '0.75rem',
+                        marginTop: '0.25rem',
                       }}
                     >
-                      {/* Subrow 1: Ward specifications */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.2fr 1fr', gap: '0.875rem' }}>
-                        <div className="form-group" style={{ marginBottom: 0 }}>
-                          <label className="form-label" style={{ fontSize: '0.75rem' }}>Inpatient Ward Name</label>
-                          <input
-                            className="form-input"
-                            value={draft.wardName}
-                            onChange={(e) => handleUpdateFloorDraft(draft.id, 'wardName', e.target.value)}
-                            placeholder="e.g. Intensive Critical Care Unit"
-                          />
-                        </div>
-                        <div className="form-group" style={{ marginBottom: 0 }}>
-                          <label className="form-label" style={{ fontSize: '0.75rem' }}>Ward Classification Type</label>
-                          <select
-                            className="form-select"
-                            value={draft.wardType}
-                            onChange={(e) => handleSelectWardType(draft.id, e.target.value)}
-                          >
-                            {availableWardTypes.map((wType) => (
-                              <option key={wType} value={wType}>
-                                {wType}
-                              </option>
-                            ))}
-                            <option value="__ADD_NEW__" style={{ color: 'var(--primary)', fontWeight: 700 }}>
-                              + Add More / Custom Ward Type...
-                            </option>
-                          </select>
-                        </div>
-                        <div className="form-group" style={{ marginBottom: 0 }}>
-                          <label className="form-label" style={{ fontSize: '0.75rem' }}>Consultation Rooms</label>
-                          <input
-                            type="number"
-                            className="form-input"
-                            value={draft.roomCount}
-                            onChange={(e) => handleUpdateFloorDraft(draft.id, 'roomCount', parseInt(e.target.value) || 0)}
-                          />
-                        </div>
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          paddingBottom: '0.25rem',
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: '0.8125rem',
+                            fontWeight: 700,
+                            color: '#334155',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                          }}
+                        >
+                          <Layers size={13} style={{ color: 'var(--primary)' }} />
+                          Floor Wards Configuration ({draft.wards.length} {draft.wards.length === 1 ? 'Ward' : 'Wards'})
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleAddWardToFloor(draft.id)}
+                          style={{
+                            border: '1px dashed var(--primary)',
+                            backgroundColor: '#eff6ff',
+                            color: 'var(--primary)',
+                            borderRadius: '6px',
+                            padding: '0.25rem 0.65rem',
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.25rem',
+                          }}
+                        >
+                          <Plus size={13} /> Add Another Ward to this Floor
+                        </button>
                       </div>
 
-                      {/* Subrow 2: Bed specifications (Spacious Bed Type with plenty of room for long names) */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.2fr 1fr', gap: '0.875rem' }}>
-                        <div className="form-group" style={{ marginBottom: 0 }}>
-                          <label className="form-label" style={{ fontSize: '0.75rem' }}>Bed Classification Type</label>
-                          <select
-                            className="form-select"
-                            value={draft.bedType}
-                            onChange={(e) => handleSelectBedType(draft.id, e.target.value)}
+                      {draft.wards.map((ward, wIdx) => (
+                        <div
+                          key={ward.id}
+                          style={{
+                            padding: '0.875rem 1rem',
+                            backgroundColor: '#f8fafc',
+                            borderRadius: '8px',
+                            border: '1px solid #e2e8f0',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '0.75rem',
+                          }}
+                        >
+                          {/* Ward Subheader Bar */}
+                          <div
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              borderBottom: '1px dashed #e2e8f0',
+                              paddingBottom: '0.35rem',
+                            }}
                           >
-                            {availableBedTypes.map((bType) => (
-                              <option key={bType} value={bType}>
-                                {bType}
-                              </option>
-                            ))}
-                            <option value="__ADD_NEW__" style={{ color: 'var(--primary)', fontWeight: 700 }}>
-                              + Add More / Custom Bed Type...
-                            </option>
-                          </select>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569' }}>
+                                Ward {wIdx + 1}
+                                {draft.wards.length > 1 ? ` of ${draft.wards.length}` : ''}:
+                              </span>
+                              <span style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.75rem' }}>
+                                {ward.wardName || 'Untitled Ward'}
+                              </span>
+                              <span
+                                style={{
+                                  backgroundColor: '#e0f2fe',
+                                  color: '#0369a1',
+                                  border: '1px solid #bae6fd',
+                                  fontSize: '0.6875rem',
+                                  fontWeight: 700,
+                                  fontFamily: 'monospace',
+                                  padding: '0.1rem 0.45rem',
+                                  borderRadius: '4px',
+                                  letterSpacing: '0.02em',
+                                }}
+                                title="Unique Auto-assigned Ward Code"
+                              >
+                                {ward.wardCode || generateWardCode(buildingData.code, draft.code, wIdx + 1)}
+                              </span>
+                            </div>
+                            {draft.wards.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveWardFromFloor(draft.id, ward.id)}
+                                style={{
+                                  border: 'none',
+                                  background: 'none',
+                                  color: '#dc2626',
+                                  cursor: 'pointer',
+                                  fontSize: '0.7rem',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '0.2rem',
+                                  padding: '0.1rem 0.35rem',
+                                  borderRadius: '4px',
+                                }}
+                              >
+                                <Trash2 size={11} /> Remove Ward
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Row 1: Ward Name & Code -> Ward Classification Type -> Rooms */}
+                          <div
+                            style={{
+                              display: 'grid',
+                              gridTemplateColumns: '1.5fr 1.1fr 0.8fr',
+                              gap: '0.875rem',
+                            }}
+                          >
+                            <div className="form-group" style={{ marginBottom: 0 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.2rem' }}>
+                                <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: 0 }}>
+                                  Ward Name & Code
+                                </label>
+                                <span
+                                  style={{
+                                    fontSize: '0.625rem',
+                                    color: '#15803d',
+                                    backgroundColor: '#dcfce7',
+                                    padding: '1px 5px',
+                                    borderRadius: '3px',
+                                    fontWeight: 600,
+                                  }}
+                                  title="Ward Code is automatically generated (Building-Ward-Floor-Index) and synchronized"
+                                >
+                                  ⚡ Auto-Code
+                                </span>
+                              </div>
+                              <div style={{ display: 'flex', gap: '0.4rem' }}>
+                                <input
+                                  className="form-input"
+                                  style={{ flex: 1.3, minWidth: 0 }}
+                                  value={ward.wardName}
+                                  onChange={(e) =>
+                                    handleUpdateWardDraft(draft.id, ward.id, 'wardName', e.target.value)
+                                  }
+                                  placeholder="e.g. Intensive Critical Care Unit"
+                                />
+                                <input
+                                  className="form-input"
+                                  style={{
+                                    flex: 1,
+                                    minWidth: '135px',
+                                    maxWidth: '185px',
+                                    fontFamily: 'monospace',
+                                    fontWeight: 700,
+                                    backgroundColor: '#f1f5f9',
+                                    color: '#0f172a',
+                                    textTransform: 'uppercase',
+                                    fontSize: '0.75rem',
+                                  }}
+                                  value={ward.wardCode}
+                                  onChange={(e) =>
+                                    handleUpdateWardDraft(draft.id, ward.id, 'wardCode', e.target.value.toUpperCase())
+                                  }
+                                  placeholder="BLD-WD-FL-0-1"
+                                  title="Auto-assigned unique Ward Code (Building-Ward-Floor-Index, editable)"
+                                />
+                              </div>
+                            </div>
+                            <div className="form-group" style={{ marginBottom: 0 }}>
+                              <label className="form-label" style={{ fontSize: '0.75rem' }}>
+                                Ward Classification Type
+                              </label>
+                              <select
+                                className="form-select"
+                                value={ward.wardType}
+                                onChange={(e) => handleSelectWardType(draft.id, ward.id, e.target.value)}
+                              >
+                                {availableWardTypes.map((wType) => (
+                                  <option key={wType} value={wType}>
+                                    {wType}
+                                  </option>
+                                ))}
+                                <option
+                                  value="__ADD_NEW__"
+                                  style={{ color: 'var(--primary)', fontWeight: 700 }}
+                                >
+                                  + Add More / Custom Ward Type...
+                                </option>
+                              </select>
+                            </div>
+                            <div className="form-group" style={{ marginBottom: 0 }}>
+                              <label className="form-label" style={{ fontSize: '0.75rem' }}>
+                                Rooms
+                              </label>
+                              <input
+                                type="number"
+                                min={0}
+                                className="form-input"
+                                value={ward.roomCount}
+                                onChange={(e) =>
+                                  handleUpdateWardDraft(
+                                    draft.id,
+                                    ward.id,
+                                    'roomCount',
+                                    parseInt(e.target.value) || 0
+                                  )
+                                }
+                              />
+                            </div>
+                          </div>
+
+                          {/* Row 2: Bed Classification Type -> Total Beds in Ward -> Daily Tariff */}
+                          <div
+                            style={{
+                              display: 'grid',
+                              gridTemplateColumns: '1.5fr 1.1fr 0.8fr',
+                              gap: '0.875rem',
+                            }}
+                          >
+                            <div className="form-group" style={{ marginBottom: 0 }}>
+                              <label className="form-label" style={{ fontSize: '0.75rem' }}>
+                                Bed Classification Type
+                              </label>
+                              <select
+                                className="form-select"
+                                value={ward.bedType}
+                                onChange={(e) => handleSelectBedType(draft.id, ward.id, e.target.value)}
+                              >
+                                {availableBedTypes.map((bType) => (
+                                  <option key={bType} value={bType}>
+                                    {bType}
+                                  </option>
+                                ))}
+                                <option
+                                  value="__ADD_NEW__"
+                                  style={{ color: 'var(--primary)', fontWeight: 700 }}
+                                >
+                                  + Add More / Custom Bed Type...
+                                </option>
+                              </select>
+                            </div>
+                            <div className="form-group" style={{ marginBottom: 0 }}>
+                              <label className="form-label" style={{ fontSize: '0.75rem' }}>
+                                Total Beds in Ward
+                              </label>
+                              <input
+                                type="number"
+                                min={0}
+                                className="form-input"
+                                value={ward.bedCount}
+                                onChange={(e) =>
+                                  handleUpdateWardDraft(
+                                    draft.id,
+                                    ward.id,
+                                    'bedCount',
+                                    parseInt(e.target.value) || 0
+                                  )
+                                }
+                              />
+                            </div>
+                            <div className="form-group" style={{ marginBottom: 0 }}>
+                              <label className="form-label" style={{ fontSize: '0.75rem' }}>
+                                Daily Tariff ($ / day)
+                              </label>
+                              <input
+                                type="number"
+                                min={0}
+                                className="form-input"
+                                value={ward.dailyTariff}
+                                onChange={(e) =>
+                                  handleUpdateWardDraft(
+                                    draft.id,
+                                    ward.id,
+                                    'dailyTariff',
+                                    parseInt(e.target.value) || 0
+                                  )
+                                }
+                              />
+                            </div>
+                          </div>
                         </div>
-                        <div className="form-group" style={{ marginBottom: 0 }}>
-                          <label className="form-label" style={{ fontSize: '0.75rem' }}>Total Beds in Ward</label>
-                          <input
-                            type="number"
-                            className="form-input"
-                            value={draft.bedCount}
-                            onChange={(e) => handleUpdateFloorDraft(draft.id, 'bedCount', parseInt(e.target.value) || 0)}
-                          />
-                        </div>
-                        <div className="form-group" style={{ marginBottom: 0 }}>
-                          <label className="form-label" style={{ fontSize: '0.75rem' }}>Daily Tariff ($ / day)</label>
-                          <input
-                            type="number"
-                            className="form-input"
-                            value={draft.dailyTariff}
-                            onChange={(e) => handleUpdateFloorDraft(draft.id, 'dailyTariff', parseInt(e.target.value) || 0)}
-                          />
-                        </div>
-                      </div>
+                      ))}
                     </div>
                   </div>
                 ))}
@@ -3285,8 +3712,8 @@ const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProv
           }}
         >
           <div style={{ fontSize: '0.8125rem', color: 'var(--text-color)' }}>
-            <strong>Blueprint Summary:</strong> {floorDrafts.length} Floors • {floorDrafts.length} Clinical Wards •{' '}
-            <strong style={{ color: 'var(--primary)' }}>{totalBedsProvisioned} Total Beds</strong> • {totalRoomsProvisioned} Consultation Rooms
+            <strong>Blueprint Summary:</strong> {floorDrafts.length} Floors • {totalWardsProvisioned} Clinical Wards •{' '}
+            <strong style={{ color: 'var(--primary)' }}>{totalBedsProvisioned} Total Beds</strong> • {totalRoomsProvisioned} Total Rooms
           </div>
 
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
