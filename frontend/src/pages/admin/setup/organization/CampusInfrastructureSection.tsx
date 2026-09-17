@@ -31,10 +31,13 @@ import {
   Save,
   ArrowRightLeft,
   LogOut,
+  Wrench,
+  Check,
+  Zap,
 } from 'lucide-react';
 
 // ============================================================================
-// DATA MODELS: CLINICAL IPD CARE, MULTI-DOCTOR, NURSING, COMPOUNDER & CLEANERS
+// DATA MODELS
 // ============================================================================
 
 export interface InpatientCareDetails {
@@ -47,20 +50,20 @@ export interface InpatientCareDetails {
   diagnosis: string;
   acuity: 'STABLE' | 'GUARDED' | 'CRITICAL' | 'OBSERVATION';
 
-  // Attending Doctors (1 Primary + Multiple Cross-Consulting Doctors)
+  // Attending Doctors (Primary + Cross-Consultants)
   primaryDoctor: { id: string; name: string; specialty: string; phone?: string };
   consultingDoctors: Array<{ id: string; name: string; specialty: string; role: string }>;
 
-  // Nursing & Compounders / Paramedics
+  // Nursing & Compounder Staff
   primaryNurse: { id: string; name: string; shift: 'Morning' | 'Evening' | 'Night' };
-  compounder?: { id: string; name: string; duty: string }; // e.g. Wound Dressing, IV Line Care
+  compounder?: { id: string; name: string; duty: string };
 
   // Sanitation & Housekeeping Staff
   assignedCleaner?: { id: string; name: string; shift: string };
   cleanlinessStatus: 'SANITIZED' | 'NEEDS_CLEANING' | 'CLEANING_IN_PROGRESS';
   lastCleanedAt?: string;
 
-  // Vitals summary
+  // Vitals
   vitals?: { bp: string; pulse: string; spo2: string; temp: string };
 }
 
@@ -78,10 +81,7 @@ export interface BedNode {
   status: 'AVAILABLE' | 'OCCUPIED' | 'RESERVED' | 'MAINTENANCE';
   notes?: string;
 
-  // Deep Inpatient & Staff Activity details
   inpatientDetails?: InpatientCareDetails;
-
-  // Sanitation status when vacant or under maintenance
   cleanlinessStatus?: 'SANITIZED' | 'NEEDS_CLEANING' | 'CLEANING_IN_PROGRESS';
   lastCleanedAt?: string;
   assignedCleaner?: string;
@@ -150,35 +150,69 @@ export interface BuildingNode {
   code: string;
   name: string;
   buildingType:
-    | 'Clinical Inpatient Tower'
+    | 'Main Clinical Hospital Tower'
     | 'Emergency & Trauma Center'
     | 'Diagnostic & Oncology Pavilion'
-    | 'Administration & Support';
+    | 'Surgical & Inpatient Block'
+    | 'Administration & Ambulatory Pavilion';
+  // Enterprise Specifications
+  totalFloorsCount: number;
+  basementCount: number;
+  buildingAdmin: string;
+  intercomExt: string;
+  operatingHours: string;
+  fireNocStatus: 'APPROVED' | 'RENEWAL_DUE' | 'INSPECTION_PENDING';
   fireZone: string;
+  powerBackupKva: number;
+  hasCentralOxygen: boolean;
+  stretcherLifts: number;
   utilities: string;
   floors: FloorNode[];
 }
 
-export const CampusInfrastructureSection: React.FC = () => {
-  // View mode switcher: 'staff_activity' (rich clinical care & staff visibility) vs 'architecture' (compact layout)
-  const [viewMode, setViewMode] = useState<'staff_activity' | 'architecture'>('staff_activity');
+// Floor Blueprint Draft used during Building Provisioning
+export interface FloorDraft {
+  id: string;
+  floorNumber: string;
+  code: string;
+  wing: string;
+  roomCount: number;
+  roomType: RoomNode['roomType'];
+  roomDept: string;
+  wardName: string;
+  wardType: WardNode['wardType'];
+  bedCount: number;
+  bedType: BedNode['bedType'];
+  dailyTariff: number;
+  supervisorNurse: string;
+}
 
-  // Pre-seeded 240-bed campus template with comprehensive IPD patients and staff activity
+export const CampusInfrastructureSection: React.FC = () => {
+  // 1 Primary Hospital Complex default template
   const defaultCampusTemplate: BuildingNode[] = [
     {
-      id: 'bld-1',
-      code: 'BLD-MAIN',
-      name: 'Main Clinical Hospital Tower',
-      buildingType: 'Clinical Inpatient Tower',
-      fireZone: 'Zone A & B (Smoke Detectors + Wet Risers)',
-      utilities: 'Dual Substation (500kVA DG Backup), Central O2 Manifold',
+      id: 'bld-main-1',
+      code: 'BLD-MAIN-01',
+      name: 'North Central Hospital Tower',
+      buildingType: 'Main Clinical Hospital Tower',
+      totalFloorsCount: 3,
+      basementCount: 1,
+      buildingAdmin: 'Eng. Victor Stone (Facility Ops)',
+      intercomExt: 'Ext: 101',
+      operatingHours: '24/7 Continuous Emergency & Inpatient',
+      fireNocStatus: 'APPROVED',
+      fireZone: 'Zone A & B (Automated Sprinklers & Wet Risers)',
+      powerBackupKva: 500,
+      hasCentralOxygen: true,
+      stretcherLifts: 2,
+      utilities: 'Dual Substation (500kVA DG Backup), Liquid O2 Manifold (LMO)',
       floors: [
         {
-          id: 'fl-1-0',
+          id: 'fl-main-0',
           floorNumber: 'Ground Floor (Level 0)',
           code: 'FL-0',
-          wing: 'Public Reception & Ambulatory Care',
-          accessZone: 'Public Open Access',
+          wing: 'Emergency Triage & Ambulatory Care',
+          accessZone: '24/7 Emergency & Public Open Access',
           rooms: [
             {
               id: 'rm-101',
@@ -320,7 +354,7 @@ export const CampusInfrastructureSection: React.FC = () => {
                   bedType: 'Emergency Stretcher',
                   dailyTariff: 180,
                   status: 'MAINTENANCE',
-                  notes: 'Hydraulic lever calibration and sterilization cycle',
+                  notes: 'Hydraulic lever calibration & sterilization cycle',
                   cleanlinessStatus: 'CLEANING_IN_PROGRESS',
                   assignedCleaner: 'Sunita Bai',
                 },
@@ -349,11 +383,11 @@ export const CampusInfrastructureSection: React.FC = () => {
           ],
         },
         {
-          id: 'fl-1-1',
+          id: 'fl-main-1',
           floorNumber: 'First Floor (Level 1)',
           code: 'FL-1',
           wing: 'General Inpatient Wards (Male / Female)',
-          accessZone: 'Authorized Patients & Relatives',
+          accessZone: 'Authorized Inpatient Visitors',
           rooms: [
             {
               id: 'rm-110',
@@ -552,11 +586,11 @@ export const CampusInfrastructureSection: React.FC = () => {
           ],
         },
         {
-          id: 'fl-1-2',
+          id: 'fl-main-2',
           floorNumber: 'Second Floor (Level 2)',
           code: 'FL-2',
           wing: 'Critical Care & Surgical Suites',
-          accessZone: 'Strict Sterile Surgical Zone',
+          accessZone: 'Strict Sterile Surgical & ICU Zone',
           rooms: [
             {
               id: 'rm-201',
@@ -651,60 +685,19 @@ export const CampusInfrastructureSection: React.FC = () => {
         },
       ],
     },
-    {
-      id: 'bld-2',
-      code: 'BLD-EMRG',
-      name: 'Emergency & Trauma Pavilion',
-      buildingType: 'Emergency & Trauma Center',
-      fireZone: 'Zone E (Dedicated Helipad Access)',
-      utilities: 'Independent Oxygen Liquefaction Tank, 300kVA Redundant UPS',
-      floors: [
-        {
-          id: 'fl-2-0',
-          floorNumber: 'Ground Floor Triage',
-          code: 'FL-ER-0',
-          wing: 'Resuscitation & Immediate Care',
-          accessZone: 'Red Priority Emergency Triage',
-          rooms: [
-            { id: 'rm-er-01', roomNumber: 'RESUS-01', roomType: 'Procedure Room', capacity: 2, departmentName: 'Emergency & Trauma (ER)', status: 'AVAILABLE', attendingStaff: { doctorName: 'Dr. Neil Patrick', nurseOrCompounder: 'Sister Clara Oswald', statusNote: 'Crash Cart Checked' } },
-            { id: 'rm-er-02', roomNumber: 'DECONTAM-01', roomType: 'Procedure Room', capacity: 1, departmentName: 'Emergency & Trauma (ER)', status: 'AVAILABLE' },
-          ],
-          wards: [
-            {
-              id: 'wd-er-red',
-              name: 'Resuscitation Bay (Red Triage)',
-              wardType: 'ICU Ward',
-              supervisorNurse: 'Sister Clara Oswald, RN',
-              nursingStation: 'Station Red Triage',
-              departmentName: 'Emergency & Trauma (ER)',
-              staffRoster: {
-                supervisorNurse: 'Sister Clara Oswald, RN',
-                onDutyNurses: [{ name: 'Sister Clara Oswald', shift: 'Emergency 24x7', grade: 'Lead Trauma RN' }],
-                compounders: [{ name: 'Dev Sharma', duty: 'Emergency Cannulation & Defibrillator Assist' }],
-                cleaners: [{ name: 'Ramesh Kumar', shift: 'Emergency Rapid Response', lastRound: '5 mins ago' }],
-                roundingDoctors: [{ name: 'Dr. Neil Patrick', department: 'Trauma Team Leader', roundTime: 'Continuous 24/7' }],
-              },
-              beds: [
-                { id: 'b-resus-1', bedNumber: 'RESUS-BED-01', bedType: 'Motorized ICU Ventilator', dailyTariff: 350, status: 'AVAILABLE', cleanlinessStatus: 'SANITIZED', lastCleanedAt: 'Today, 09:30 AM', assignedCleaner: 'Ramesh Kumar' },
-                { id: 'b-resus-2', bedNumber: 'RESUS-BED-02', bedType: 'Motorized ICU Ventilator', dailyTariff: 350, status: 'AVAILABLE', cleanlinessStatus: 'SANITIZED', lastCleanedAt: 'Today, 09:25 AM', assignedCleaner: 'Ramesh Kumar' },
-              ],
-            },
-          ],
-        },
-      ],
-    },
   ];
 
   const [buildings, setBuildings] = useState<BuildingNode[]>(defaultCampusTemplate);
-  const [expandedBuildings, setExpandedBuildings] = useState<Record<string, boolean>>({ 'bld-1': true, 'bld-2': true });
-  const [expandedFloors, setExpandedFloors] = useState<Record<string, boolean>>({ 'fl-1-0': true, 'fl-1-1': true, 'fl-1-2': true });
+  const [expandedBuildings, setExpandedBuildings] = useState<Record<string, boolean>>({ 'bld-main-1': true });
+  const [expandedFloors, setExpandedFloors] = useState<Record<string, boolean>>({ 'fl-main-0': true, 'fl-main-1': true, 'fl-main-2': true });
   const [expandedWards, setExpandedWards] = useState<Record<string, boolean>>({ 'wd-0-1': true, 'wd-1-1': true, 'wd-1-2': true, 'wd-2-1': true });
 
   const [alertMsg, setAlertMsg] = useState<string | null>(null);
 
   // Modals state
-  const [showAddBuildingModal, setShowAddBuildingModal] = useState(false);
-  const [showAddFloorModal, setShowAddFloorModal] = useState<string | null>(null); // buildingId
+  const [showAddBuildingWizard, setShowAddBuildingWizard] = useState(false);
+  const [editingBuildingSpecs, setEditingBuildingSpecs] = useState<BuildingNode | null>(null);
+  const [showAddFloorModal, setShowAddFloorModal] = useState<string | null>(null);
   const [showAddWardModal, setShowAddWardModal] = useState<{ buildingId: string; floorId: string } | null>(null);
   const [showAddRoomModal, setShowAddRoomModal] = useState<{ buildingId: string; floorId: string } | null>(null);
   const [showAddBedModal, setShowAddBedModal] = useState<{ buildingId: string; floorId: string; wardId: string } | null>(null);
@@ -732,8 +725,7 @@ export const CampusInfrastructureSection: React.FC = () => {
     ward: WardNode;
   } | null>(null);
 
-  // Form states
-  const [buildingForm, setBuildingForm] = useState({ name: '', code: '', buildingType: 'Clinical Inpatient Tower' as BuildingNode['buildingType'] });
+  // Inline basic forms for single floor/ward/room/bed addition
   const [floorForm, setFloorForm] = useState({ floorNumber: '', code: '', wing: '' });
   const [wardForm, setWardForm] = useState({ name: '', wardType: 'General Ward' as WardNode['wardType'], supervisorNurse: '' });
   const [roomForm, setRoomForm] = useState({ roomNumber: '', roomType: 'Consultation Room' as RoomNode['roomType'] });
@@ -777,24 +769,22 @@ export const CampusInfrastructureSection: React.FC = () => {
   );
   const availableBeds = totalBeds - occupiedBeds;
 
-  // Handlers for Add
-  const handleAddBuildingSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const newBld: BuildingNode = {
-      id: `bld-${Date.now()}`,
-      code: buildingForm.code.toUpperCase(),
-      name: buildingForm.name,
-      buildingType: buildingForm.buildingType,
-      fireZone: 'Zone A (Automated Suppression)',
-      utilities: 'Primary Feeder + 250kVA Emergency Backup',
-      floors: [],
-    };
-    setBuildings([...buildings, newBld]);
-    setShowAddBuildingModal(false);
-    setBuildingForm({ name: '', code: '', buildingType: 'Clinical Inpatient Tower' });
-    showAlert(`Added building: ${newBld.name}`);
+  // Handler to provision entire building from Wizard
+  const handleCreateBuildingFromWizard = (newBuilding: BuildingNode) => {
+    setBuildings((prev) => [...prev, newBuilding]);
+    setExpandedBuildings((prev) => ({ ...prev, [newBuilding.id]: true }));
+    setShowAddBuildingWizard(false);
+    showAlert(`✓ Successfully provisioned ${newBuilding.name} with ${newBuilding.floors.length} floors and all wards/beds!`);
   };
 
+  // Handler to update building specs
+  const handleUpdateBuildingSpecs = (updatedBld: BuildingNode) => {
+    setBuildings((prev) => prev.map((b) => (b.id === updatedBld.id ? updatedBld : b)));
+    setEditingBuildingSpecs(null);
+    showAlert(`✓ Updated infrastructure specifications for ${updatedBld.name}`);
+  };
+
+  // Inline floor addition
   const handleAddFloorSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!showAddFloorModal) return;
@@ -802,7 +792,7 @@ export const CampusInfrastructureSection: React.FC = () => {
       id: `fl-${Date.now()}`,
       floorNumber: floorForm.floorNumber,
       code: floorForm.code.toUpperCase(),
-      wing: floorForm.wing || 'Standard Wing',
+      wing: floorForm.wing || 'Clinical Care Wing',
       accessZone: 'Standard Clinical Access',
       rooms: [],
       wards: [],
@@ -816,6 +806,7 @@ export const CampusInfrastructureSection: React.FC = () => {
     showAlert(`Added ${newFloor.floorNumber}`);
   };
 
+  // Inline ward addition
   const handleAddWardSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!showAddWardModal) return;
@@ -831,9 +822,9 @@ export const CampusInfrastructureSection: React.FC = () => {
       staffRoster: {
         supervisorNurse: wardForm.supervisorNurse || 'Ward Incharge, RN',
         onDutyNurses: [{ name: wardForm.supervisorNurse || 'Ward Incharge, RN', shift: 'Day', grade: 'RN' }],
-        compounders: [{ name: 'Compounder On Duty', duty: 'General Care' }],
-        cleaners: [{ name: 'Assigned Cleaner', shift: 'Day', lastRound: 'Just now' }],
-        roundingDoctors: [{ name: 'Dr. Assigned', department: 'Inpatient Care', roundTime: 'Morning' }],
+        compounders: [{ name: 'Assigned Compounder', duty: 'General Inpatient Care' }],
+        cleaners: [{ name: 'Assigned Housekeeper', shift: 'Day', lastRound: 'Just now' }],
+        roundingDoctors: [{ name: 'Attending Physician', department: 'Inpatient Care', roundTime: 'Morning' }],
       },
     };
     setBuildings((prev) =>
@@ -852,6 +843,7 @@ export const CampusInfrastructureSection: React.FC = () => {
     showAlert(`Added ward: ${newWard.name}`);
   };
 
+  // Inline room addition
   const handleAddRoomSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!showAddRoomModal) return;
@@ -880,6 +872,7 @@ export const CampusInfrastructureSection: React.FC = () => {
     showAlert(`Added room: ${newRoom.roomNumber}`);
   };
 
+  // Inline bed addition
   const handleAddBedSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!showAddBedModal) return;
@@ -916,9 +909,8 @@ export const CampusInfrastructureSection: React.FC = () => {
     showAlert(`Added bed: ${newBed.bedNumber}`);
   };
 
-  // Handlers for Delete
   const handleDeleteBuilding = (bldId: string) => {
-    if (window.confirm('Delete this entire building and all floors/wards/beds?')) {
+    if (window.confirm('Delete this building and all of its floors, wards, and beds?')) {
       setBuildings((prev) => prev.filter((b) => b.id !== bldId));
       showAlert('Building removed.');
     }
@@ -966,7 +958,6 @@ export const CampusInfrastructureSection: React.FC = () => {
     showAlert('Bed removed.');
   };
 
-  // Toggle quick status
   const handleToggleBedStatus = (bldId: string, floorId: string, wardId: string, bedId: string) => {
     setBuildings((prev) =>
       prev.map((b) =>
@@ -1001,7 +992,6 @@ export const CampusInfrastructureSection: React.FC = () => {
     );
   };
 
-  // Save Care Details Updates
   const handleSaveBedCareDetails = (updatedBed: BedNode) => {
     if (!selectedBedForCare) return;
     const { buildingId, floorId, wardId } = selectedBedForCare;
@@ -1030,10 +1020,9 @@ export const CampusInfrastructureSection: React.FC = () => {
       )
     );
     setSelectedBedForCare(null);
-    showAlert(`✓ Updated inpatient care team & staff roster for ${updatedBed.bedNumber}`);
+    showAlert(`✓ Updated inpatient care team for ${updatedBed.bedNumber}`);
   };
 
-  // Discharge Patient Workflow
   const handleDischargePatient = (bldId: string, floorId: string, wardId: string, bedId: string) => {
     setBuildings((prev) =>
       prev.map((b) =>
@@ -1071,10 +1060,9 @@ export const CampusInfrastructureSection: React.FC = () => {
       )
     );
     setSelectedBedForCare(null);
-    showAlert('✓ Patient successfully discharged. Bed marked as AVAILABLE (Needs Cleaning).');
+    showAlert('✓ Patient discharged. Bed marked as AVAILABLE (Needs Cleaning).');
   };
 
-  // Quick Admit Form Submit
   const handleAdmitPatientSubmit = (e: React.FormEvent, admitData: any) => {
     e.preventDefault();
     if (!admitPatientTarget) return;
@@ -1113,7 +1101,7 @@ export const CampusInfrastructureSection: React.FC = () => {
         shift: 'Morning',
       },
       cleanlinessStatus: 'SANITIZED',
-      lastCleanedAt: 'Just now (Pre-admission sanitized)',
+      lastCleanedAt: 'Just now',
       vitals: { bp: '120/80', pulse: '78 bpm', spo2: '99%', temp: '98.6 °F' },
     };
 
@@ -1182,7 +1170,7 @@ export const CampusInfrastructureSection: React.FC = () => {
 
   return (
     <div className="card" style={{ padding: '1.5rem' }}>
-      {/* Top Banner & Summary Rollup Strip */}
+      {/* Top Banner - Cleaned of prefix numbers, Latin text, and toggles */}
       <div
         style={{
           display: 'flex',
@@ -1198,88 +1186,37 @@ export const CampusInfrastructureSection: React.FC = () => {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
             <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--secondary)', margin: 0 }}>
-              2. Campus Physical Infrastructure & Inpatient Operations
+              Campus Physical Infrastructure & Facilities
             </h3>
             <span className="badge badge-info" style={{ textTransform: 'none', fontWeight: 700 }}>
-              Single-Location Campus Tree
+              Hospital Buildings & Inpatient Setup
             </span>
           </div>
           <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: '0.25rem 0 0' }}>
-            Collapsible hierarchy: <strong>Building</strong> $\rightarrow$ <strong>Floors</strong> $\rightarrow$ <strong>Rooms & Wards</strong> $\rightarrow$ <strong>Beds</strong> with multi-doctor care teams, nurses, compounders, and sanitation visibility.
+            Manage hospital buildings, floors, clinical wards, and beds with integrated multi-doctor monitoring, nursing, and sanitation visibility.
           </p>
         </div>
 
-        {/* Action Controls & View Switcher */}
+        {/* Top Actions */}
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-          {/* View Mode Toggle Pill Button Group */}
-          <div
-            style={{
-              display: 'flex',
-              backgroundColor: 'var(--bg-subtle, #f1f5f9)',
-              padding: '0.25rem',
-              borderRadius: '8px',
-              border: '1px solid var(--border-color)',
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => setViewMode('staff_activity')}
-              style={{
-                border: 'none',
-                background: viewMode === 'staff_activity' ? '#ffffff' : 'transparent',
-                color: viewMode === 'staff_activity' ? 'var(--primary)' : 'var(--text-muted)',
-                fontWeight: viewMode === 'staff_activity' ? 700 : 500,
-                fontSize: '0.75rem',
-                padding: '0.35rem 0.65rem',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.35rem',
-                boxShadow: viewMode === 'staff_activity' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-              }}
-            >
-              <Stethoscope size={13} /> 🩺 Live Care & Staff Operations
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('architecture')}
-              style={{
-                border: 'none',
-                background: viewMode === 'architecture' ? '#ffffff' : 'transparent',
-                color: viewMode === 'architecture' ? 'var(--primary)' : 'var(--text-muted)',
-                fontWeight: viewMode === 'architecture' ? 700 : 500,
-                fontSize: '0.75rem',
-                padding: '0.35rem 0.65rem',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.35rem',
-                boxShadow: viewMode === 'architecture' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-              }}
-            >
-              <Layers size={13} /> 📐 Architecture View
-            </button>
-          </div>
-
           <button
             type="button"
             className="btn btn-secondary btn-sm"
             onClick={() => {
               setBuildings(defaultCampusTemplate);
-              showAlert('Reloaded enterprise campus template with live patient & staff activity data.');
+              showAlert('Reset campus to default hospital complex.');
             }}
-            title="Reload Campus Template"
+            title="Reset Campus Infrastructure"
           >
             <RotateCcw size={14} /> Reset Campus
           </button>
           <button
             type="button"
             className="btn btn-primary btn-sm"
-            onClick={() => setShowAddBuildingModal(true)}
+            onClick={() => setShowAddBuildingWizard(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
           >
-            <Plus size={15} /> + Add Hospital Building
+            <Plus size={15} /> + Add Hospital Building (Full Setup Wizard)
           </button>
         </div>
       </div>
@@ -1322,7 +1259,7 @@ export const CampusInfrastructureSection: React.FC = () => {
           </div>
           <div>
             <div style={{ fontSize: '1.125rem', fontWeight: 700 }}>{totalBuildings}</div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Buildings</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Hospital Buildings</div>
           </div>
         </div>
 
@@ -1373,9 +1310,9 @@ export const CampusInfrastructureSection: React.FC = () => {
       </div>
 
       {/* ========================================================================= */}
-      {/* LEVEL 1: BUILDINGS ACCORDION */}
+      {/* LEVEL 1: BUILDINGS ACCORDION WITH ENTERPRISE SPECS */}
       {/* ========================================================================= */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
         {buildings.map((bld) => {
           const isBldExpanded = !!expandedBuildings[bld.id];
           const bldBedCount = bld.floors.reduce(
@@ -1389,9 +1326,10 @@ export const CampusInfrastructureSection: React.FC = () => {
               key={bld.id}
               style={{
                 border: '1px solid var(--border-color)',
-                borderRadius: '8px',
+                borderRadius: '10px',
                 overflow: 'hidden',
                 backgroundColor: '#ffffff',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
               }}
             >
               {/* Building Header Bar */}
@@ -1400,41 +1338,53 @@ export const CampusInfrastructureSection: React.FC = () => {
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
-                  padding: '0.75rem 1rem',
+                  padding: '0.875rem 1.25rem',
                   backgroundColor: '#f8fafc',
                   cursor: 'pointer',
                   borderBottom: isBldExpanded ? '1px solid var(--border-color)' : 'none',
                 }}
                 onClick={() => toggleBuilding(bld.id)}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
                   <button
                     type="button"
                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
                   >
-                    {isBldExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    {isBldExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                   </button>
-                  <Building size={18} color="var(--primary)" />
+                  <Building size={20} color="var(--primary)" />
                   <div>
-                    <span style={{ fontWeight: 700, fontSize: '0.9375rem', marginRight: '0.5rem' }}>
-                      {bld.name}
-                    </span>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--secondary)' }}>
+                        {bld.name}
+                      </span>
                       <code>{bld.code}</code>
-                    </span>
-                    <span
-                      className="badge badge-secondary"
-                      style={{ marginLeft: '0.5rem', fontSize: '0.6875rem' }}
-                    >
-                      {bld.buildingType.toUpperCase()}
-                    </span>
+                      <span className="badge badge-secondary" style={{ fontSize: '0.6875rem' }}>
+                        {bld.buildingType}
+                      </span>
+                      <span className="badge badge-success" style={{ fontSize: '0.6875rem' }}>
+                        ✓ Fire NOC {bld.fireNocStatus}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                      Admin: <strong>{bld.buildingAdmin}</strong> ({bld.intercomExt}) • Hours: {bld.operatingHours} • Utilities: {bld.powerBackupKva} kVA DG Backup • {bld.hasCentralOxygen ? 'Central O2 (MGPS) Enabled' : 'Cylinder Supply'}
+                    </div>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }} onClick={(e) => e.stopPropagation()}>
-                  <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }} onClick={(e) => e.stopPropagation()}>
+                  <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginRight: '0.5rem' }}>
                     {bld.floors.length} Floors • {bldRoomCount} Rooms • {bldBedCount} Total Beds
                   </span>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                    onClick={() => setEditingBuildingSpecs(bld)}
+                    title="Edit Building Specifications"
+                  >
+                    <Edit2 size={12} /> Edit Specs
+                  </button>
                   <button
                     type="button"
                     className="btn btn-secondary btn-sm"
@@ -1448,6 +1398,7 @@ export const CampusInfrastructureSection: React.FC = () => {
                     className="action-btn delete"
                     style={{ padding: '0.25rem' }}
                     onClick={() => handleDeleteBuilding(bld.id)}
+                    title="Delete Building"
                   >
                     <Trash2 size={13} />
                   </button>
@@ -1471,7 +1422,7 @@ export const CampusInfrastructureSection: React.FC = () => {
                           key={floor.id}
                           style={{
                             border: '1px solid #e2e8f0',
-                            borderRadius: '6px',
+                            borderRadius: '8px',
                             backgroundColor: '#fafbfc',
                             overflow: 'hidden',
                           }}
@@ -1489,7 +1440,7 @@ export const CampusInfrastructureSection: React.FC = () => {
                             }}
                             onClick={() => toggleFloor(floor.id)}
                           >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                               <button
                                 type="button"
                                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
@@ -1538,7 +1489,7 @@ export const CampusInfrastructureSection: React.FC = () => {
                           {/* LEVEL 3: WARDS & ROOMS WITHIN FLOOR */}
                           {isFloorExpanded && (
                             <div style={{ padding: '0.875rem', display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
-                              {/* Floor Clinical Wards */}
+                              {/* Clinical Wards */}
                               <div>
                                 <span
                                   style={{
@@ -1549,7 +1500,7 @@ export const CampusInfrastructureSection: React.FC = () => {
                                     letterSpacing: '0.5px',
                                   }}
                                 >
-                                  CLINICAL WARDS & INPATIENT BEDS
+                                  CLINICAL INPATIENT WARDS
                                 </span>
 
                                 {floor.wards.length === 0 ? (
@@ -1608,7 +1559,7 @@ export const CampusInfrastructureSection: React.FC = () => {
                                                 className="btn btn-secondary btn-sm"
                                                 style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
                                                 onClick={() => setSelectedWardForStaff({ buildingId: bld.id, floorId: floor.id, ward })}
-                                                title="View/Edit Ward Nurses, Compounders, Cleaners and Rounding Doctors"
+                                                title="Manage Ward Roster"
                                               >
                                                 <Users size={12} /> Staff Roster
                                               </button>
@@ -1631,7 +1582,7 @@ export const CampusInfrastructureSection: React.FC = () => {
                                             </div>
                                           </div>
 
-                                          {/* Ward Staff & Hygiene Summary Strip */}
+                                          {/* Ward Staff Roster Activity Bar */}
                                           {isWardExpanded && roster && (
                                             <div
                                               style={{
@@ -1660,22 +1611,22 @@ export const CampusInfrastructureSection: React.FC = () => {
                                               </div>
 
                                               <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                                                <span style={{ fontWeight: 600, color: '#059669' }}>🧹 Housekeeping / Cleaners:</span>
+                                                <span style={{ fontWeight: 600, color: '#059669' }}>🧹 Housekeeping Cleaners:</span>
                                                 <span style={{ color: 'var(--text-color)' }}>
-                                                  {roster.cleaners.map((cl) => `${cl.name} (Last round: ${cl.lastRound})`).join('; ') || 'Housekeeping Pool'}
+                                                  {roster.cleaners.map((cl) => `${cl.name} (${cl.lastRound})`).join('; ') || 'Housekeeping Desk'}
                                                 </span>
                                               </div>
 
                                               <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                                                 <span style={{ fontWeight: 600, color: '#4f46e5' }}>🩺 Rounding Doctors:</span>
                                                 <span style={{ color: 'var(--text-color)' }}>
-                                                  {roster.roundingDoctors.map((rd) => rd.name).join(', ') || 'Consultant on duty'}
+                                                  {roster.roundingDoctors.map((rd) => rd.name).join(', ') || 'Consultants on duty'}
                                                 </span>
                                               </div>
                                             </div>
                                           )}
 
-                                          {/* LEVEL 4: BEDS TILES GRID */}
+                                          {/* LEVEL 4: BEDS TILES GRID - Unified High Clarity View */}
                                           {isWardExpanded && (
                                             <div style={{ padding: '0.75rem', backgroundColor: '#f1f5f9' }}>
                                               {ward.beds.length === 0 ? (
@@ -1686,129 +1637,189 @@ export const CampusInfrastructureSection: React.FC = () => {
                                                 <div
                                                   style={{
                                                     display: 'grid',
-                                                    gridTemplateColumns:
-                                                      viewMode === 'staff_activity'
-                                                        ? 'repeat(auto-fill, minmax(290px, 1fr))'
-                                                        : 'repeat(auto-fill, minmax(180px, 1fr))',
+                                                    gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))',
                                                     gap: '0.75rem',
                                                   }}
                                                 >
                                                   {ward.beds.map((bed) => {
                                                     const pt = bed.inpatientDetails;
 
-                                                    // RENDER MODE A: LIVE CARE & STAFF OPERATIONS VIEW
-                                                    if (viewMode === 'staff_activity') {
-                                                      return (
-                                                        <div
-                                                          key={bed.id}
-                                                          style={{
-                                                            padding: '0.75rem',
-                                                            backgroundColor: '#ffffff',
-                                                            borderRadius: '8px',
-                                                            border:
-                                                              bed.status === 'OCCUPIED'
-                                                                ? '1px solid #bfdbfe'
-                                                                : bed.status === 'MAINTENANCE'
-                                                                ? '1px solid #fecaca'
-                                                                : '1px solid #e2e8f0',
-                                                            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-                                                            display: 'flex',
-                                                            flexDirection: 'column',
-                                                            gap: '0.5rem',
-                                                          }}
-                                                        >
-                                                          {/* Card Top Strip */}
-                                                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                                              <strong style={{ fontSize: '0.875rem', color: 'var(--secondary)' }}>
-                                                                {bed.bedNumber}
-                                                              </strong>
-                                                              {getBedStatusBadge(bed.status)}
-                                                            </div>
-                                                            {pt && getAcuityBadge(pt.acuity)}
+                                                    return (
+                                                      <div
+                                                        key={bed.id}
+                                                        style={{
+                                                          padding: '0.75rem',
+                                                          backgroundColor: '#ffffff',
+                                                          borderRadius: '8px',
+                                                          border:
+                                                            bed.status === 'OCCUPIED'
+                                                              ? '1px solid #bfdbfe'
+                                                              : bed.status === 'MAINTENANCE'
+                                                              ? '1px solid #fecaca'
+                                                              : '1px solid #e2e8f0',
+                                                          boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                                                          display: 'flex',
+                                                          flexDirection: 'column',
+                                                          gap: '0.45rem',
+                                                        }}
+                                                      >
+                                                        {/* Top Bed Code & Status */}
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                            <strong style={{ fontSize: '0.875rem', color: 'var(--secondary)' }}>
+                                                              {bed.bedNumber}
+                                                            </strong>
+                                                            {getBedStatusBadge(bed.status)}
                                                           </div>
+                                                          {pt && getAcuityBadge(pt.acuity)}
+                                                        </div>
 
-                                                          {/* OCCUPIED BED CLINICAL DATA */}
-                                                          {bed.status === 'OCCUPIED' && pt ? (
-                                                            <>
-                                                              {/* Patient Info Box */}
-                                                              <div
-                                                                style={{
-                                                                  padding: '0.5rem',
-                                                                  backgroundColor: '#eff6ff',
-                                                                  borderRadius: '6px',
-                                                                  border: '1px solid #dbeafe',
-                                                                }}
-                                                              >
-                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                                                  <div>
-                                                                    <strong style={{ fontSize: '0.875rem', color: '#1e3a8a' }}>
-                                                                      {pt.patientName}
-                                                                    </strong>{' '}
-                                                                    <span style={{ fontSize: '0.75rem', color: '#3b82f6' }}>
-                                                                      ({pt.age}y / {pt.gender.substring(0, 1)})
-                                                                    </span>
-                                                                  </div>
-                                                                  <code style={{ fontSize: '0.7rem', color: '#1e40af' }}>{pt.uhid}</code>
+                                                        {/* OCCUPIED BED CLINICAL DATA */}
+                                                        {bed.status === 'OCCUPIED' && pt ? (
+                                                          <>
+                                                            <div
+                                                              style={{
+                                                                padding: '0.5rem',
+                                                                backgroundColor: '#eff6ff',
+                                                                borderRadius: '6px',
+                                                                border: '1px solid #dbeafe',
+                                                              }}
+                                                            >
+                                                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                                                <div>
+                                                                  <strong style={{ fontSize: '0.875rem', color: '#1e3a8a' }}>
+                                                                    {pt.patientName}
+                                                                  </strong>{' '}
+                                                                  <span style={{ fontSize: '0.75rem', color: '#3b82f6' }}>
+                                                                    ({pt.age}y / {pt.gender.substring(0, 1)})
+                                                                  </span>
                                                                 </div>
-                                                                <div style={{ fontSize: '0.75rem', color: '#475569', marginTop: '0.2rem' }}>
-                                                                  <strong>Diagnosis:</strong> {pt.diagnosis}
-                                                                </div>
+                                                                <code style={{ fontSize: '0.7rem', color: '#1e40af' }}>{pt.uhid}</code>
+                                                              </div>
+                                                              <div style={{ fontSize: '0.75rem', color: '#475569', marginTop: '0.2rem' }}>
+                                                                <strong>Diagnosis:</strong> {pt.diagnosis}
+                                                               </div>
+                                                            </div>
+
+                                                            {/* Multi-Doctor and Nursing details */}
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.75rem' }}>
+                                                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                                                                <span style={{ fontWeight: 600, color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                                                                  <Stethoscope size={13} /> Doctor(s):
+                                                                </span>
+                                                                <span style={{ color: 'var(--text-color)', fontWeight: 600 }}>
+                                                                  {pt.primaryDoctor.name}
+                                                                </span>
+                                                                {pt.consultingDoctors && pt.consultingDoctors.length > 0 && (
+                                                                  <span
+                                                                    className="badge badge-info"
+                                                                    style={{ fontSize: '0.65rem', padding: '0.1rem 0.35rem', cursor: 'help' }}
+                                                                    title={`Co-Consultants: ${pt.consultingDoctors.map((d) => `${d.name} (${d.specialty})`).join(', ')}`}
+                                                                  >
+                                                                    +{pt.consultingDoctors.length} Co-Doctors
+                                                                  </span>
+                                                                )}
                                                               </div>
 
-                                                              {/* Multidisciplinary Care Team Chips */}
-                                                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.75rem' }}>
-                                                                {/* Doctors Line */}
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
-                                                                  <span style={{ fontWeight: 600, color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                                                                    <Stethoscope size={13} /> Doctor(s):
-                                                                  </span>
-                                                                  <span style={{ color: 'var(--text-color)', fontWeight: 600 }}>
-                                                                    {pt.primaryDoctor.name}
-                                                                  </span>
-                                                                  {pt.consultingDoctors && pt.consultingDoctors.length > 0 && (
-                                                                    <span
-                                                                      className="badge badge-info"
-                                                                      style={{ fontSize: '0.65rem', padding: '0.1rem 0.35rem', cursor: 'help' }}
-                                                                      title={`Consulting: ${pt.consultingDoctors.map((d) => `${d.name} (${d.specialty})`).join(', ')}`}
-                                                                    >
-                                                                      +{pt.consultingDoctors.length} Co-Doctors
-                                                                    </span>
-                                                                  )}
-                                                                </div>
-
-                                                                {/* Nurse & Compounder */}
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--text-muted)' }}>
-                                                                  <span>👩‍⚕️ Nurse: <strong>{pt.primaryNurse.name}</strong></span>
-                                                                  {pt.compounder && (
-                                                                    <span>• 🩹 Comp: <strong>{pt.compounder.name}</strong></span>
-                                                                  )}
-                                                                </div>
-
-                                                                {/* Sanitation & Cleaner */}
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#059669', fontSize: '0.7rem' }}>
-                                                                  <span>🧹 Sanitized by <strong>{pt.assignedCleaner?.name || 'Ramesh K.'}</strong></span>
-                                                                  <span>({pt.lastCleanedAt || '08:30 AM'})</span>
-                                                                </div>
+                                                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--text-muted)' }}>
+                                                                <span>👩‍⚕️ Nurse: <strong>{pt.primaryNurse.name}</strong></span>
+                                                                {pt.compounder && (
+                                                                  <span>• 🩹 Comp: <strong>{pt.compounder.name}</strong></span>
+                                                                )}
                                                               </div>
 
-                                                              {/* Card Action Buttons */}
-                                                              <div
-                                                                style={{
-                                                                  display: 'flex',
-                                                                  justifyContent: 'space-between',
-                                                                  alignItems: 'center',
-                                                                  marginTop: '0.25rem',
-                                                                  paddingTop: '0.35rem',
-                                                                  borderTop: '1px solid #e2e8f0',
-                                                                }}
+                                                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#059669', fontSize: '0.7rem' }}>
+                                                                <span>🧹 Cleaned by <strong>{pt.assignedCleaner?.name || 'Ramesh K.'}</strong></span>
+                                                                <span>({pt.lastCleanedAt || 'Today'})</span>
+                                                              </div>
+                                                            </div>
+
+                                                            {/* Actions */}
+                                                            <div
+                                                              style={{
+                                                                display: 'flex',
+                                                                justifyContent: 'space-between',
+                                                                alignItems: 'center',
+                                                                marginTop: '0.25rem',
+                                                                paddingTop: '0.35rem',
+                                                                borderTop: '1px solid #e2e8f0',
+                                                              }}
+                                                            >
+                                                              <button
+                                                                type="button"
+                                                                className="btn btn-secondary btn-sm"
+                                                                style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                                                                onClick={() =>
+                                                                  setSelectedBedForCare({
+                                                                    buildingId: bld.id,
+                                                                    floorId: floor.id,
+                                                                    wardId: ward.id,
+                                                                    bed,
+                                                                  })
+                                                                }
                                                               >
+                                                                <ClipboardList size={12} /> Care Team & Vitals
+                                                              </button>
+                                                              <div style={{ display: 'flex', gap: '0.35rem' }}>
                                                                 <button
                                                                   type="button"
                                                                   className="btn btn-secondary btn-sm"
-                                                                  style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                                                                  style={{ fontSize: '0.7rem', padding: '0.2rem 0.4rem', color: '#dc2626' }}
+                                                                  onClick={() => handleDischargePatient(bld.id, floor.id, ward.id, bed.id)}
+                                                                  title="Discharge Patient"
+                                                                >
+                                                                  Discharge
+                                                                </button>
+                                                                <button
+                                                                  type="button"
+                                                                  className="action-btn delete"
+                                                                  style={{ padding: '0.1rem' }}
+                                                                  onClick={() => handleDeleteBed(bld.id, floor.id, ward.id, bed.id)}
+                                                                >
+                                                                  <Trash2 size={12} />
+                                                                </button>
+                                                               </div>
+                                                            </div>
+                                                          </>
+                                                        ) : (
+                                                          // AVAILABLE OR MAINTENANCE BED
+                                                          <>
+                                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                                              {bed.bedType} • <strong style={{ color: '#047857' }}>${bed.dailyTariff}/day</strong>
+                                                            </div>
+
+                                                            <div style={{ fontSize: '0.7rem', color: bed.cleanlinessStatus === 'NEEDS_CLEANING' ? '#b45309' : '#059669', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                                              <span>
+                                                                {bed.cleanlinessStatus === 'NEEDS_CLEANING'
+                                                                  ? '⚠️ Needs Linen Change'
+                                                                  : '✓ Sanitized & Ready for Admission'}
+                                                              </span>
+                                                              {bed.assignedCleaner && <span>({bed.assignedCleaner})</span>}
+                                                            </div>
+
+                                                            {bed.notes && (
+                                                              <div style={{ fontSize: '0.7rem', color: '#dc2626' }}>
+                                                                Note: {bed.notes}
+                                                              </div>
+                                                            )}
+
+                                                            <div
+                                                              style={{
+                                                                display: 'flex',
+                                                                justifyContent: 'space-between',
+                                                                alignItems: 'center',
+                                                                marginTop: '0.25rem',
+                                                                paddingTop: '0.35rem',
+                                                                borderTop: '1px solid #e2e8f0',
+                                                              }}
+                                                            >
+                                                              {bed.status === 'AVAILABLE' ? (
+                                                                <button
+                                                                  type="button"
+                                                                  className="btn btn-primary btn-sm"
+                                                                  style={{ fontSize: '0.75rem', padding: '0.25rem 0.6rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
                                                                   onClick={() =>
-                                                                    setSelectedBedForCare({
+                                                                    setAdmitPatientTarget({
                                                                       buildingId: bld.id,
                                                                       floorId: floor.id,
                                                                       wardId: ward.id,
@@ -1816,161 +1827,33 @@ export const CampusInfrastructureSection: React.FC = () => {
                                                                     })
                                                                   }
                                                                 >
-                                                                  <ClipboardList size={12} /> Care Team & Vitals
+                                                                  <UserPlus size={12} /> + Admit IPD Patient
                                                                 </button>
-                                                                <div style={{ display: 'flex', gap: '0.35rem' }}>
-                                                                  <button
-                                                                    type="button"
-                                                                    className="btn btn-secondary btn-sm"
-                                                                    style={{ fontSize: '0.7rem', padding: '0.2rem 0.4rem', color: '#dc2626' }}
-                                                                    onClick={() => handleDischargePatient(bld.id, floor.id, ward.id, bed.id)}
-                                                                    title="Discharge Patient / Vacate Bed"
-                                                                  >
-                                                                    Discharge
-                                                                  </button>
-                                                                  <button
-                                                                    type="button"
-                                                                    className="action-btn delete"
-                                                                    style={{ padding: '0.1rem' }}
-                                                                    onClick={() => handleDeleteBed(bld.id, floor.id, ward.id, bed.id)}
-                                                                  >
-                                                                    <Trash2 size={12} />
-                                                                  </button>
-                                                                </div>
-                                                              </div>
-                                                            </>
-                                                          ) : (
-                                                            // AVAILABLE OR MAINTENANCE BED
-                                                            <>
-                                                              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                                                {bed.bedType} • <strong style={{ color: '#047857' }}>${bed.dailyTariff}/day</strong>
-                                                              </div>
-
-                                                              {/* Hygiene status */}
-                                                              <div style={{ fontSize: '0.7rem', color: bed.cleanlinessStatus === 'NEEDS_CLEANING' ? '#b45309' : '#059669', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                                                                <span>
-                                                                  {bed.cleanlinessStatus === 'NEEDS_CLEANING'
-                                                                    ? '⚠️ Needs Linen Change'
-                                                                    : '✓ Sanitized & Ready for Admission'}
+                                                              ) : (
+                                                                <span style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 600 }}>
+                                                                  Under Maintenance
                                                                 </span>
-                                                                {bed.assignedCleaner && <span>({bed.assignedCleaner})</span>}
-                                                              </div>
-
-                                                              {bed.notes && (
-                                                                <div style={{ fontSize: '0.7rem', color: '#dc2626' }}>
-                                                                  Note: {bed.notes}
-                                                                </div>
                                                               )}
 
-                                                              <div
-                                                                style={{
-                                                                  display: 'flex',
-                                                                  justifyContent: 'space-between',
-                                                                  alignItems: 'center',
-                                                                  marginTop: '0.25rem',
-                                                                  paddingTop: '0.35rem',
-                                                                  borderTop: '1px solid #e2e8f0',
-                                                                }}
-                                                              >
-                                                                {bed.status === 'AVAILABLE' ? (
-                                                                  <button
-                                                                    type="button"
-                                                                    className="btn btn-primary btn-sm"
-                                                                    style={{ fontSize: '0.75rem', padding: '0.25rem 0.6rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-                                                                    onClick={() =>
-                                                                      setAdmitPatientTarget({
-                                                                        buildingId: bld.id,
-                                                                        floorId: floor.id,
-                                                                        wardId: ward.id,
-                                                                        bed,
-                                                                      })
-                                                                    }
-                                                                  >
-                                                                    <UserPlus size={12} /> + Admit IPD Patient
-                                                                  </button>
-                                                                ) : (
-                                                                  <span style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 600 }}>
-                                                                    Under Maintenance
-                                                                  </span>
-                                                                )}
-
-                                                                <div style={{ display: 'flex', gap: '0.25rem' }}>
-                                                                  <button
-                                                                    type="button"
-                                                                    style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '0.6875rem', color: '#0284c7', padding: '0.1rem 0.25rem' }}
-                                                                    onClick={() => handleToggleBedStatus(bld.id, floor.id, ward.id, bed.id)}
-                                                                  >
-                                                                    Toggle
-                                                                  </button>
-                                                                  <button
-                                                                    type="button"
-                                                                    style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--danger)', padding: '0.1rem' }}
-                                                                    onClick={() => handleDeleteBed(bld.id, floor.id, ward.id, bed.id)}
-                                                                  >
-                                                                    <Trash2 size={11} />
-                                                                  </button>
-                                                                </div>
+                                                              <div style={{ display: 'flex', gap: '0.25rem' }}>
+                                                                <button
+                                                                  type="button"
+                                                                  style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '0.6875rem', color: '#0284c7', padding: '0.1rem 0.25rem' }}
+                                                                  onClick={() => handleToggleBedStatus(bld.id, floor.id, ward.id, bed.id)}
+                                                                >
+                                                                  Toggle
+                                                                </button>
+                                                                <button
+                                                                  type="button"
+                                                                  style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--danger)', padding: '0.1rem' }}
+                                                                  onClick={() => handleDeleteBed(bld.id, floor.id, ward.id, bed.id)}
+                                                                >
+                                                                  <Trash2 size={11} />
+                                                                </button>
                                                               </div>
-                                                            </>
-                                                          )}
-                                                        </div>
-                                                      );
-                                                    }
-
-                                                    // RENDER MODE B: ARCHITECTURE COMPACT VIEW
-                                                    return (
-                                                      <div
-                                                        key={bed.id}
-                                                        style={{
-                                                          padding: '0.5rem 0.75rem',
-                                                          backgroundColor: '#ffffff',
-                                                          borderRadius: '6px',
-                                                          border: '1px solid #e2e8f0',
-                                                          display: 'flex',
-                                                          flexDirection: 'column',
-                                                          gap: '0.25rem',
-                                                        }}
-                                                      >
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                          <strong style={{ fontSize: '0.8125rem', color: 'var(--secondary)' }}>
-                                                            {bed.bedNumber}
-                                                          </strong>
-                                                          {getBedStatusBadge(bed.status)}
-                                                        </div>
-                                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                                                          {bed.bedType}
-                                                        </div>
-                                                        <div
-                                                          style={{
-                                                            display: 'flex',
-                                                            justifyContent: 'space-between',
-                                                            alignItems: 'center',
-                                                            marginTop: '0.25rem',
-                                                            paddingTop: '0.25rem',
-                                                            borderTop: '1px dashed #e2e8f0',
-                                                          }}
-                                                        >
-                                                          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#047857' }}>
-                                                            ${bed.dailyTariff}/day
-                                                          </span>
-                                                          <div style={{ display: 'flex', gap: '0.25rem' }}>
-                                                            <button
-                                                              type="button"
-                                                              style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '0.6875rem', color: '#0284c7', padding: '0.1rem 0.25rem' }}
-                                                              onClick={() => handleToggleBedStatus(bld.id, floor.id, ward.id, bed.id)}
-                                                              title="Toggle Status"
-                                                            >
-                                                              Toggle
-                                                            </button>
-                                                            <button
-                                                              type="button"
-                                                              style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--danger)', padding: '0.1rem' }}
-                                                              onClick={() => handleDeleteBed(bld.id, floor.id, ward.id, bed.id)}
-                                                            >
-                                                              <Trash2 size={11} />
-                                                            </button>
-                                                          </div>
-                                                        </div>
+                                                            </div>
+                                                          </>
+                                                        )}
                                                       </div>
                                                     );
                                                   })}
@@ -1996,7 +1879,7 @@ export const CampusInfrastructureSection: React.FC = () => {
                                     letterSpacing: '0.5px',
                                   }}
                                 >
-                                  ROOMS, CHAMBERS & PROCEDURE SUITES
+                                  CONSULTATION CHAMBERS & PROCEDURE ROOMS
                                 </span>
 
                                 {floor.rooms.length === 0 ? (
@@ -2025,7 +1908,7 @@ export const CampusInfrastructureSection: React.FC = () => {
                                           </span>
                                         </div>
                                         <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                                          Dept: {room.departmentName || 'General'}
+                                          Dept: {room.departmentName || 'General Consultation'}
                                         </div>
                                         {room.attendingStaff && (
                                           <div style={{ fontSize: '0.7rem', color: '#1e40af', marginTop: '0.25rem', paddingTop: '0.25rem', borderTop: '1px dashed #e2e8f0' }}>
@@ -2051,7 +1934,28 @@ export const CampusInfrastructureSection: React.FC = () => {
       </div>
 
       {/* ========================================================================= */}
-      {/* MODAL: DEEP BED CARE TEAM & INPATIENT ACTIVITY INSPECTOR */}
+      {/* MODAL: FULL HOSPITAL BUILDING SETUP WIZARD (WITH FLOORS, WARDS, BEDS) */}
+      {/* ========================================================================= */}
+      {showAddBuildingWizard && (
+        <AddBuildingWizardModal
+          onClose={() => setShowAddBuildingWizard(false)}
+          onProvision={handleCreateBuildingFromWizard}
+        />
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: EDIT BUILDING SPECIFICATIONS */}
+      {/* ========================================================================= */}
+      {editingBuildingSpecs && (
+        <EditBuildingSpecsModal
+          building={editingBuildingSpecs}
+          onClose={() => setEditingBuildingSpecs(null)}
+          onSave={handleUpdateBuildingSpecs}
+        />
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: DEEP BED CARE TEAM INSPECTOR */}
       {/* ========================================================================= */}
       {selectedBedForCare && (
         <BedCareInspectorModal
@@ -2070,7 +1974,7 @@ export const CampusInfrastructureSection: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL: QUICK ADMIT IPD PATIENT */}
+      {/* MODAL: QUICK ADMIT PATIENT */}
       {/* ========================================================================= */}
       {admitPatientTarget && (
         <AdmitPatientModal
@@ -2082,7 +1986,7 @@ export const CampusInfrastructureSection: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL: WARD STAFF ROSTER MANAGER */}
+      {/* MODAL: WARD STAFF MANAGER */}
       {/* ========================================================================= */}
       {selectedWardForStaff && (
         <WardStaffManagerModal
@@ -2122,63 +2026,10 @@ export const CampusInfrastructureSection: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL: ADD BUILDING */}
-      {/* ========================================================================= */}
-      {showAddBuildingModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
-          <div style={{ backgroundColor: '#ffffff', borderRadius: '8px', width: '100%', maxWidth: '480px', padding: '1.5rem', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-              <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Add Hospital Building</h4>
-              <button onClick={() => setShowAddBuildingModal(false)} style={{ border: 'none', background: 'none', cursor: 'pointer' }}><X size={18} /></button>
-            </div>
-            <form onSubmit={handleAddBuildingSubmit}>
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label className="form-label">Building Name</label>
-                <input
-                  className="form-input"
-                  value={buildingForm.name}
-                  onChange={(e) => setBuildingForm({ ...buildingForm, name: e.target.value })}
-                  placeholder="e.g. Surgical & Super Specialty Tower"
-                  required
-                />
-              </div>
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label className="form-label">Building Code</label>
-                <input
-                  className="form-input"
-                  value={buildingForm.code}
-                  onChange={(e) => setBuildingForm({ ...buildingForm, code: e.target.value })}
-                  placeholder="e.g. BLD-SURG"
-                  required
-                />
-              </div>
-              <div className="form-group" style={{ marginBottom: '1.25rem' }}>
-                <label className="form-label">Building Classification</label>
-                <select
-                  className="form-select"
-                  value={buildingForm.buildingType}
-                  onChange={(e) => setBuildingForm({ ...buildingForm, buildingType: e.target.value as any })}
-                >
-                  <option value="Clinical Inpatient Tower">Clinical Inpatient Tower</option>
-                  <option value="Emergency & Trauma Center">Emergency & Trauma Center</option>
-                  <option value="Diagnostic & Oncology Pavilion">Diagnostic & Oncology Pavilion</option>
-                  <option value="Administration & Support">Administration & Support</option>
-                </select>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setShowAddBuildingModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary"><Building size={14} /> Create Building</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* MODAL: ADD FLOOR */}
+      {/* MODAL: INLINE ADD FLOOR */}
       {/* ========================================================================= */}
       {showAddFloorModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
           <div style={{ backgroundColor: '#ffffff', borderRadius: '8px', width: '100%', maxWidth: '460px', padding: '1.5rem', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
               <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Add Floor to Building</h4>
@@ -2191,7 +2042,7 @@ export const CampusInfrastructureSection: React.FC = () => {
                   className="form-input"
                   value={floorForm.floorNumber}
                   onChange={(e) => setFloorForm({ ...floorForm, floorNumber: e.target.value })}
-                  placeholder="e.g. Floor 4 (Orthopedic & Neuro Wing)"
+                  placeholder="e.g. Floor 3 - Oncology & Infusion"
                   required
                 />
               </div>
@@ -2201,7 +2052,7 @@ export const CampusInfrastructureSection: React.FC = () => {
                   className="form-input"
                   value={floorForm.code}
                   onChange={(e) => setFloorForm({ ...floorForm, code: e.target.value })}
-                  placeholder="e.g. FL-4"
+                  placeholder="e.g. FL-3"
                   required
                 />
               </div>
@@ -2211,7 +2062,7 @@ export const CampusInfrastructureSection: React.FC = () => {
                   className="form-input"
                   value={floorForm.wing}
                   onChange={(e) => setFloorForm({ ...floorForm, wing: e.target.value })}
-                  placeholder="e.g. South Surgical Wing"
+                  placeholder="e.g. East Wing Daycare"
                 />
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
@@ -2224,10 +2075,10 @@ export const CampusInfrastructureSection: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL: ADD WARD */}
+      {/* MODAL: INLINE ADD WARD */}
       {/* ========================================================================= */}
       {showAddWardModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
           <div style={{ backgroundColor: '#ffffff', borderRadius: '8px', width: '100%', maxWidth: '480px', padding: '1.5rem', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
               <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Add Clinical Inpatient Ward</h4>
@@ -2240,7 +2091,7 @@ export const CampusInfrastructureSection: React.FC = () => {
                   className="form-input"
                   value={wardForm.name}
                   onChange={(e) => setWardForm({ ...wardForm, name: e.target.value })}
-                  placeholder="e.g. Pediatric Intensive Care Ward"
+                  placeholder="e.g. Dialysis Daycare Ward"
                   required
                 />
               </div>
@@ -2253,6 +2104,8 @@ export const CampusInfrastructureSection: React.FC = () => {
                 >
                   <option value="General Ward">General Ward</option>
                   <option value="ICU Ward">ICU Ward</option>
+                  <option value="NICU Ward">NICU Ward</option>
+                  <option value="Pediatric Ward">Pediatric Ward</option>
                   <option value="Male Ward">Male Ward</option>
                   <option value="Female Ward">Female Ward</option>
                   <option value="Maternity Ward">Maternity Ward</option>
@@ -2261,12 +2114,12 @@ export const CampusInfrastructureSection: React.FC = () => {
                 </select>
               </div>
               <div className="form-group" style={{ marginBottom: '1.25rem' }}>
-                <label className="form-label">In-Charge Supervisor Nurse</label>
+                <label className="form-label">Supervisor Nurse</label>
                 <input
                   className="form-input"
                   value={wardForm.supervisorNurse}
                   onChange={(e) => setWardForm({ ...wardForm, supervisorNurse: e.target.value })}
-                  placeholder="e.g. Sister Elena Rostova, RN"
+                  placeholder="e.g. Sister Clara Oswald, RN"
                 />
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
@@ -2279,10 +2132,10 @@ export const CampusInfrastructureSection: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL: ADD ROOM */}
+      {/* MODAL: INLINE ADD ROOM */}
       {/* ========================================================================= */}
       {showAddRoomModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
           <div style={{ backgroundColor: '#ffffff', borderRadius: '8px', width: '100%', maxWidth: '460px', padding: '1.5rem', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
               <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Add Room / Consultation Chamber</h4>
@@ -2295,7 +2148,7 @@ export const CampusInfrastructureSection: React.FC = () => {
                   className="form-input"
                   value={roomForm.roomNumber}
                   onChange={(e) => setRoomForm({ ...roomForm, roomNumber: e.target.value })}
-                  placeholder="e.g. OPD-105"
+                  placeholder="e.g. OPD-108"
                   required
                 />
               </div>
@@ -2324,10 +2177,10 @@ export const CampusInfrastructureSection: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL: ADD BED */}
+      {/* MODAL: INLINE ADD BED */}
       {/* ========================================================================= */}
       {showAddBedModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
           <div style={{ backgroundColor: '#ffffff', borderRadius: '8px', width: '100%', maxWidth: '460px', padding: '1.5rem', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
               <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Add Bed to Ward</h4>
@@ -2382,7 +2235,803 @@ export const CampusInfrastructureSection: React.FC = () => {
 };
 
 // ============================================================================
-// SUB-MODAL 1: BED CARE INSPECTOR (MULTI-DOCTORS, NURSES, COMPOUNDERS, CLEANERS)
+// WIZARD MODAL: COMPLETE HOSPITAL BUILDING PROVISIONING WIZARD
+// ============================================================================
+interface BuildingWizardProps {
+  onClose: () => void;
+  onProvision: (newBuilding: BuildingNode) => void;
+}
+
+const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProvision }) => {
+  const [activeStep, setActiveStep] = useState<'identity' | 'floors_wards'>('identity');
+
+  // Building identity & operations
+  const [buildingData, setBuildingData] = useState({
+    name: '',
+    code: '',
+    buildingType: 'Main Clinical Hospital Tower' as BuildingNode['buildingType'],
+    buildingAdmin: 'Dr. Arthur Pendelton',
+    intercomExt: 'Ext: 102',
+    operatingHours: '24/7 Emergency & Inpatient',
+    fireNocStatus: 'APPROVED' as BuildingNode['fireNocStatus'],
+    fireZone: 'Zone A & B (Automated Sprinklers)',
+    powerBackupKva: 500,
+    hasCentralOxygen: true,
+    stretcherLifts: 2,
+    totalFloorsCount: 3,
+    basementCount: 1,
+  });
+
+  // Provisioning floor drafts
+  const [floorDrafts, setFloorDrafts] = useState<FloorDraft[]>([
+    {
+      id: 'fld-1',
+      floorNumber: 'Ground Floor (Level 0)',
+      code: 'FL-0',
+      wing: 'Emergency Triage & Ambulatory Care',
+      roomCount: 4,
+      roomType: 'Consultation Room',
+      roomDept: 'General Medicine & Emergency',
+      wardName: 'Emergency Observation Unit',
+      wardType: 'General Ward',
+      bedCount: 6,
+      bedType: 'Emergency Stretcher',
+      dailyTariff: 180,
+      supervisorNurse: 'Sister Clara Oswald, RN',
+    },
+    {
+      id: 'fld-2',
+      floorNumber: 'Floor 1 (Level 1)',
+      code: 'FL-1',
+      wing: 'General Inpatient Medical Wards',
+      roomCount: 2,
+      roomType: 'Doctor Chamber',
+      roomDept: 'Inpatient Care',
+      wardName: 'General Medical Inpatient Ward',
+      wardType: 'Male Ward',
+      bedCount: 15,
+      bedType: 'Standard Ward Bed',
+      dailyTariff: 150,
+      supervisorNurse: 'Marcus Bell, BSN',
+    },
+    {
+      id: 'fld-3',
+      floorNumber: 'Floor 2 (Level 2)',
+      code: 'FL-2',
+      wing: 'Critical Care & Surgical Suites',
+      roomCount: 2,
+      roomType: 'OT Suite',
+      roomDept: 'Surgery & OT',
+      wardName: 'Intensive Critical Care Unit (ICU)',
+      wardType: 'ICU Ward',
+      bedCount: 10,
+      bedType: 'Motorized ICU Ventilator',
+      dailyTariff: 450,
+      supervisorNurse: 'Sister Miriam Cruz, CCRN',
+    },
+  ]);
+
+  // Blueprint presets
+  const applyPreset = (type: 'emergency' | 'inpatient' | 'icu' | 'maternity') => {
+    const newId = `fld-${Date.now()}-${Math.floor(Math.random() * 100)}`;
+    const floorIndex = floorDrafts.length;
+
+    let preset: FloorDraft;
+    switch (type) {
+      case 'emergency':
+        preset = {
+          id: newId,
+          floorNumber: `Level ${floorIndex} - Emergency Triage`,
+          code: `FL-ER-${floorIndex}`,
+          wing: 'Emergency & Acute Trauma',
+          roomCount: 4,
+          roomType: 'Procedure Room',
+          roomDept: 'Emergency & Trauma',
+          wardName: 'Acute Emergency Triage Bay',
+          wardType: 'General Ward',
+          bedCount: 8,
+          bedType: 'Emergency Stretcher',
+          dailyTariff: 200,
+          supervisorNurse: 'Lead Trauma Nurse, RN',
+        };
+        break;
+      case 'inpatient':
+        preset = {
+          id: newId,
+          floorNumber: `Level ${floorIndex} - Inpatient Wards`,
+          code: `FL-MED-${floorIndex}`,
+          wing: 'General Inpatient Medicine',
+          roomCount: 2,
+          roomType: 'Consultation Room',
+          roomDept: 'Internal Medicine',
+          wardName: 'Medical Inpatient Ward',
+          wardType: 'Male Ward',
+          bedCount: 20,
+          bedType: 'Standard Ward Bed',
+          dailyTariff: 150,
+          supervisorNurse: 'Ward Nurse Incharge, RN',
+        };
+        break;
+      case 'icu':
+        preset = {
+          id: newId,
+          floorNumber: `Level ${floorIndex} - Critical Care (ICU)`,
+          code: `FL-ICU-${floorIndex}`,
+          wing: 'Intensive Care & Surgical OT',
+          roomCount: 2,
+          roomType: 'OT Suite',
+          roomDept: 'Operation Theatre Complex',
+          wardName: 'Intensive Critical Care (ICU)',
+          wardType: 'ICU Ward',
+          bedCount: 12,
+          bedType: 'Motorized ICU Ventilator',
+          dailyTariff: 500,
+          supervisorNurse: 'Critical Care Sister Incharge, CCRN',
+        };
+        break;
+      case 'maternity':
+        preset = {
+          id: newId,
+          floorNumber: `Level ${floorIndex} - Maternity & Neonatal`,
+          code: `FL-MAT-${floorIndex}`,
+          wing: 'Mother & Child Care Wing',
+          roomCount: 3,
+          roomType: 'Consultation Room',
+          roomDept: 'Obstetrics & Gynecology',
+          wardName: 'Postnatal Maternity Ward',
+          wardType: 'Maternity Ward',
+          bedCount: 14,
+          bedType: 'Semi-Fowler',
+          dailyTariff: 220,
+          supervisorNurse: 'Senior Midwife Nurse, RMN',
+        };
+        break;
+    }
+
+    setFloorDrafts([...floorDrafts, preset]);
+  };
+
+  const handleUpdateFloorDraft = (id: string, field: string, value: any) => {
+    setFloorDrafts(floorDrafts.map((f) => (f.id === id ? { ...f, [field]: value } : f)));
+  };
+
+  const handleRemoveFloorDraft = (id: string) => {
+    setFloorDrafts(floorDrafts.filter((f) => f.id !== id));
+  };
+
+  const totalBedsProvisioned = floorDrafts.reduce((acc, f) => acc + (Number(f.bedCount) || 0), 0);
+  const totalRoomsProvisioned = floorDrafts.reduce((acc, f) => acc + (Number(f.roomCount) || 0), 0);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!buildingData.name.trim() || !buildingData.code.trim()) {
+      alert('Please enter building name and building code.');
+      return;
+    }
+
+    const bldId = `bld-${Date.now()}`;
+    const codeUpper = buildingData.code.trim().toUpperCase();
+
+    // Construct floors, rooms, wards, and beds
+    const generatedFloors: FloorNode[] = floorDrafts.map((fDraft, fIdx) => {
+      const flId = `fl-${bldId}-${fIdx}`;
+
+      // Generate rooms
+      const rooms: RoomNode[] = Array.from({ length: fDraft.roomCount }, (_, rIdx) => ({
+        id: `rm-${flId}-${rIdx + 1}`,
+        roomNumber: `${codeUpper}-${fDraft.code}-R${rIdx + 1}`,
+        roomType: fDraft.roomType,
+        capacity: 1,
+        departmentName: fDraft.roomDept,
+        status: 'AVAILABLE',
+        attendingStaff: { doctorName: 'Attending Consultant', nurseOrCompounder: 'Floor Assistant' },
+      }));
+
+      // Generate beds for ward
+      const beds: BedNode[] = Array.from({ length: fDraft.bedCount }, (_, bIdx) => ({
+        id: `b-${flId}-${bIdx + 1}`,
+        bedNumber: `${codeUpper}-${fDraft.code}-B${(bIdx + 1).toString().padStart(2, '0')}`,
+        bedType: fDraft.bedType,
+        dailyTariff: fDraft.dailyTariff,
+        status: 'AVAILABLE',
+        cleanlinessStatus: 'SANITIZED',
+        lastCleanedAt: 'Provisioned Clean & Ready',
+        assignedCleaner: 'Housekeeping Desk',
+      }));
+
+      // Generate ward
+      const ward: WardNode = {
+        id: `wd-${flId}-1`,
+        name: fDraft.wardName,
+        wardType: fDraft.wardType,
+        supervisorNurse: fDraft.supervisorNurse,
+        nursingStation: `Station ${fDraft.code}`,
+        departmentName: fDraft.roomDept,
+        beds,
+        staffRoster: {
+          supervisorNurse: fDraft.supervisorNurse,
+          onDutyNurses: [{ name: fDraft.supervisorNurse, shift: 'Day Shift (Lead)', grade: 'RN' }],
+          compounders: [{ name: 'Assigned Compounder', duty: 'General Patient Care' }],
+          cleaners: [{ name: 'Assigned Housekeeper', shift: 'Day Shift', lastRound: 'Just now' }],
+          roundingDoctors: [{ name: 'Attending Physician', department: fDraft.roomDept, roundTime: 'Morning' }],
+        },
+      };
+
+      return {
+        id: flId,
+        floorNumber: fDraft.floorNumber,
+        code: fDraft.code,
+        wing: fDraft.wing,
+        accessZone: 'Standard Clinical Access',
+        rooms,
+        wards: [ward],
+      };
+    });
+
+    const newBuilding: BuildingNode = {
+      id: bldId,
+      code: codeUpper,
+      name: buildingData.name.trim(),
+      buildingType: buildingData.buildingType,
+      totalFloorsCount: generatedFloors.length,
+      basementCount: buildingData.basementCount,
+      buildingAdmin: buildingData.buildingAdmin,
+      intercomExt: buildingData.intercomExt,
+      operatingHours: buildingData.operatingHours,
+      fireNocStatus: buildingData.fireNocStatus,
+      fireZone: buildingData.fireZone,
+      powerBackupKva: buildingData.powerBackupKva,
+      hasCentralOxygen: buildingData.hasCentralOxygen,
+      stretcherLifts: buildingData.stretcherLifts,
+      utilities: `${buildingData.powerBackupKva} kVA DG Backup, ${buildingData.hasCentralOxygen ? 'Central O2 Pipeline (MGPS)' : 'Oxygen Cylinder Supply'}`,
+      floors: generatedFloors,
+    };
+
+    onProvision(newBuilding);
+  };
+
+  return (
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
+      <div style={{ backgroundColor: '#ffffff', borderRadius: '12px', width: '100%', maxWidth: '820px', padding: '1.75rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', maxHeight: '92vh', overflowY: 'auto' }}>
+        {/* Wizard Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.875rem', marginBottom: '1.25rem' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Building size={22} color="var(--primary)" />
+              <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700 }}>
+                Hospital Building Setup & Provisioning Wizard
+              </h3>
+            </div>
+            <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+              Configure hospital building identity, power/oxygen utilities, and auto-generate complete floors, wards, and beds.
+            </p>
+          </div>
+          <button onClick={onClose} style={{ border: 'none', background: 'none', cursor: 'pointer' }}><X size={20} /></button>
+        </div>
+
+        {/* Step Indicator */}
+        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem' }}>
+          <button
+            type="button"
+            className={`btn btn-sm ${activeStep === 'identity' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setActiveStep('identity')}
+            style={{ fontSize: '0.8125rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+          >
+            <Building size={14} /> 1. Building Identity & Operations
+          </button>
+          <button
+            type="button"
+            className={`btn btn-sm ${activeStep === 'floors_wards' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setActiveStep('floors_wards')}
+            style={{ fontSize: '0.8125rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+          >
+            <Layers size={14} /> 2. Floors, Wards & Beds Blueprint ({floorDrafts.length} Floors • {totalBedsProvisioned} Beds)
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          {/* STEP 1: IDENTITY & CRITICAL HOSPITAL UTILITIES */}
+          {activeStep === 'identity' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '1rem' }}>
+                <div className="form-group">
+                  <label className="form-label">Official Building Name</label>
+                  <input
+                    className="form-input"
+                    placeholder="e.g. Surgical & Super Specialty Tower"
+                    value={buildingData.name}
+                    onChange={(e) => setBuildingData({ ...buildingData, name: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Building System Code</label>
+                  <input
+                    className="form-input"
+                    placeholder="e.g. BLD-SURG-02"
+                    value={buildingData.code}
+                    onChange={(e) => setBuildingData({ ...buildingData, code: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1rem' }}>
+                <div className="form-group">
+                  <label className="form-label">Hospital Classification Type</label>
+                  <select
+                    className="form-select"
+                    value={buildingData.buildingType}
+                    onChange={(e) => setBuildingData({ ...buildingData, buildingType: e.target.value as any })}
+                  >
+                    <option value="Main Clinical Hospital Tower">Main Clinical Hospital Tower</option>
+                    <option value="Emergency & Trauma Center">Emergency & Trauma Center</option>
+                    <option value="Surgical & Inpatient Block">Surgical & Inpatient Block</option>
+                    <option value="Diagnostic & Oncology Pavilion">Diagnostic & Oncology Pavilion</option>
+                    <option value="Administration & Ambulatory Pavilion">Administration & Ambulatory Pavilion</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Operating Schedule</label>
+                  <select
+                    className="form-select"
+                    value={buildingData.operatingHours}
+                    onChange={(e) => setBuildingData({ ...buildingData, operatingHours: e.target.value })}
+                  >
+                    <option value="24/7 Continuous Emergency & Inpatient">24/7 Continuous Emergency & Inpatient</option>
+                    <option value="08:00 - 20:00 Ambulatory Care">08:00 - 20:00 Ambulatory Care</option>
+                    <option value="06:00 - 22:00 Daycare & Diagnostic">06:00 - 22:00 Daycare & Diagnostic</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Operational Leadership */}
+              <div style={{ padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--secondary)', display: 'block', marginBottom: '0.5rem' }}>
+                  Operational Management & Contact
+                </span>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '0.75rem' }}>
+                  <div>
+                    <label className="form-label" style={{ fontSize: '0.75rem' }}>Facility In-Charge Administrator</label>
+                    <input
+                      className="form-input"
+                      value={buildingData.buildingAdmin}
+                      onChange={(e) => setBuildingData({ ...buildingData, buildingAdmin: e.target.value })}
+                      placeholder="e.g. Dr. Arthur Pendelton / Eng. Stone"
+                    />
+                  </div>
+                  <div>
+                    <label className="form-label" style={{ fontSize: '0.75rem' }}>Direct Intercom / Phone Ext</label>
+                    <input
+                      className="form-input"
+                      value={buildingData.intercomExt}
+                      onChange={(e) => setBuildingData({ ...buildingData, intercomExt: e.target.value })}
+                      placeholder="e.g. Ext: 104"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Critical Utilities & Life Safety */}
+              <div style={{ padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#047857', display: 'block', marginBottom: '0.5rem' }}>
+                  Life Safety, Medical Oxygen & Emergency Utilities
+                </span>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
+                  <div>
+                    <label className="form-label" style={{ fontSize: '0.75rem' }}>Power Backup (DG kVA)</label>
+                    <input
+                      type="number"
+                      className="form-input"
+                      value={buildingData.powerBackupKva}
+                      onChange={(e) => setBuildingData({ ...buildingData, powerBackupKva: Number(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div>
+                    <label className="form-label" style={{ fontSize: '0.75rem' }}>Patient & Stretcher Lifts</label>
+                    <input
+                      type="number"
+                      className="form-input"
+                      value={buildingData.stretcherLifts}
+                      onChange={(e) => setBuildingData({ ...buildingData, stretcherLifts: Number(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div>
+                    <label className="form-label" style={{ fontSize: '0.75rem' }}>Fire Clearance NOC</label>
+                    <select
+                      className="form-select"
+                      value={buildingData.fireNocStatus}
+                      onChange={(e) => setBuildingData({ ...buildingData, fireNocStatus: e.target.value as any })}
+                    >
+                      <option value="APPROVED">✓ Approved & Valid</option>
+                      <option value="RENEWAL_DUE">Renewal Due</option>
+                      <option value="INSPECTION_PENDING">Inspection Pending</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: '0.75rem' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.8125rem' }}>
+                    <input
+                      type="checkbox"
+                      checked={buildingData.hasCentralOxygen}
+                      onChange={(e) => setBuildingData({ ...buildingData, hasCentralOxygen: e.target.checked })}
+                      style={{ width: '16px', height: '16px' }}
+                    />
+                    <strong>Central Medical Gas Pipeline System (MGPS / Liquid Oxygen) Connected to this building</strong>
+                  </label>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.5rem' }}>
+                <button type="button" className="btn btn-secondary" onClick={onClose}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => setActiveStep('floors_wards')}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                >
+                  Next: Configure Floors & Wards <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 2: FLOORS, CLINICAL WARDS & BEDS BLUEPRINT */}
+          {activeStep === 'floors_wards' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              {/* Quick Blueprints Strip */}
+              <div style={{ padding: '0.875rem', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#166534', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <Sparkles size={16} /> Instant Clinical Floor Presets
+                  </span>
+                  <span style={{ fontSize: '0.75rem', color: '#15803d' }}>
+                    Click to instantly add standard hospital floors
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    style={{ backgroundColor: '#ffffff', border: '1px solid #86efac', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                    onClick={() => applyPreset('emergency')}
+                  >
+                    ⚡ + Emergency Triage (8 stretchers + 4 OPD)
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    style={{ backgroundColor: '#ffffff', border: '1px solid #86efac', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                    onClick={() => applyPreset('inpatient')}
+                  >
+                    🛏️ + Inpatient Floor (20 beds)
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    style={{ backgroundColor: '#ffffff', border: '1px solid #86efac', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                    onClick={() => applyPreset('icu')}
+                  >
+                    🫀 + ICU & Surgery (12 ventilators + 2 OT)
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    style={{ backgroundColor: '#ffffff', border: '1px solid #86efac', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                    onClick={() => applyPreset('maternity')}
+                  >
+                    👶 + Maternity Wing (14 beds)
+                  </button>
+                </div>
+              </div>
+
+              {/* Floor Drafts List */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '420px', overflowY: 'auto', paddingRight: '0.25rem' }}>
+                {floorDrafts.map((draft, idx) => (
+                  <div
+                    key={draft.id}
+                    style={{
+                      border: '1px solid #cbd5e1',
+                      borderRadius: '8px',
+                      padding: '1rem',
+                      backgroundColor: '#ffffff',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ padding: '0.2rem 0.5rem', backgroundColor: '#e2e8f0', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700 }}>
+                          Floor {idx + 1}
+                        </span>
+                        <input
+                          style={{ fontWeight: 700, fontSize: '0.875rem', border: '1px solid #cbd5e1', borderRadius: '4px', padding: '0.25rem 0.5rem', width: '220px' }}
+                          value={draft.floorNumber}
+                          onChange={(e) => handleUpdateFloorDraft(draft.id, 'floorNumber', e.target.value)}
+                        />
+                        <input
+                          style={{ fontSize: '0.75rem', border: '1px solid #cbd5e1', borderRadius: '4px', padding: '0.25rem 0.5rem', width: '90px' }}
+                          value={draft.code}
+                          onChange={(e) => handleUpdateFloorDraft(draft.id, 'code', e.target.value)}
+                          placeholder="Code"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveFloorDraft(draft.id)}
+                        style={{ border: 'none', background: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                      >
+                        <Trash2 size={13} /> Remove Floor
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                      <div>
+                        <label className="form-label" style={{ fontSize: '0.7rem' }}>Wing / Description</label>
+                        <input
+                          className="form-input"
+                          value={draft.wing}
+                          onChange={(e) => handleUpdateFloorDraft(draft.id, 'wing', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="form-label" style={{ fontSize: '0.7rem' }}>Department Specialization</label>
+                        <input
+                          className="form-input"
+                          value={draft.roomDept}
+                          onChange={(e) => handleUpdateFloorDraft(draft.id, 'roomDept', e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Ward & Beds Config */}
+                    <div style={{ padding: '0.75rem', backgroundColor: '#f8fafc', borderRadius: '6px', border: '1px dashed #cbd5e1' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 0.8fr 1fr 0.8fr', gap: '0.5rem' }}>
+                        <div>
+                          <label className="form-label" style={{ fontSize: '0.7rem' }}>Ward Name</label>
+                          <input
+                            className="form-input"
+                            value={draft.wardName}
+                            onChange={(e) => handleUpdateFloorDraft(draft.id, 'wardName', e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="form-label" style={{ fontSize: '0.7rem' }}>Ward Type</label>
+                          <select
+                            className="form-select"
+                            value={draft.wardType}
+                            onChange={(e) => handleUpdateFloorDraft(draft.id, 'wardType', e.target.value as any)}
+                          >
+                            <option value="General Ward">General Ward</option>
+                            <option value="ICU Ward">ICU Ward</option>
+                            <option value="NICU Ward">NICU Ward</option>
+                            <option value="Male Ward">Male Ward</option>
+                            <option value="Female Ward">Female Ward</option>
+                            <option value="Maternity Ward">Maternity Ward</option>
+                            <option value="Pediatric Ward">Pediatric Ward</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="form-label" style={{ fontSize: '0.7rem' }}>Total Beds</label>
+                          <input
+                            type="number"
+                            className="form-input"
+                            value={draft.bedCount}
+                            onChange={(e) => handleUpdateFloorDraft(draft.id, 'bedCount', parseInt(e.target.value) || 0)}
+                          />
+                        </div>
+                        <div>
+                          <label className="form-label" style={{ fontSize: '0.7rem' }}>Bed Type</label>
+                          <select
+                            className="form-select"
+                            value={draft.bedType}
+                            onChange={(e) => handleUpdateFloorDraft(draft.id, 'bedType', e.target.value as any)}
+                          >
+                            <option value="Standard Ward Bed">Standard Ward Bed</option>
+                            <option value="Motorized ICU Ventilator">ICU Ventilator</option>
+                            <option value="Semi-Fowler">Semi-Fowler</option>
+                            <option value="Emergency Stretcher">Emergency Stretcher</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="form-label" style={{ fontSize: '0.7rem' }}>Tariff ($/day)</label>
+                          <input
+                            type="number"
+                            className="form-input"
+                            value={draft.dailyTariff}
+                            onChange={(e) => handleUpdateFloorDraft(draft.id, 'dailyTariff', parseInt(e.target.value) || 0)}
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '0.75rem', marginTop: '0.5rem' }}>
+                        <div>
+                          <label className="form-label" style={{ fontSize: '0.7rem' }}>Supervisor Nurse</label>
+                          <input
+                            className="form-input"
+                            value={draft.supervisorNurse}
+                            onChange={(e) => handleUpdateFloorDraft(draft.id, 'supervisorNurse', e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="form-label" style={{ fontSize: '0.7rem' }}>Consultation / Procedure Rooms</label>
+                          <input
+                            type="number"
+                            className="form-input"
+                            value={draft.roomCount}
+                            onChange={(e) => handleUpdateFloorDraft(draft.id, 'roomCount', parseInt(e.target.value) || 0)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Blueprint Totals Summary Bar */}
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '0.875rem 1rem',
+                  backgroundColor: '#f1f5f9',
+                  borderRadius: '8px',
+                  fontSize: '0.8125rem',
+                }}
+              >
+                <div>
+                  <strong>Blueprint Summary:</strong> {floorDrafts.length} Floors • {floorDrafts.length} Clinical Wards •{' '}
+                  <strong style={{ color: 'var(--primary)' }}>{totalBedsProvisioned} Total Beds</strong> • {totalRoomsProvisioned} Consultation Rooms
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => setActiveStep('identity')}>
+                    Back
+                  </button>
+                  <button type="submit" className="btn btn-primary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <Check size={14} /> Provision Building & Infrastructure
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// ============================================================================
+// MODAL: EDIT EXISTING BUILDING SPECS
+// ============================================================================
+interface EditBuildingSpecsProps {
+  building: BuildingNode;
+  onClose: () => void;
+  onSave: (updated: BuildingNode) => void;
+}
+
+const EditBuildingSpecsModal: React.FC<EditBuildingSpecsProps> = ({ building, onClose, onSave }) => {
+  const [bldState, setBldState] = useState<BuildingNode>({ ...building });
+
+  return (
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
+      <div style={{ backgroundColor: '#ffffff', borderRadius: '12px', width: '100%', maxWidth: '580px', padding: '1.5rem', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem' }}>
+          <div>
+            <h4 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 700 }}>
+              Edit Building Specs: {bldState.name}
+            </h4>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Code: {bldState.code}</span>
+          </div>
+          <button onClick={onClose} style={{ border: 'none', background: 'none', cursor: 'pointer' }}><X size={18} /></button>
+        </div>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            onSave(bldState);
+          }}
+          style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}
+        >
+          <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '0.75rem' }}>
+            <div className="form-group">
+              <label className="form-label">Building Incharge Administrator</label>
+              <input
+                className="form-input"
+                value={bldState.buildingAdmin}
+                onChange={(e) => setBldState({ ...bldState, buildingAdmin: e.target.value })}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Intercom / Direct Ext</label>
+              <input
+                className="form-input"
+                value={bldState.intercomExt}
+                onChange={(e) => setBldState({ ...bldState, intercomExt: e.target.value })}
+                required
+              />
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+            <div className="form-group">
+              <label className="form-label">Operating Schedule</label>
+              <input
+                className="form-input"
+                value={bldState.operatingHours}
+                onChange={(e) => setBldState({ ...bldState, operatingHours: e.target.value })}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Power Backup (DG kVA)</label>
+              <input
+                type="number"
+                className="form-input"
+                value={bldState.powerBackupKva}
+                onChange={(e) => setBldState({ ...bldState, powerBackupKva: Number(e.target.value) || 0 })}
+                required
+              />
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+            <div className="form-group">
+              <label className="form-label">Fire Safety Clearance NOC</label>
+              <select
+                className="form-select"
+                value={bldState.fireNocStatus}
+                onChange={(e) => setBldState({ ...bldState, fireNocStatus: e.target.value as any })}
+              >
+                <option value="APPROVED">Approved & Valid</option>
+                <option value="RENEWAL_DUE">Renewal Due</option>
+                <option value="INSPECTION_PENDING">Inspection Pending</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Patient & Stretcher Lifts</label>
+              <input
+                type="number"
+                className="form-input"
+                value={bldState.stretcherLifts}
+                onChange={(e) => setBldState({ ...bldState, stretcherLifts: Number(e.target.value) || 0 })}
+                required
+              />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.8125rem' }}>
+              <input
+                type="checkbox"
+                checked={bldState.hasCentralOxygen}
+                onChange={(e) => setBldState({ ...bldState, hasCentralOxygen: e.target.checked })}
+                style={{ width: '16px', height: '16px' }}
+              />
+              <strong>Central Medical Gas Pipeline System (MGPS / Liquid O2) Enabled</strong>
+            </label>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.5rem' }}>
+            <button type="button" className="btn btn-secondary" onClick={onClose}>
+              Cancel
+            </button>
+            <button type="submit" className="btn btn-primary">
+              <Save size={14} /> Save Specifications
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// ============================================================================
+// SUB-MODAL 1: BED CARE INSPECTOR (MULTI-DOCTOR, NURSING, COMPOUNDER, CLEANERS)
 // ============================================================================
 interface BedCareModalProps {
   data: {
@@ -2462,7 +3111,6 @@ const BedCareInspectorModal: React.FC<BedCareModalProps> = ({ data, onClose, onS
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
       <div style={{ backgroundColor: '#ffffff', borderRadius: '12px', width: '100%', maxWidth: '680px', padding: '1.5rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', maxHeight: '90vh', overflowY: 'auto' }}>
-        {/* Modal Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem', marginBottom: '1rem' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -2479,7 +3127,6 @@ const BedCareInspectorModal: React.FC<BedCareModalProps> = ({ data, onClose, onS
           <button onClick={onClose} style={{ border: 'none', background: 'none', cursor: 'pointer' }}><X size={20} /></button>
         </div>
 
-        {/* Sub-tabs */}
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem' }}>
           <button
             type="button"
@@ -2507,10 +3154,9 @@ const BedCareInspectorModal: React.FC<BedCareModalProps> = ({ data, onClose, onS
           </button>
         </div>
 
-        {/* TAB 1: ATTENDING DOCTORS, NURSING, COMPOUNDERS */}
+        {/* TAB 1: ATTENDING DOCTORS, NURSES, COMPOUNDERS */}
         {activeTab === 'care_team' && pt && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {/* Primary Doctor */}
             <div style={{ padding: '0.875rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                 <strong style={{ fontSize: '0.875rem', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
@@ -2542,7 +3188,6 @@ const BedCareInspectorModal: React.FC<BedCareModalProps> = ({ data, onClose, onS
               </div>
             </div>
 
-            {/* Consulting / Co-monitoring Doctors (Multi-Doctor Care) */}
             <div style={{ padding: '0.875rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                 <div>
@@ -2555,7 +3200,6 @@ const BedCareInspectorModal: React.FC<BedCareModalProps> = ({ data, onClose, onS
                 </div>
               </div>
 
-              {/* Existing Co-Doctors List */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.75rem' }}>
                 {pt.consultingDoctors && pt.consultingDoctors.length > 0 ? (
                   pt.consultingDoctors.map((doc) => (
@@ -2592,7 +3236,6 @@ const BedCareInspectorModal: React.FC<BedCareModalProps> = ({ data, onClose, onS
                 )}
               </div>
 
-              {/* Add Co-Doctor Line */}
               <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr auto', gap: '0.5rem', alignItems: 'flex-end' }}>
                 <div>
                   <label className="form-label" style={{ fontSize: '0.7rem' }}>+ Add Consulting Doctor</label>
@@ -2623,9 +3266,7 @@ const BedCareInspectorModal: React.FC<BedCareModalProps> = ({ data, onClose, onS
               </div>
             </div>
 
-            {/* Nurse & Compounder Grid */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-              {/* Assigned Inpatient Nurse */}
               <div style={{ padding: '0.875rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
                 <strong style={{ fontSize: '0.8125rem', color: '#047857', display: 'block', marginBottom: '0.5rem' }}>
                   👩‍⚕️ Assigned Ward Nurse
@@ -2656,7 +3297,6 @@ const BedCareInspectorModal: React.FC<BedCareModalProps> = ({ data, onClose, onS
                 </div>
               </div>
 
-              {/* Compounder / Dresser */}
               <div style={{ padding: '0.875rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
                 <strong style={{ fontSize: '0.8125rem', color: '#b45309', display: 'block', marginBottom: '0.5rem' }}>
                   🩹 Compounder / Medical Assistant
@@ -2709,7 +3349,7 @@ const BedCareInspectorModal: React.FC<BedCareModalProps> = ({ data, onClose, onS
                 />
               </div>
               <div className="form-group">
-                <label className="form-label" style={{ fontSize: '0.75rem' }}>UHID (Unique Health ID)</label>
+                <label className="form-label" style={{ fontSize: '0.75rem' }}>UHID</label>
                 <input
                   className="form-input"
                   value={pt.uhid}
@@ -2741,7 +3381,7 @@ const BedCareInspectorModal: React.FC<BedCareModalProps> = ({ data, onClose, onS
             </div>
 
             <div className="form-group">
-              <label className="form-label" style={{ fontSize: '0.75rem' }}>Primary Inpatient Diagnosis</label>
+              <label className="form-label" style={{ fontSize: '0.75rem' }}>Primary Diagnosis</label>
               <textarea
                 className="form-textarea"
                 rows={2}
@@ -2750,7 +3390,6 @@ const BedCareInspectorModal: React.FC<BedCareModalProps> = ({ data, onClose, onS
               />
             </div>
 
-            {/* Vitals */}
             {pt.vitals && (
               <div style={{ padding: '0.75rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
                 <strong style={{ fontSize: '0.8125rem', color: '#0284c7', display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.5rem' }}>
@@ -2866,7 +3505,6 @@ const BedCareInspectorModal: React.FC<BedCareModalProps> = ({ data, onClose, onS
           </div>
         )}
 
-        {/* Modal Footer Controls */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid #e2e8f0' }}>
           <div>
             {bedState.status === 'OCCUPIED' && (
@@ -2905,7 +3543,7 @@ const BedCareInspectorModal: React.FC<BedCareModalProps> = ({ data, onClose, onS
 };
 
 // ============================================================================
-// SUB-MODAL 2: QUICK ADMIT INPATIENT TO AVAILABLE BED
+// SUB-MODAL 2: QUICK ADMIT INPATIENT
 // ============================================================================
 interface AdmitModalProps {
   bedNumber: string;
@@ -3017,7 +3655,6 @@ const AdmitPatientModal: React.FC<AdmitModalProps> = ({ bedNumber, dailyTariff, 
             />
           </div>
 
-          {/* Doctors Assignment */}
           <div style={{ padding: '0.75rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
             <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--primary)', display: 'block', marginBottom: '0.35rem' }}>
               🩺 Medical Staff Allocation
@@ -3044,7 +3681,6 @@ const AdmitPatientModal: React.FC<AdmitModalProps> = ({ bedNumber, dailyTariff, 
             </div>
           </div>
 
-          {/* Nursing & Compounder */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
             <div className="form-group">
               <label className="form-label" style={{ fontSize: '0.7rem' }}>Assigned Nurse</label>
