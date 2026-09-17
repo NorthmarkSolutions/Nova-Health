@@ -36,6 +36,7 @@ import {
   ShieldCheck,
   Zap,
   Info,
+  LayoutGrid,
 } from 'lucide-react';
 import {
   BuildingNode,
@@ -224,6 +225,7 @@ export const DepartmentProfileView: React.FC<Props> = ({
   const [targetMergeDeptId, setTargetMergeDeptId] = useState('');
   const [mergeConfirmationText, setMergeConfirmationText] = useState('');
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
 
   // Campus Space Reallocation Modal
   const [isReallocateModalOpen, setIsReallocateModalOpen] = useState(false);
@@ -477,14 +479,47 @@ export const DepartmentProfileView: React.FC<Props> = ({
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
           <button
-            className="btn btn-primary"
-            onClick={handleSaveAll}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+            type="button"
+            className="btn btn-secondary"
+            onClick={handleOpenReallocateModal}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.8125rem' }}
           >
-            <Save size={16} /> Save Changes
+            <Building2 size={15} /> Reallocate Space
           </button>
+          {isEditMode ? (
+            <div style={{ display: 'flex', gap: '0.375rem' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setIsEditMode(false)}
+                style={{ fontSize: '0.8125rem' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  handleSaveAll();
+                  setIsEditMode(false);
+                }}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.8125rem' }}
+              >
+                <Save size={15} /> Save Changes
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setIsEditMode(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.8125rem' }}
+            >
+              <Edit2 size={15} /> ✏️ Edit Department
+            </button>
+          )}
         </div>
       </div>
 
@@ -663,37 +698,37 @@ export const DepartmentProfileView: React.FC<Props> = ({
           className={`subtab-pill ${activeTab === 'basic' ? 'active' : ''}`}
           onClick={() => setActiveTab('basic')}
         >
-          <FileText size={15} /> 1. Basic Info
-        </button>
-        <button
-          className={`subtab-pill ${activeTab === 'operational' ? 'active' : ''}`}
-          onClick={() => setActiveTab('operational')}
-        >
-          <Clock size={15} /> 2. Operational
-        </button>
-        <button
-          className={`subtab-pill ${activeTab === 'financial' ? 'active' : ''}`}
-          onClick={() => setActiveTab('financial')}
-        >
-          <DollarSign size={15} /> 3. Financial
-        </button>
-        <button
-          className={`subtab-pill ${activeTab === 'clinical' ? 'active' : ''}`}
-          onClick={() => setActiveTab('clinical')}
-        >
-          <Stethoscope size={15} /> 4. Clinical
-        </button>
-        <button
-          className={`subtab-pill ${activeTab === 'staff' ? 'active' : ''}`}
-          onClick={() => setActiveTab('staff')}
-        >
-          <Users size={15} /> 5. Staff Roster
+          <LayoutGrid size={15} /> 1. Executive Overview
         </button>
         <button
           className={`subtab-pill ${activeTab === 'infrastructure' ? 'active' : ''}`}
           onClick={() => setActiveTab('infrastructure')}
         >
-          <Building2 size={15} /> 6. Infrastructure & Space
+          <Building2 size={15} /> 2. Campus & Beds ({liveBedStats.totalBeds})
+        </button>
+        <button
+          className={`subtab-pill ${activeTab === 'staff' ? 'active' : ''}`}
+          onClick={() => setActiveTab('staff')}
+        >
+          <Users size={15} /> 3. Staff Deployment
+        </button>
+        <button
+          className={`subtab-pill ${activeTab === 'financial' ? 'active' : ''}`}
+          onClick={() => setActiveTab('financial')}
+        >
+          <DollarSign size={15} /> 4. Financials & Tariffs
+        </button>
+        <button
+          className={`subtab-pill ${activeTab === 'clinical' ? 'active' : ''}`}
+          onClick={() => setActiveTab('clinical')}
+        >
+          <Stethoscope size={15} /> 5. Clinical Scope
+        </button>
+        <button
+          className={`subtab-pill ${activeTab === 'operational' ? 'active' : ''}`}
+          onClick={() => setActiveTab('operational')}
+        >
+          <Clock size={15} /> 6. Operational Rules
         </button>
         <button
           className={`subtab-pill ${activeTab === 'documents' ? 'active' : ''}`}
@@ -702,16 +737,10 @@ export const DepartmentProfileView: React.FC<Props> = ({
           <FileText size={15} /> 7. Documents & SOPs
         </button>
         <button
-          className={`subtab-pill ${activeTab === 'permissions' ? 'active' : ''}`}
-          onClick={() => setActiveTab('permissions')}
-        >
-          <Lock size={15} /> 8. Permissions
-        </button>
-        <button
           className={`subtab-pill ${activeTab === 'lifecycle' ? 'active' : ''}`}
           onClick={() => setActiveTab('lifecycle')}
         >
-          <GitMerge size={15} /> 9. Status & Merge
+          <GitMerge size={15} /> 8. Status & Merge
         </button>
       </div>
 
@@ -724,99 +753,532 @@ export const DepartmentProfileView: React.FC<Props> = ({
           padding: '1.75rem',
         }}
       >
-        {/* ================= 1. BASIC INFORMATION ================= */}
+        {/* ================= 1. EXECUTIVE OVERVIEW (READ-FIRST WITH EDIT TOGGLE) ================= */}
         {activeTab === 'basic' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            <div>
-              <h3 style={{ fontSize: '1.125rem', fontWeight: 700, margin: '0 0 0.25rem 0' }}>
-                Department Identity & Classification
-              </h3>
-              <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: 0 }}>
-                Define core naming, official hospital abbreviation, functional classification category, and scope of operations.
-              </p>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem' }}>
-              <div className="form-group">
-                <label className="form-label">Official Department Name</label>
-                <input
-                  className="form-input"
-                  value={profile.name}
-                  onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-                  placeholder="e.g. Emergency & Trauma Center"
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">System Department Code</label>
-                <input
-                  className="form-input"
-                  value={profile.code}
-                  onChange={(e) => setProfile({ ...profile, code: e.target.value })}
-                  placeholder="e.g. DEPT-ER"
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Short Name / Display Acronym</label>
-                <input
-                  className="form-input"
-                  value={profile.shortName || ''}
-                  onChange={(e) => setProfile({ ...profile, shortName: e.target.value })}
-                  placeholder="e.g. Emergency / ER"
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Classification Category</label>
-                <select
-                  className="form-select"
-                  value={profile.category}
-                  onChange={(e) => setProfile({ ...profile, category: e.target.value as any })}
+          <div>
+            {!isEditMode ? (
+              /* READ-FIRST EXECUTIVE OVERVIEW DOSSIER */
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                {/* Executive Dossier Sub-Header */}
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    paddingBottom: '1rem',
+                    borderBottom: '1px solid var(--border-color)',
+                    flexWrap: 'wrap',
+                    gap: '0.75rem',
+                  }}
                 >
-                  <option value="clinical">Clinical Care</option>
-                  <option value="diagnostic">Diagnostic & Imaging</option>
-                  <option value="revenue">Revenue & Patient Billing</option>
-                  <option value="admin">Administration & HR</option>
-                  <option value="support">Support & Facilities</option>
-                </select>
-              </div>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--primary)', fontWeight: 700, letterSpacing: '0.5px' }}>
+                        Executive Administrative Command Dossier
+                      </span>
+                      <span className="badge badge-success">✓ Commissioned & Governed</span>
+                    </div>
+                    <h3 style={{ fontSize: '1.25rem', fontWeight: 700, margin: '0.25rem 0 0 0' }}>
+                      {profile.name} ({profile.code})
+                    </h3>
+                    <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: '0.25rem 0 0 0' }}>
+                      Stationed in {profile.buildingAssigned} • Head of Department: <strong>{profile.head}</strong>
+                    </p>
+                  </div>
 
-              <div className="form-group">
-                <label className="form-label">Head of Department (HOD)</label>
-                <input
-                  className="form-input"
-                  value={profile.head}
-                  onChange={(e) => setProfile({ ...profile, head: e.target.value })}
-                  placeholder="e.g. Dr. Neil Patrick, MD"
-                />
-              </div>
+                  <div style={{ display: 'flex', gap: '0.625rem' }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={handleOpenReallocateModal}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.8125rem' }}
+                    >
+                      <Building2 size={15} /> Reallocate Footprint
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => setIsEditMode(true)}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.8125rem' }}
+                    >
+                      <Edit2 size={15} /> ✏️ Edit Department Details
+                    </button>
+                  </div>
+                </div>
 
-              <div className="form-group">
-                <label className="form-label">Current Operational Status</label>
-                <select
-                  className="form-select"
-                  value={profile.status}
-                  onChange={(e) => setProfile({ ...profile, status: e.target.value as any })}
+                {/* 2-Column Grid of Executive Panels */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '1.25rem' }}>
+                  
+                  {/* PANEL 1: GOVERNANCE & IDENTITY DOSSIER */}
+                  <div
+                    style={{
+                      backgroundColor: 'var(--card-bg, #ffffff)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '10px',
+                      padding: '1.25rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '1rem',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
+                      <ShieldCheck size={18} color="var(--primary)" />
+                      <strong style={{ fontSize: '0.9375rem' }}>1. Governance & Administrative Identity</strong>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', fontSize: '0.8125rem' }}>
+                      <div>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', display: 'block' }}>Official Legal Title</span>
+                        <strong>{profile.name}</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', display: 'block' }}>System Identifier</span>
+                        <code>{profile.code}</code> {profile.shortName && <span className="badge badge-secondary" style={{ marginLeft: '4px' }}>{profile.shortName}</span>}
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', display: 'block' }}>Operational Category</span>
+                        <span className="badge badge-info" style={{ marginTop: '2px' }}>{profile.category.toUpperCase()}</span>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', display: 'block' }}>Operational Status</span>
+                        <span className="badge badge-success" style={{ marginTop: '2px' }}>{profile.status}</span>
+                      </div>
+                      <div style={{ gridColumn: 'span 2' }}>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', display: 'block' }}>Accountable Clinical Head (HOD)</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '2px' }}>
+                          <User size={15} color="var(--primary)" />
+                          <strong>{profile.head}</strong>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>• Chief Clinician</span>
+                        </div>
+                      </div>
+                      <div style={{ gridColumn: 'span 2' }}>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', display: 'block' }}>Emergency Intercom & Escalation</span>
+                        <span style={{ fontSize: '0.8125rem' }}>{profile.onCallRoster || 'Ext: 104 • Speed Dial #881 (Duty Registrar)'}</span>
+                      </div>
+                    </div>
+
+                    {profile.description && (
+                      <div
+                        style={{
+                          backgroundColor: 'var(--bg-subtle, #f9fafb)',
+                          borderLeft: '3px solid var(--primary)',
+                          padding: '0.625rem 0.875rem',
+                          borderRadius: '0 6px 6px 0',
+                          fontSize: '0.8125rem',
+                          color: 'var(--text-color)',
+                          fontStyle: 'italic',
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        "{profile.description}"
+                      </div>
+                    )}
+                  </div>
+
+                  {/* PANEL 2: PHYSICAL CAMPUS ALLOCATION & BED FOOTPRINT */}
+                  <div
+                    style={{
+                      backgroundColor: 'var(--card-bg, #ffffff)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '10px',
+                      padding: '1.25rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '1rem',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <Building2 size={18} color="var(--primary)" />
+                        <strong style={{ fontSize: '0.9375rem' }}>2. Campus Physical Footprint & Beds</strong>
+                      </div>
+                      <span className="badge badge-info" style={{ fontSize: '0.7rem' }}>
+                        {liveBedStats.totalBeds} Beds • {departmentalRooms.length || profile.roomsCount || 0} Chambers
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '0.8125rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Assigned Complex:</span>
+                        <strong>{profile.buildingAssigned}</strong>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Floors / Wings:</span>
+                        <span>{profile.floorAssigned}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Waiting Area & Token LED:</span>
+                        <span className="badge badge-success">
+                          {profile.hasDedicatedWaitingArea ? '✓ Dedicated Lounge with LED Queue' : 'Central Shared Lounge'}
+                        </span>
+                      </div>
+
+                      {/* Clinical Wards Breakdown */}
+                      <div>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '0.375rem' }}>
+                          Allocated Inpatient Wards:
+                        </span>
+                        {departmentalWards.length > 0 ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+                            {departmentalWards.map(({ ward, floor }) => (
+                              <div
+                                key={ward.id}
+                                style={{
+                                  padding: '0.5rem 0.75rem',
+                                  borderRadius: '6px',
+                                  backgroundColor: 'rgba(37, 99, 235, 0.04)',
+                                  border: '1px solid var(--border-color)',
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center',
+                                }}
+                              >
+                                <div>
+                                  <strong>{ward.name}</strong>
+                                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block' }}>
+                                    {floor.floorNumber} • Sister {ward.supervisorNurse}
+                                  </span>
+                                </div>
+                                <span className="badge badge-info">{ward.beds.length} Beds</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', backgroundColor: 'var(--bg-subtle, #f9fafb)', border: '1px dashed var(--border-color)', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                            No overnight inpatient wards allocated (Ambulatory OPD / Diagnostic unit).
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Consultation Chambers */}
+                      {departmentalRooms.length > 0 && (
+                        <div>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '0.375rem' }}>
+                            Consultation & Procedure Chambers:
+                          </span>
+                          <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap' }}>
+                            {departmentalRooms.map(({ room }) => (
+                              <span key={room.id} className="badge badge-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}>
+                                🚪 Room {room.roomNumber} ({room.roomType})
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* PANEL 3: CLINICAL PRIVILEGES & HMS CAPABILITIES */}
+                  <div
+                    style={{
+                      backgroundColor: 'var(--card-bg, #ffffff)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '10px',
+                      padding: '1.25rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '1rem',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
+                      <Stethoscope size={18} color="var(--primary)" />
+                      <strong style={{ fontSize: '0.9375rem' }}>3. Clinical Governance & HMS Privileges</strong>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.625rem' }}>
+                      {[
+                        { label: 'OPD Appointments', enabled: profile.consultationEnabled, desc: 'Accepts scheduled patient bookings' },
+                        { label: 'IPD Bed Admissions', enabled: profile.admissionEnabled, desc: 'Can admit patients to hospital beds' },
+                        { label: 'OT Surgical Booking', enabled: profile.procedureEnabled, desc: 'Can reserve operation theatre suites' },
+                        { label: 'Digital E-Prescriptions', enabled: profile.prescriptionEnabled, desc: 'Issues pharmacy dispensary orders' },
+                        { label: 'Diagnostic Requisitions', enabled: profile.labRequestsEnabled, desc: 'Orders pathology, biochemistry & MRI' },
+                        { label: 'Emergency Trauma Triage', enabled: profile.emergencyEnabled, desc: 'Receives ambulance code-red alerts' },
+                      ].map((item) => (
+                        <div
+                          key={item.label}
+                          style={{
+                            padding: '0.625rem',
+                            borderRadius: '8px',
+                            border: `1px solid ${item.enabled ? 'rgba(16, 185, 129, 0.3)' : 'var(--border-color)'}`,
+                            backgroundColor: item.enabled ? 'rgba(16, 185, 129, 0.04)' : 'var(--bg-subtle, #f9fafb)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '0.125rem',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                            {item.enabled ? (
+                              <CheckCircle2 size={15} color="#10b981" />
+                            ) : (
+                              <X size={15} color="var(--text-muted)" />
+                            )}
+                            <strong style={{ fontSize: '0.8125rem', color: item.enabled ? 'var(--text-color)' : 'var(--text-muted)' }}>
+                              {item.label}
+                            </strong>
+                          </div>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: '1.3rem' }}>
+                            {item.desc}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* PANEL 4: FINANCIAL ACCOUNTING & BILLING RULES */}
+                  <div
+                    style={{
+                      backgroundColor: 'var(--card-bg, #ffffff)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '10px',
+                      padding: '1.25rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '1rem',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
+                      <DollarSign size={18} color="var(--primary)" />
+                      <strong style={{ fontSize: '0.9375rem' }}>4. Financial Accounting & Billing Rules</strong>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', fontSize: '0.8125rem' }}>
+                      <div>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', display: 'block' }}>GL Cost Center</span>
+                        <code style={{ fontSize: '0.875rem' }}>{profile.costCenter}</code>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', display: 'block' }}>GL Revenue Center</span>
+                        <code style={{ fontSize: '0.875rem' }}>{profile.revenueCenter || 'RC-CLN-01'}</code>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', display: 'block' }}>Default Specialist OPD Tariff</span>
+                        <strong style={{ fontSize: '1rem', color: '#10b981' }}>$50.00 / ₹800</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', display: 'block' }}>Follow-up Visit Policy</span>
+                        <span className="badge badge-info" style={{ marginTop: '2px' }}>Free within 7 Days</span>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', display: 'block' }}>Annual Operating Budget</span>
+                        <strong style={{ fontSize: '1rem' }}>${(profile.budget || 0).toLocaleString()}</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', display: 'block' }}>Direct Cashier Billing</span>
+                        <span className={`badge ${profile.billingEnabled !== false ? 'badge-success' : 'badge-secondary'}`} style={{ marginTop: '2px' }}>
+                          {profile.billingEnabled !== false ? '✓ Enabled' : 'Non-Billing Ledger'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* PANEL 5: STAFF DEPLOYMENT & SAFETY RATIO (Full Width) */}
+                  <div
+                    style={{
+                      gridColumn: '1 / -1',
+                      backgroundColor: 'var(--card-bg, #ffffff)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '10px',
+                      padding: '1.25rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '1rem',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <Users size={18} color="var(--primary)" />
+                        <strong style={{ fontSize: '0.9375rem' }}>5. Staff Deployment Quotas & Safety Roster</strong>
+                      </div>
+                      <span className="badge badge-secondary" style={{ fontSize: '0.75rem' }}>
+                        {(profile.doctorsCount || 0) + (profile.nursesCount || 0) + (profile.techsCount || 0) + (profile.receptionistsCount || 0)} Total Personnel
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
+                      <div style={{ padding: '0.75rem', backgroundColor: 'var(--bg-subtle, #f9fafb)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Attending Doctors</span>
+                        <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--primary)', marginTop: '0.25rem' }}>
+                          {profile.doctorsCount || 0} Physicians
+                        </div>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Specialists & Residents</span>
+                      </div>
+
+                      <div style={{ padding: '0.75rem', backgroundColor: 'var(--bg-subtle, #f9fafb)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Nursing Staff</span>
+                        <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#10b981', marginTop: '0.25rem' }}>
+                          {profile.nursesCount || 0} Nurses
+                        </div>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Sisters & Floor Care</span>
+                      </div>
+
+                      <div style={{ padding: '0.75rem', backgroundColor: 'var(--bg-subtle, #f9fafb)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Technical & Paramedical</span>
+                        <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0ea5e9', marginTop: '0.25rem' }}>
+                          {profile.techsCount || 0} Technicians
+                        </div>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Compounders & Techs</span>
+                      </div>
+
+                      <div style={{ padding: '0.75rem', backgroundColor: 'var(--bg-subtle, #f9fafb)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Front Desk & Clerks</span>
+                        <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#8b5cf6', marginTop: '0.25rem' }}>
+                          {profile.receptionistsCount || 0} Clerks
+                        </div>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Token & Check-In Desk</span>
+                      </div>
+
+                      <div style={{ padding: '0.75rem', backgroundColor: 'rgba(37, 99, 235, 0.04)', borderRadius: '8px', border: '1px solid rgba(37, 99, 235, 0.2)' }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--primary)', textTransform: 'uppercase', fontWeight: 700 }}>Nurse-to-Bed Safety</span>
+                        <div style={{ fontSize: '1.125rem', fontWeight: 700, color: 'var(--primary)', marginTop: '0.25rem' }}>
+                          {liveBedStats.totalBeds > 0 && (profile.nursesCount || 0) > 0
+                            ? `1 : ${(liveBedStats.totalBeds / (profile.nursesCount || 1)).toFixed(1)} Ratio`
+                            : 'Ambulatory OPD'}
+                        </div>
+                        <span style={{ fontSize: '0.7rem', color: '#10b981', fontWeight: 600 }}>✓ Within Accreditation Norms</span>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            ) : (
+              /* EDIT MODE ACTIVE: INTERACTIVE INPUT FORM */
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                {/* Edit Mode Notice Banner */}
+                <div
+                  style={{
+                    backgroundColor: 'rgba(37, 99, 235, 0.08)',
+                    border: '1px solid var(--primary)',
+                    borderRadius: '8px',
+                    padding: '0.875rem 1.25rem',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '0.75rem',
+                  }}
                 >
-                  <option value="ACTIVE">Active (In Operation)</option>
-                  <option value="UNDER_MAINTENANCE">Under Maintenance / Renovation</option>
-                  <option value="INACTIVE">Inactive (Temporarily Suspended)</option>
-                  <option value="ARCHIVED">Archived (Decommissioned)</option>
-                </select>
-              </div>
-            </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <Edit2 size={16} color="var(--primary)" />
+                    <strong style={{ fontSize: '0.875rem', color: 'var(--primary)' }}>
+                      Edit Mode Active: Modify department identity, clinical scope, and administrative settings.
+                    </strong>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => setIsEditMode(false)}
+                      style={{ fontSize: '0.8125rem', padding: '0.35rem 0.75rem' }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => {
+                        handleSaveAll();
+                        setIsEditMode(false);
+                      }}
+                      style={{ fontSize: '0.8125rem', padding: '0.35rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.375rem' }}
+                    >
+                      <Save size={14} /> Save Changes
+                    </button>
+                  </div>
+                </div>
 
-            <div className="form-group">
-              <label className="form-label">Department Description & Scope</label>
-              <textarea
-                className="form-textarea"
-                rows={3}
-                value={profile.description || ''}
-                onChange={(e) => setProfile({ ...profile, description: e.target.value })}
-                placeholder="Detail clinical specializations, patient intake policies, or internal administrative responsibilities..."
-              />
-            </div>
+                <div>
+                  <h3 style={{ fontSize: '1.125rem', fontWeight: 700, margin: '0 0 0.25rem 0' }}>
+                    Department Identity & Classification Form
+                  </h3>
+                  <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: 0 }}>
+                    Define core naming, official hospital abbreviation, functional classification category, and scope of operations.
+                  </p>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem' }}>
+                  <div className="form-group">
+                    <label className="form-label">Official Department Name</label>
+                    <input
+                      className="form-input"
+                      value={profile.name}
+                      onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+                      placeholder="e.g. Emergency & Trauma Center"
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">System Department Code</label>
+                    <input
+                      className="form-input"
+                      value={profile.code}
+                      onChange={(e) => setProfile({ ...profile, code: e.target.value })}
+                      placeholder="e.g. DEPT-ER"
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Short Name / Display Acronym</label>
+                    <input
+                      className="form-input"
+                      value={profile.shortName || ''}
+                      onChange={(e) => setProfile({ ...profile, shortName: e.target.value })}
+                      placeholder="e.g. Emergency / ER"
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Classification Category</label>
+                    <select
+                      className="form-select"
+                      value={profile.category}
+                      onChange={(e) => setProfile({ ...profile, category: e.target.value as any })}
+                    >
+                      <option value="clinical">Clinical Care</option>
+                      <option value="diagnostic">Diagnostic & Imaging</option>
+                      <option value="revenue">Revenue & Patient Billing</option>
+                      <option value="admin">Administration & HR</option>
+                      <option value="support">Support & Facilities</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Head of Department (HOD)</label>
+                    <input
+                      className="form-input"
+                      value={profile.head}
+                      onChange={(e) => setProfile({ ...profile, head: e.target.value })}
+                      placeholder="e.g. Dr. Neil Patrick, MD"
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Current Operational Status</label>
+                    <select
+                      className="form-select"
+                      value={profile.status}
+                      onChange={(e) => setProfile({ ...profile, status: e.target.value as any })}
+                    >
+                      <option value="ACTIVE">Active (In Operation)</option>
+                      <option value="UNDER_MAINTENANCE">Under Maintenance / Renovation</option>
+                      <option value="INACTIVE">Inactive (Temporarily Suspended)</option>
+                      <option value="ARCHIVED">Archived (Decommissioned)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Department Description & Scope</label>
+                  <textarea
+                    className="form-textarea"
+                    rows={3}
+                    value={profile.description || ''}
+                    onChange={(e) => setProfile({ ...profile, description: e.target.value })}
+                    placeholder="Detail clinical specializations, patient intake policies, or internal administrative responsibilities..."
+                  />
+                </div>
+              </div>
+            )}
           </div>
         )}
 
