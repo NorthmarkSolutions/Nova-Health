@@ -731,6 +731,42 @@ export const CampusInfrastructureSection: React.FC = () => {
   const [roomForm, setRoomForm] = useState({ roomNumber: '', roomType: 'Consultation Room' as RoomNode['roomType'] });
   const [bedForm, setBedForm] = useState({ bedNumber: '', bedType: 'Standard Ward Bed' as BedNode['bedType'], dailyTariff: 150 });
 
+  // Extensible dropdown option lists for single entity modals
+  const [inlineWardTypes, setInlineWardTypes] = useState<string[]>([
+    'General Ward',
+    'ICU Ward',
+    'NICU Ward',
+    'Pediatric Ward',
+    'Male Ward',
+    'Female Ward',
+    'Maternity Ward',
+    'Isolation Ward',
+    'VIP Suite Ward',
+    'Dialysis Daycare Ward',
+    'Post-Op Recovery Ward',
+    'Oncology Ward',
+    'High Dependency Unit (HDU)',
+  ]);
+  const [inlineRoomTypes, setInlineRoomTypes] = useState<string[]>([
+    'Consultation Room',
+    'Procedure Room',
+    'Doctor Chamber',
+    'Private Inpatient Room',
+    'OT Suite',
+    'Daycare Unit',
+    'Triage Chamber',
+  ]);
+  const [inlineBedTypes, setInlineBedTypes] = useState<string[]>([
+    'Standard Ward Bed',
+    'Motorized ICU Ventilator',
+    'Semi-Fowler',
+    'Deluxe Suite Bed',
+    'Pediatric Crib',
+    'Emergency Stretcher',
+    'Bariatric Heavy Duty Bed',
+    'Dialysis Recliner Chair',
+  ]);
+
   const showAlert = (msg: string) => {
     setAlertMsg(msg);
     setTimeout(() => setAlertMsg(null), 3500);
@@ -2100,17 +2136,27 @@ export const CampusInfrastructureSection: React.FC = () => {
                 <select
                   className="form-select"
                   value={wardForm.wardType}
-                  onChange={(e) => setWardForm({ ...wardForm, wardType: e.target.value as any })}
+                  onChange={(e) => {
+                    if (e.target.value === '__ADD_NEW__') {
+                      const customVal = window.prompt('Enter new custom Ward Classification Type:');
+                      if (customVal && customVal.trim()) {
+                        const trimmed = customVal.trim();
+                        if (!inlineWardTypes.includes(trimmed)) {
+                          setInlineWardTypes([...inlineWardTypes, trimmed]);
+                        }
+                        setWardForm({ ...wardForm, wardType: trimmed as any });
+                      }
+                    } else {
+                      setWardForm({ ...wardForm, wardType: e.target.value as any });
+                    }
+                  }}
                 >
-                  <option value="General Ward">General Ward</option>
-                  <option value="ICU Ward">ICU Ward</option>
-                  <option value="NICU Ward">NICU Ward</option>
-                  <option value="Pediatric Ward">Pediatric Ward</option>
-                  <option value="Male Ward">Male Ward</option>
-                  <option value="Female Ward">Female Ward</option>
-                  <option value="Maternity Ward">Maternity Ward</option>
-                  <option value="Isolation Ward">Isolation Ward</option>
-                  <option value="VIP Suite Ward">VIP Suite Ward</option>
+                  {inlineWardTypes.map((wt) => (
+                    <option key={wt} value={wt}>{wt}</option>
+                  ))}
+                  <option value="__ADD_NEW__" style={{ color: 'var(--primary)', fontWeight: 700 }}>
+                    + Add More / Custom Ward Type...
+                  </option>
                 </select>
               </div>
               <div className="form-group" style={{ marginBottom: '1.25rem' }}>
@@ -2157,14 +2203,27 @@ export const CampusInfrastructureSection: React.FC = () => {
                 <select
                   className="form-select"
                   value={roomForm.roomType}
-                  onChange={(e) => setRoomForm({ ...roomForm, roomType: e.target.value as any })}
+                  onChange={(e) => {
+                    if (e.target.value === '__ADD_NEW__') {
+                      const customVal = window.prompt('Enter new custom Room Type:');
+                      if (customVal && customVal.trim()) {
+                        const trimmed = customVal.trim();
+                        if (!inlineRoomTypes.includes(trimmed)) {
+                          setInlineRoomTypes([...inlineRoomTypes, trimmed]);
+                        }
+                        setRoomForm({ ...roomForm, roomType: trimmed as any });
+                      }
+                    } else {
+                      setRoomForm({ ...roomForm, roomType: e.target.value as any });
+                    }
+                  }}
                 >
-                  <option value="Consultation Room">Consultation Room</option>
-                  <option value="Procedure Room">Procedure Room</option>
-                  <option value="Doctor Chamber">Doctor Chamber</option>
-                  <option value="Private Inpatient Room">Private Inpatient Room</option>
-                  <option value="OT Suite">OT Suite</option>
-                  <option value="Daycare Unit">Daycare Unit</option>
+                  {inlineRoomTypes.map((rt) => (
+                    <option key={rt} value={rt}>{rt}</option>
+                  ))}
+                  <option value="__ADD_NEW__" style={{ color: 'var(--primary)', fontWeight: 700 }}>
+                    + Add More / Custom Room Type...
+                  </option>
                 </select>
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
@@ -2202,14 +2261,27 @@ export const CampusInfrastructureSection: React.FC = () => {
                 <select
                   className="form-select"
                   value={bedForm.bedType}
-                  onChange={(e) => setBedForm({ ...bedForm, bedType: e.target.value as any })}
+                  onChange={(e) => {
+                    if (e.target.value === '__ADD_NEW__') {
+                      const customVal = window.prompt('Enter new custom Bed Type:');
+                      if (customVal && customVal.trim()) {
+                        const trimmed = customVal.trim();
+                        if (!inlineBedTypes.includes(trimmed)) {
+                          setInlineBedTypes([...inlineBedTypes, trimmed]);
+                        }
+                        setBedForm({ ...bedForm, bedType: trimmed as any });
+                      }
+                    } else {
+                      setBedForm({ ...bedForm, bedType: e.target.value as any });
+                    }
+                  }}
                 >
-                  <option value="Standard Ward Bed">Standard Ward Bed</option>
-                  <option value="Motorized ICU Ventilator">Motorized ICU Ventilator</option>
-                  <option value="Semi-Fowler">Semi-Fowler Bed</option>
-                  <option value="Deluxe Suite">Deluxe Suite Bed</option>
-                  <option value="Pediatric Crib">Pediatric Crib</option>
-                  <option value="Emergency Stretcher">Emergency Stretcher</option>
+                  {inlineBedTypes.map((bt) => (
+                    <option key={bt} value={bt}>{bt}</option>
+                  ))}
+                  <option value="__ADD_NEW__" style={{ color: 'var(--primary)', fontWeight: 700 }}>
+                    + Add More / Custom Bed Type...
+                  </option>
                 </select>
               </div>
               <div className="form-group" style={{ marginBottom: '1.25rem' }}>
@@ -2245,14 +2317,68 @@ interface BuildingWizardProps {
 const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProvision }) => {
   const [activeStep, setActiveStep] = useState<'identity' | 'floors_wards'>('identity');
 
-  // Building identity & operations
+  // Dynamic dropdown option lists with user extensible capabilities
+  const [availableBuildingTypes, setAvailableBuildingTypes] = useState<string[]>([
+    'Main Clinical Hospital Tower',
+    'Emergency & Trauma Center',
+    'Surgical & Inpatient Block',
+    'Diagnostic & Oncology Pavilion',
+    'Administration & Ambulatory Pavilion',
+    'Women & Children Hospital Wing',
+    'Specialty Cardiology Center',
+  ]);
+
+  const [availableOperatingSchedules, setAvailableOperatingSchedules] = useState<string[]>([
+    '24/7 Continuous Emergency & Inpatient',
+    '08:00 - 20:00 Ambulatory Care',
+    '06:00 - 22:00 Daycare & Diagnostic',
+    '09:00 - 17:00 Administrative & Consultations',
+  ]);
+
+  const [availableFireNocStatuses, setAvailableFireNocStatuses] = useState<{ value: string; label: string }[]>([
+    { value: 'APPROVED', label: '✓ Approved & Valid' },
+    { value: 'RENEWAL_DUE', label: 'Renewal Due' },
+    { value: 'INSPECTION_PENDING', label: 'Inspection Pending' },
+  ]);
+
+  const [availableWardTypes, setAvailableWardTypes] = useState<string[]>([
+    'General Ward',
+    'ICU Ward',
+    'NICU Ward',
+    'Pediatric Ward',
+    'Male Ward',
+    'Female Ward',
+    'Maternity Ward',
+    'Isolation Ward',
+    'VIP Suite Ward',
+    'Post-Op Recovery Ward',
+    'Dialysis Daycare Ward',
+    'Oncology Ward',
+    'High Dependency Unit (HDU)',
+    'Emergency Observation Bay',
+  ]);
+
+  const [availableBedTypes, setAvailableBedTypes] = useState<string[]>([
+    'Standard Ward Bed',
+    'Motorized ICU Ventilator',
+    'Semi-Fowler',
+    'Deluxe Suite Bed',
+    'Pediatric Crib',
+    'Emergency Stretcher',
+    'Bariatric Heavy Duty Bed',
+    'Dialysis Recliner Chair',
+    'Neonatal Incubator',
+    'Birthing Bed',
+  ]);
+
+  // Building identity & operations state
   const [buildingData, setBuildingData] = useState({
     name: '',
     code: '',
-    buildingType: 'Main Clinical Hospital Tower' as BuildingNode['buildingType'],
+    buildingType: 'Main Clinical Hospital Tower',
     buildingAdmin: 'Dr. Arthur Pendelton',
     intercomExt: 'Ext: 102',
-    operatingHours: '24/7 Emergency & Inpatient',
+    operatingHours: '24/7 Continuous Emergency & Inpatient',
     fireNocStatus: 'APPROVED' as BuildingNode['fireNocStatus'],
     fireZone: 'Zone A & B (Automated Sprinklers)',
     powerBackupKva: 500,
@@ -2262,7 +2388,7 @@ const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProv
     basementCount: 1,
   });
 
-  // Provisioning floor drafts
+  // Provisioning floor drafts state
   const [floorDrafts, setFloorDrafts] = useState<FloorDraft[]>([
     {
       id: 'fld-1',
@@ -2273,9 +2399,9 @@ const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProv
       roomType: 'Consultation Room',
       roomDept: 'General Medicine & Emergency',
       wardName: 'Emergency Observation Unit',
-      wardType: 'General Ward',
+      wardType: 'General Ward' as WardNode['wardType'],
       bedCount: 6,
-      bedType: 'Emergency Stretcher',
+      bedType: 'Emergency Stretcher' as BedNode['bedType'],
       dailyTariff: 180,
       supervisorNurse: 'Sister Clara Oswald, RN',
     },
@@ -2288,9 +2414,9 @@ const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProv
       roomType: 'Doctor Chamber',
       roomDept: 'Inpatient Care',
       wardName: 'General Medical Inpatient Ward',
-      wardType: 'Male Ward',
+      wardType: 'Male Ward' as WardNode['wardType'],
       bedCount: 15,
-      bedType: 'Standard Ward Bed',
+      bedType: 'Standard Ward Bed' as BedNode['bedType'],
       dailyTariff: 150,
       supervisorNurse: 'Marcus Bell, BSN',
     },
@@ -2303,13 +2429,110 @@ const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProv
       roomType: 'OT Suite',
       roomDept: 'Surgery & OT',
       wardName: 'Intensive Critical Care Unit (ICU)',
-      wardType: 'ICU Ward',
+      wardType: 'ICU Ward' as WardNode['wardType'],
       bedCount: 10,
-      bedType: 'Motorized ICU Ventilator',
+      bedType: 'Motorized ICU Ventilator' as BedNode['bedType'],
       dailyTariff: 450,
       supervisorNurse: 'Sister Miriam Cruz, CCRN',
     },
   ]);
+
+  // Handlers for "+ Add Custom Option..."
+  const handleSelectBuildingType = (val: string) => {
+    if (val === '__ADD_NEW__') {
+      const customName = window.prompt('Enter new custom Building Classification Type:');
+      if (customName && customName.trim()) {
+        const trimmed = customName.trim();
+        if (!availableBuildingTypes.includes(trimmed)) {
+          setAvailableBuildingTypes([...availableBuildingTypes, trimmed]);
+        }
+        setBuildingData({ ...buildingData, buildingType: trimmed as any });
+      }
+    } else {
+      setBuildingData({ ...buildingData, buildingType: val as any });
+    }
+  };
+
+  const handleSelectOperatingHours = (val: string) => {
+    if (val === '__ADD_NEW__') {
+      const customVal = window.prompt('Enter new custom Operating Schedule (e.g. "07:00 - 19:00 Shift"):');
+      if (customVal && customVal.trim()) {
+        const trimmed = customVal.trim();
+        if (!availableOperatingSchedules.includes(trimmed)) {
+          setAvailableOperatingSchedules([...availableOperatingSchedules, trimmed]);
+        }
+        setBuildingData({ ...buildingData, operatingHours: trimmed });
+      }
+    } else {
+      setBuildingData({ ...buildingData, operatingHours: val });
+    }
+  };
+
+  const handleSelectFireNocStatus = (val: string) => {
+    if (val === '__ADD_NEW__') {
+      const customVal = window.prompt('Enter custom Fire NOC / Safety Status (e.g. "CONDITIONAL_APPROVAL"):');
+      if (customVal && customVal.trim()) {
+        const trimmed = customVal.trim();
+        const upper = trimmed.toUpperCase().replace(/\s+/g, '_');
+        if (!availableFireNocStatuses.some((s) => s.value === upper)) {
+          setAvailableFireNocStatuses([...availableFireNocStatuses, { value: upper, label: trimmed }]);
+        }
+        setBuildingData({ ...buildingData, fireNocStatus: upper as any });
+      }
+    } else {
+      setBuildingData({ ...buildingData, fireNocStatus: val as any });
+    }
+  };
+
+  const handleSelectWardType = (floorId: string, val: string) => {
+    if (val === '__ADD_NEW__') {
+      const customName = window.prompt('Enter new custom Ward Classification Type (e.g. "Burn Care ICU", "Dialysis Daycare", "Post-Op Recovery"):');
+      if (customName && customName.trim()) {
+        const trimmed = customName.trim();
+        if (!availableWardTypes.includes(trimmed)) {
+          setAvailableWardTypes([...availableWardTypes, trimmed]);
+        }
+        handleUpdateFloorDraft(floorId, 'wardType', trimmed);
+      }
+    } else {
+      handleUpdateFloorDraft(floorId, 'wardType', val);
+    }
+  };
+
+  const handleSelectBedType = (floorId: string, val: string) => {
+    if (val === '__ADD_NEW__') {
+      const customName = window.prompt('Enter new custom Bed Type (e.g. "Bariatric Heavy Duty Bed", "Dialysis Recliner", "Birthing Bed"):');
+      if (customName && customName.trim()) {
+        const trimmed = customName.trim();
+        if (!availableBedTypes.includes(trimmed)) {
+          setAvailableBedTypes([...availableBedTypes, trimmed]);
+        }
+        handleUpdateFloorDraft(floorId, 'bedType', trimmed);
+      }
+    } else {
+      handleUpdateFloorDraft(floorId, 'bedType', val);
+    }
+  };
+
+  const handleAddBlankFloor = () => {
+    const floorIndex = floorDrafts.length;
+    const newFloor: FloorDraft = {
+      id: `fld-${Date.now()}`,
+      floorNumber: `Floor ${floorIndex} (Level ${floorIndex})`,
+      code: `FL-${floorIndex}`,
+      wing: 'Clinical Inpatient Wing',
+      roomCount: 2,
+      roomType: 'Consultation Room',
+      roomDept: 'General Medicine',
+      wardName: `General Care Ward ${floorIndex}`,
+      wardType: 'General Ward',
+      bedCount: 10,
+      bedType: 'Standard Ward Bed',
+      dailyTariff: 150,
+      supervisorNurse: 'Sister In-Charge, RN',
+    };
+    setFloorDrafts([...floorDrafts, newFloor]);
+  };
 
   // Blueprint presets
   const applyPreset = (type: 'emergency' | 'inpatient' | 'icu' | 'maternity') => {
@@ -2321,16 +2544,16 @@ const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProv
       case 'emergency':
         preset = {
           id: newId,
-          floorNumber: `Level ${floorIndex} - Emergency Triage`,
+          floorNumber: `Floor ${floorIndex} - Emergency Triage`,
           code: `FL-ER-${floorIndex}`,
           wing: 'Emergency & Acute Trauma',
           roomCount: 4,
           roomType: 'Procedure Room',
           roomDept: 'Emergency & Trauma',
           wardName: 'Acute Emergency Triage Bay',
-          wardType: 'General Ward',
+          wardType: 'General Ward' as WardNode['wardType'],
           bedCount: 8,
-          bedType: 'Emergency Stretcher',
+          bedType: 'Emergency Stretcher' as BedNode['bedType'],
           dailyTariff: 200,
           supervisorNurse: 'Lead Trauma Nurse, RN',
         };
@@ -2338,16 +2561,16 @@ const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProv
       case 'inpatient':
         preset = {
           id: newId,
-          floorNumber: `Level ${floorIndex} - Inpatient Wards`,
+          floorNumber: `Floor ${floorIndex} - Inpatient Wards`,
           code: `FL-MED-${floorIndex}`,
           wing: 'General Inpatient Medicine',
           roomCount: 2,
           roomType: 'Consultation Room',
           roomDept: 'Internal Medicine',
           wardName: 'Medical Inpatient Ward',
-          wardType: 'Male Ward',
+          wardType: 'Male Ward' as WardNode['wardType'],
           bedCount: 20,
-          bedType: 'Standard Ward Bed',
+          bedType: 'Standard Ward Bed' as BedNode['bedType'],
           dailyTariff: 150,
           supervisorNurse: 'Ward Nurse Incharge, RN',
         };
@@ -2355,16 +2578,16 @@ const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProv
       case 'icu':
         preset = {
           id: newId,
-          floorNumber: `Level ${floorIndex} - Critical Care (ICU)`,
+          floorNumber: `Floor ${floorIndex} - Critical Care (ICU)`,
           code: `FL-ICU-${floorIndex}`,
           wing: 'Intensive Care & Surgical OT',
           roomCount: 2,
           roomType: 'OT Suite',
           roomDept: 'Operation Theatre Complex',
-          wardName: 'Intensive Critical Care (ICU)',
-          wardType: 'ICU Ward',
+          wardName: 'Intensive Critical Care Unit (ICU)',
+          wardType: 'ICU Ward' as WardNode['wardType'],
           bedCount: 12,
-          bedType: 'Motorized ICU Ventilator',
+          bedType: 'Motorized ICU Ventilator' as BedNode['bedType'],
           dailyTariff: 500,
           supervisorNurse: 'Critical Care Sister Incharge, CCRN',
         };
@@ -2372,16 +2595,16 @@ const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProv
       case 'maternity':
         preset = {
           id: newId,
-          floorNumber: `Level ${floorIndex} - Maternity & Neonatal`,
+          floorNumber: `Floor ${floorIndex} - Maternity & Neonatal`,
           code: `FL-MAT-${floorIndex}`,
           wing: 'Mother & Child Care Wing',
           roomCount: 3,
           roomType: 'Consultation Room',
           roomDept: 'Obstetrics & Gynecology',
           wardName: 'Postnatal Maternity Ward',
-          wardType: 'Maternity Ward',
+          wardType: 'Maternity Ward' as WardNode['wardType'],
           bedCount: 14,
-          bedType: 'Semi-Fowler',
+          bedType: 'Semi-Fowler' as BedNode['bedType'],
           dailyTariff: 220,
           supervisorNurse: 'Senior Midwife Nurse, RMN',
         };
@@ -2406,6 +2629,7 @@ const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProv
     e.preventDefault();
     if (!buildingData.name.trim() || !buildingData.code.trim()) {
       alert('Please enter building name and building code.');
+      setActiveStep('identity');
       return;
     }
 
@@ -2416,7 +2640,6 @@ const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProv
     const generatedFloors: FloorNode[] = floorDrafts.map((fDraft, fIdx) => {
       const flId = `fl-${bldId}-${fIdx}`;
 
-      // Generate rooms
       const rooms: RoomNode[] = Array.from({ length: fDraft.roomCount }, (_, rIdx) => ({
         id: `rm-${flId}-${rIdx + 1}`,
         roomNumber: `${codeUpper}-${fDraft.code}-R${rIdx + 1}`,
@@ -2427,7 +2650,6 @@ const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProv
         attendingStaff: { doctorName: 'Attending Consultant', nurseOrCompounder: 'Floor Assistant' },
       }));
 
-      // Generate beds for ward
       const beds: BedNode[] = Array.from({ length: fDraft.bedCount }, (_, bIdx) => ({
         id: `b-${flId}-${bIdx + 1}`,
         bedNumber: `${codeUpper}-${fDraft.code}-B${(bIdx + 1).toString().padStart(2, '0')}`,
@@ -2439,7 +2661,6 @@ const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProv
         assignedCleaner: 'Housekeeping Desk',
       }));
 
-      // Generate ward
       const ward: WardNode = {
         id: `wd-${flId}-1`,
         name: fDraft.wardName,
@@ -2472,7 +2693,7 @@ const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProv
       id: bldId,
       code: codeUpper,
       name: buildingData.name.trim(),
-      buildingType: buildingData.buildingType,
+      buildingType: buildingData.buildingType as any,
       totalFloorsCount: generatedFloors.length,
       basementCount: buildingData.basementCount,
       buildingAdmin: buildingData.buildingAdmin,
@@ -2491,45 +2712,102 @@ const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProv
   };
 
   return (
-    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
-      <div style={{ backgroundColor: '#ffffff', borderRadius: '12px', width: '100%', maxWidth: '820px', padding: '1.75rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', maxHeight: '92vh', overflowY: 'auto' }}>
-        {/* Wizard Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.875rem', marginBottom: '1.25rem' }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Building size={22} color="var(--primary)" />
-              <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700 }}>
-                Hospital Building Setup & Provisioning Wizard
-              </h3>
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.65)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 9999,
+        padding: '1rem',
+      }}
+    >
+      <div
+        style={{
+          backgroundColor: '#ffffff',
+          borderRadius: '12px',
+          width: '100%',
+          maxWidth: '1020px',
+          height: '90vh',
+          maxHeight: '90vh',
+          display: 'flex',
+          flexDirection: 'column',
+          boxShadow: '0 25px 50px -12px rgba(0,0,0,0.35)',
+          overflow: 'hidden',
+          position: 'relative',
+        }}
+      >
+        {/* ========================================================================= */}
+        {/* 1. FIXED HEADER (PERMANENTLY PINNED AT THE TOP, NEVER MOVES) */}
+        {/* ========================================================================= */}
+        <div
+          style={{
+            flexShrink: 0,
+            padding: '1.25rem 1.75rem 0.875rem 1.75rem',
+            borderBottom: '1px solid #e2e8f0',
+            backgroundColor: '#ffffff',
+            zIndex: 10,
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Building size={22} color="var(--primary)" />
+                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: 'var(--secondary)' }}>
+                  Hospital Building Setup & Provisioning Wizard
+                </h3>
+              </div>
+              <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                Configure hospital building identity, power/oxygen utilities, and auto-generate complete floors, wards, and beds.
+              </p>
             </div>
-            <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-              Configure hospital building identity, power/oxygen utilities, and auto-generate complete floors, wards, and beds.
-            </p>
+            <button
+              onClick={onClose}
+              style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
+              title="Close Wizard"
+            >
+              <X size={20} />
+            </button>
           </div>
-          <button onClick={onClose} style={{ border: 'none', background: 'none', cursor: 'pointer' }}><X size={20} /></button>
+
+          {/* Wizard Step Navigation Tabs */}
+          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+            <button
+              type="button"
+              className={`btn btn-sm ${activeStep === 'identity' ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setActiveStep('identity')}
+              style={{ fontSize: '0.8125rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+            >
+              <Building size={14} /> 1. Building Identity & Operations
+            </button>
+            <button
+              type="button"
+              className={`btn btn-sm ${activeStep === 'floors_wards' ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setActiveStep('floors_wards')}
+              style={{ fontSize: '0.8125rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+            >
+              <Layers size={14} /> 2. Floors, Wards & Beds Blueprint ({floorDrafts.length} Floors • {totalBedsProvisioned} Beds)
+            </button>
+          </div>
         </div>
 
-        {/* Step Indicator */}
-        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem' }}>
-          <button
-            type="button"
-            className={`btn btn-sm ${activeStep === 'identity' ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setActiveStep('identity')}
-            style={{ fontSize: '0.8125rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
-          >
-            <Building size={14} /> 1. Building Identity & Operations
-          </button>
-          <button
-            type="button"
-            className={`btn btn-sm ${activeStep === 'floors_wards' ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setActiveStep('floors_wards')}
-            style={{ fontSize: '0.8125rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
-          >
-            <Layers size={14} /> 2. Floors, Wards & Beds Blueprint ({floorDrafts.length} Floors • {totalBedsProvisioned} Beds)
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit}>
+        {/* ========================================================================= */}
+        {/* 2. SCROLLABLE BODY (ONLY THIS INNER SECTION SCROLLS VERTICALLY) */}
+        {/* ========================================================================= */}
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            padding: '1.25rem 1.75rem',
+          }}
+        >
           {/* STEP 1: IDENTITY & CRITICAL HOSPITAL UTILITIES */}
           {activeStep === 'identity' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
@@ -2556,19 +2834,22 @@ const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProv
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '1rem' }}>
                 <div className="form-group">
                   <label className="form-label">Hospital Classification Type</label>
                   <select
                     className="form-select"
                     value={buildingData.buildingType}
-                    onChange={(e) => setBuildingData({ ...buildingData, buildingType: e.target.value as any })}
+                    onChange={(e) => handleSelectBuildingType(e.target.value)}
                   >
-                    <option value="Main Clinical Hospital Tower">Main Clinical Hospital Tower</option>
-                    <option value="Emergency & Trauma Center">Emergency & Trauma Center</option>
-                    <option value="Surgical & Inpatient Block">Surgical & Inpatient Block</option>
-                    <option value="Diagnostic & Oncology Pavilion">Diagnostic & Oncology Pavilion</option>
-                    <option value="Administration & Ambulatory Pavilion">Administration & Ambulatory Pavilion</option>
+                    {availableBuildingTypes.map((bType) => (
+                      <option key={bType} value={bType}>
+                        {bType}
+                      </option>
+                    ))}
+                    <option value="__ADD_NEW__" style={{ color: 'var(--primary)', fontWeight: 700 }}>
+                      + Add More / Custom Classification...
+                    </option>
                   </select>
                 </div>
                 <div className="form-group">
@@ -2576,11 +2857,16 @@ const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProv
                   <select
                     className="form-select"
                     value={buildingData.operatingHours}
-                    onChange={(e) => setBuildingData({ ...buildingData, operatingHours: e.target.value })}
+                    onChange={(e) => handleSelectOperatingHours(e.target.value)}
                   >
-                    <option value="24/7 Continuous Emergency & Inpatient">24/7 Continuous Emergency & Inpatient</option>
-                    <option value="08:00 - 20:00 Ambulatory Care">08:00 - 20:00 Ambulatory Care</option>
-                    <option value="06:00 - 22:00 Daycare & Diagnostic">06:00 - 22:00 Daycare & Diagnostic</option>
+                    {availableOperatingSchedules.map((sched) => (
+                      <option key={sched} value={sched}>
+                        {sched}
+                      </option>
+                    ))}
+                    <option value="__ADD_NEW__" style={{ color: 'var(--primary)', fontWeight: 700 }}>
+                      + Add More / Custom Schedule...
+                    </option>
                   </select>
                 </div>
               </div>
@@ -2641,11 +2927,16 @@ const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProv
                     <select
                       className="form-select"
                       value={buildingData.fireNocStatus}
-                      onChange={(e) => setBuildingData({ ...buildingData, fireNocStatus: e.target.value as any })}
+                      onChange={(e) => handleSelectFireNocStatus(e.target.value)}
                     >
-                      <option value="APPROVED">✓ Approved & Valid</option>
-                      <option value="RENEWAL_DUE">Renewal Due</option>
-                      <option value="INSPECTION_PENDING">Inspection Pending</option>
+                      {availableFireNocStatuses.map((noc) => (
+                        <option key={noc.value} value={noc.value}>
+                          {noc.label}
+                        </option>
+                      ))}
+                      <option value="__ADD_NEW__" style={{ color: 'var(--primary)', fontWeight: 700 }}>
+                        + Add More / Custom NOC Status...
+                      </option>
                     </select>
                   </div>
                 </div>
@@ -2662,34 +2953,20 @@ const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProv
                   </label>
                 </div>
               </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.5rem' }}>
-                <button type="button" className="btn btn-secondary" onClick={onClose}>
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => setActiveStep('floors_wards')}
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
-                >
-                  Next: Configure Floors & Wards <ChevronRight size={16} />
-                </button>
-              </div>
             </div>
           )}
 
           {/* STEP 2: FLOORS, CLINICAL WARDS & BEDS BLUEPRINT */}
           {activeStep === 'floors_wards' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              {/* Quick Blueprints Strip */}
-              <div style={{ padding: '0.875rem', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px' }}>
+              {/* Presets Toolbar Bar */}
+              <div style={{ padding: '0.875rem 1rem', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                   <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#166534', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                     <Sparkles size={16} /> Instant Clinical Floor Presets
                   </span>
                   <span style={{ fontSize: '0.75rem', color: '#15803d' }}>
-                    Click to instantly add standard hospital floors
+                    Click to add ready-to-use hospital floors
                   </span>
                 </div>
 
@@ -2729,34 +3006,58 @@ const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProv
                 </div>
               </div>
 
-              {/* Floor Drafts List */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '420px', overflowY: 'auto', paddingRight: '0.25rem' }}>
+              {/* Floor Drafts Cards List - Clean Aligned Multi-row Grid */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 {floorDrafts.map((draft, idx) => (
                   <div
                     key={draft.id}
                     style={{
                       border: '1px solid #cbd5e1',
-                      borderRadius: '8px',
-                      padding: '1rem',
+                      borderRadius: '10px',
+                      padding: '1rem 1.25rem',
                       backgroundColor: '#ffffff',
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
                     }}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <span style={{ padding: '0.2rem 0.5rem', backgroundColor: '#e2e8f0', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700 }}>
+                    {/* Row 1: Floor Header Bar */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginBottom: '0.875rem',
+                        borderBottom: '1px solid #f1f5f9',
+                        paddingBottom: '0.625rem',
+                        gap: '0.75rem',
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', flex: 1, minWidth: '300px' }}>
+                        <span
+                          style={{
+                            padding: '0.25rem 0.6rem',
+                            backgroundColor: '#e2e8f0',
+                            borderRadius: '4px',
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
                           Floor {idx + 1}
                         </span>
                         <input
-                          style={{ fontWeight: 700, fontSize: '0.875rem', border: '1px solid #cbd5e1', borderRadius: '4px', padding: '0.25rem 0.5rem', width: '220px' }}
+                          className="form-input"
+                          style={{ fontWeight: 700, fontSize: '0.875rem', flex: 2 }}
                           value={draft.floorNumber}
                           onChange={(e) => handleUpdateFloorDraft(draft.id, 'floorNumber', e.target.value)}
+                          placeholder="Floor Name (e.g. Ground Floor)"
                         />
                         <input
-                          style={{ fontSize: '0.75rem', border: '1px solid #cbd5e1', borderRadius: '4px', padding: '0.25rem 0.5rem', width: '90px' }}
+                          className="form-input"
+                          style={{ fontSize: '0.75rem', flex: 1, maxWidth: '110px' }}
                           value={draft.code}
                           onChange={(e) => handleUpdateFloorDraft(draft.id, 'code', e.target.value)}
-                          placeholder="Code"
+                          placeholder="Code (FL-0)"
                         />
                       </div>
                       <button
@@ -2768,96 +3069,79 @@ const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProv
                       </button>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
-                      <div>
-                        <label className="form-label" style={{ fontSize: '0.7rem' }}>Wing / Description</label>
+                    {/* Row 2: Location, Specialization & Supervisor Nurse (Aliged 1.4fr 1.2fr 1fr Grid) */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.2fr 1fr', gap: '0.875rem', marginBottom: '0.875rem' }}>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label" style={{ fontSize: '0.75rem' }}>Wing / Location</label>
                         <input
                           className="form-input"
                           value={draft.wing}
                           onChange={(e) => handleUpdateFloorDraft(draft.id, 'wing', e.target.value)}
+                          placeholder="e.g. Emergency & Ambulatory Care"
                         />
                       </div>
-                      <div>
-                        <label className="form-label" style={{ fontSize: '0.7rem' }}>Department Specialization</label>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label" style={{ fontSize: '0.75rem' }}>Department Specialization</label>
                         <input
                           className="form-input"
                           value={draft.roomDept}
                           onChange={(e) => handleUpdateFloorDraft(draft.id, 'roomDept', e.target.value)}
+                          placeholder="e.g. Emergency & Trauma"
+                        />
+                      </div>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label" style={{ fontSize: '0.75rem' }}>Supervisor Nurse In-Charge</label>
+                        <input
+                          className="form-input"
+                          value={draft.supervisorNurse}
+                          onChange={(e) => handleUpdateFloorDraft(draft.id, 'supervisorNurse', e.target.value)}
+                          placeholder="e.g. Sister Clara Oswald, RN"
                         />
                       </div>
                     </div>
 
-                    {/* Ward & Beds Config */}
-                    <div style={{ padding: '0.75rem', backgroundColor: '#f8fafc', borderRadius: '6px', border: '1px dashed #cbd5e1' }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 0.8fr 1fr 0.8fr', gap: '0.5rem' }}>
-                        <div>
-                          <label className="form-label" style={{ fontSize: '0.7rem' }}>Ward Name</label>
+                    {/* Row 3: Inpatient Ward & Beds Specifications Box (Matching 1.4fr 1.2fr 1fr Column Alignment) */}
+                    <div
+                      style={{
+                        padding: '0.875rem 1rem',
+                        backgroundColor: '#f8fafc',
+                        borderRadius: '8px',
+                        border: '1px solid #e2e8f0',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.75rem',
+                      }}
+                    >
+                      {/* Subrow 1: Ward specifications */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.2fr 1fr', gap: '0.875rem' }}>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label className="form-label" style={{ fontSize: '0.75rem' }}>Inpatient Ward Name</label>
                           <input
                             className="form-input"
                             value={draft.wardName}
                             onChange={(e) => handleUpdateFloorDraft(draft.id, 'wardName', e.target.value)}
+                            placeholder="e.g. Intensive Critical Care Unit"
                           />
                         </div>
-                        <div>
-                          <label className="form-label" style={{ fontSize: '0.7rem' }}>Ward Type</label>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label className="form-label" style={{ fontSize: '0.75rem' }}>Ward Classification Type</label>
                           <select
                             className="form-select"
                             value={draft.wardType}
-                            onChange={(e) => handleUpdateFloorDraft(draft.id, 'wardType', e.target.value as any)}
+                            onChange={(e) => handleSelectWardType(draft.id, e.target.value)}
                           >
-                            <option value="General Ward">General Ward</option>
-                            <option value="ICU Ward">ICU Ward</option>
-                            <option value="NICU Ward">NICU Ward</option>
-                            <option value="Male Ward">Male Ward</option>
-                            <option value="Female Ward">Female Ward</option>
-                            <option value="Maternity Ward">Maternity Ward</option>
-                            <option value="Pediatric Ward">Pediatric Ward</option>
+                            {availableWardTypes.map((wType) => (
+                              <option key={wType} value={wType}>
+                                {wType}
+                              </option>
+                            ))}
+                            <option value="__ADD_NEW__" style={{ color: 'var(--primary)', fontWeight: 700 }}>
+                              + Add More / Custom Ward Type...
+                            </option>
                           </select>
                         </div>
-                        <div>
-                          <label className="form-label" style={{ fontSize: '0.7rem' }}>Total Beds</label>
-                          <input
-                            type="number"
-                            className="form-input"
-                            value={draft.bedCount}
-                            onChange={(e) => handleUpdateFloorDraft(draft.id, 'bedCount', parseInt(e.target.value) || 0)}
-                          />
-                        </div>
-                        <div>
-                          <label className="form-label" style={{ fontSize: '0.7rem' }}>Bed Type</label>
-                          <select
-                            className="form-select"
-                            value={draft.bedType}
-                            onChange={(e) => handleUpdateFloorDraft(draft.id, 'bedType', e.target.value as any)}
-                          >
-                            <option value="Standard Ward Bed">Standard Ward Bed</option>
-                            <option value="Motorized ICU Ventilator">ICU Ventilator</option>
-                            <option value="Semi-Fowler">Semi-Fowler</option>
-                            <option value="Emergency Stretcher">Emergency Stretcher</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="form-label" style={{ fontSize: '0.7rem' }}>Tariff ($/day)</label>
-                          <input
-                            type="number"
-                            className="form-input"
-                            value={draft.dailyTariff}
-                            onChange={(e) => handleUpdateFloorDraft(draft.id, 'dailyTariff', parseInt(e.target.value) || 0)}
-                          />
-                        </div>
-                      </div>
-
-                      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '0.75rem', marginTop: '0.5rem' }}>
-                        <div>
-                          <label className="form-label" style={{ fontSize: '0.7rem' }}>Supervisor Nurse</label>
-                          <input
-                            className="form-input"
-                            value={draft.supervisorNurse}
-                            onChange={(e) => handleUpdateFloorDraft(draft.id, 'supervisorNurse', e.target.value)}
-                          />
-                        </div>
-                        <div>
-                          <label className="form-label" style={{ fontSize: '0.7rem' }}>Consultation / Procedure Rooms</label>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label className="form-label" style={{ fontSize: '0.75rem' }}>Consultation Rooms</label>
                           <input
                             type="number"
                             className="form-input"
@@ -2866,39 +3150,130 @@ const AddBuildingWizardModal: React.FC<BuildingWizardProps> = ({ onClose, onProv
                           />
                         </div>
                       </div>
+
+                      {/* Subrow 2: Bed specifications (Spacious Bed Type with plenty of room for long names) */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.2fr 1fr', gap: '0.875rem' }}>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label className="form-label" style={{ fontSize: '0.75rem' }}>Bed Classification Type</label>
+                          <select
+                            className="form-select"
+                            value={draft.bedType}
+                            onChange={(e) => handleSelectBedType(draft.id, e.target.value)}
+                          >
+                            {availableBedTypes.map((bType) => (
+                              <option key={bType} value={bType}>
+                                {bType}
+                              </option>
+                            ))}
+                            <option value="__ADD_NEW__" style={{ color: 'var(--primary)', fontWeight: 700 }}>
+                              + Add More / Custom Bed Type...
+                            </option>
+                          </select>
+                        </div>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label className="form-label" style={{ fontSize: '0.75rem' }}>Total Beds in Ward</label>
+                          <input
+                            type="number"
+                            className="form-input"
+                            value={draft.bedCount}
+                            onChange={(e) => handleUpdateFloorDraft(draft.id, 'bedCount', parseInt(e.target.value) || 0)}
+                          />
+                        </div>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label className="form-label" style={{ fontSize: '0.75rem' }}>Daily Tariff ($ / day)</label>
+                          <input
+                            type="number"
+                            className="form-input"
+                            value={draft.dailyTariff}
+                            onChange={(e) => handleUpdateFloorDraft(draft.id, 'dailyTariff', parseInt(e.target.value) || 0)}
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ))}
-              </div>
 
-              {/* Blueprint Totals Summary Bar */}
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '0.875rem 1rem',
-                  backgroundColor: '#f1f5f9',
-                  borderRadius: '8px',
-                  fontSize: '0.8125rem',
-                }}
-              >
-                <div>
-                  <strong>Blueprint Summary:</strong> {floorDrafts.length} Floors • {floorDrafts.length} Clinical Wards •{' '}
-                  <strong style={{ color: 'var(--primary)' }}>{totalBedsProvisioned} Total Beds</strong> • {totalRoomsProvisioned} Consultation Rooms
-                </div>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => setActiveStep('identity')}>
-                    Back
-                  </button>
-                  <button type="submit" className="btn btn-primary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                    <Check size={14} /> Provision Building & Infrastructure
+                {/* Button: Add Another Floor */}
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.25rem', marginBottom: '0.5rem' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={handleAddBlankFloor}
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', borderStyle: 'dashed', padding: '0.5rem 1.25rem' }}
+                  >
+                    <Plus size={15} /> + Add Another Floor to Blueprint
                   </button>
                 </div>
               </div>
             </div>
           )}
-        </form>
+        </div>
+
+        {/* ========================================================================= */}
+        {/* 3. FIXED FOOTER (PERMANENTLY PINNED AT THE BOTTOM, NEVER MOVES) */}
+        {/* ========================================================================= */}
+        <div
+          style={{
+            flexShrink: 0,
+            padding: '1rem 1.75rem',
+            borderTop: '1px solid #e2e8f0',
+            backgroundColor: '#f8fafc',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '1rem',
+            flexWrap: 'wrap',
+            zIndex: 10,
+            boxShadow: '0 -4px 6px -1px rgba(0, 0, 0, 0.04)',
+          }}
+        >
+          <div style={{ fontSize: '0.8125rem', color: 'var(--text-color)' }}>
+            <strong>Blueprint Summary:</strong> {floorDrafts.length} Floors • {floorDrafts.length} Clinical Wards •{' '}
+            <strong style={{ color: 'var(--primary)' }}>{totalBedsProvisioned} Total Beds</strong> • {totalRoomsProvisioned} Consultation Rooms
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            {activeStep === 'identity' ? (
+              <>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => {
+                    if (!buildingData.name.trim() || !buildingData.code.trim()) {
+                      alert('Please enter building name and building code first.');
+                      return;
+                    }
+                    setActiveStep('floors_wards');
+                  }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                >
+                  Next: Configure Floors & Wards <ChevronRight size={15} />
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setActiveStep('identity')}
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={handleSubmit}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                >
+                  <Check size={15} /> Provision Building & Infrastructure
+                </button>
+              </>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -2985,11 +3360,27 @@ const EditBuildingSpecsModal: React.FC<EditBuildingSpecsProps> = ({ building, on
               <select
                 className="form-select"
                 value={bldState.fireNocStatus}
-                onChange={(e) => setBldState({ ...bldState, fireNocStatus: e.target.value as any })}
+                onChange={(e) => {
+                  if (e.target.value === '__ADD_NEW__') {
+                    const customNoc = window.prompt('Enter custom Fire NOC / Safety Status:');
+                    if (customNoc && customNoc.trim()) {
+                      const upper = customNoc.trim().toUpperCase().replace(/\s+/g, '_');
+                      setBldState({ ...bldState, fireNocStatus: upper as any });
+                    }
+                  } else {
+                    setBldState({ ...bldState, fireNocStatus: e.target.value as any });
+                  }
+                }}
               >
                 <option value="APPROVED">Approved & Valid</option>
                 <option value="RENEWAL_DUE">Renewal Due</option>
                 <option value="INSPECTION_PENDING">Inspection Pending</option>
+                {bldState.fireNocStatus && !['APPROVED', 'RENEWAL_DUE', 'INSPECTION_PENDING'].includes(bldState.fireNocStatus) && (
+                  <option value={bldState.fireNocStatus}>{bldState.fireNocStatus}</option>
+                )}
+                <option value="__ADD_NEW__" style={{ color: 'var(--primary)', fontWeight: 700 }}>
+                  + Add More / Custom NOC Status...
+                </option>
               </select>
             </div>
             <div className="form-group">
