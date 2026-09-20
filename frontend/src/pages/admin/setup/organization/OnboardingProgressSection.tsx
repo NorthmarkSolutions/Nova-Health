@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 
 interface OnboardingProgressSectionProps {
-  onNavigateToTab: (tab: 'profile' | 'infrastructure' | 'departments') => void;
+  onNavigateToTab: (tab: 'profile' | 'infrastructure' | 'departments' | 'staff') => void;
 }
 
 export const OnboardingProgressSection: React.FC<OnboardingProgressSectionProps> = ({
@@ -274,23 +274,28 @@ export const OnboardingProgressSection: React.FC<OnboardingProgressSectionProps>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <strong style={{ fontSize: '0.9375rem', color: '#9a3412' }}>
-                  Phase 4: Global System Masters & RBAC Security (Admin Level)
+                  Phase 4: Staff Master & Hospital Shifts Roster (Admin Level)
                 </strong>
-                <span className="badge badge-warning">12% / 15% Configured</span>
+                <span className="badge badge-warning">14% / 15% Configured</span>
               </div>
               <p style={{ fontSize: '0.8125rem', color: '#c2410c', margin: '0.25rem 0 0.5rem' }}>
-                Permanent UHID Prefix (PAT-000001), 20-minute appointment slots, mandatory IPD admission deposits, and GST invoicing rules locked.
+                Hospital staff credentials, clinical shift definitions, doctor & nursing rosters, and department leadership bindings configured.
               </p>
               <div style={{ display: 'flex', gap: '1rem', fontSize: '0.75rem', color: '#9a3412' }}>
-                <span>✓ UHID Prefix Active</span>
-                <span>✓ Timezone America/New_York</span>
-                <span>✓ 10 Role Profiles Provisioned</span>
+                <span>✓ Staff Master Active</span>
+                <span>✓ Shift Timings Synchronized</span>
+                <span>✓ Department HODs Bound</span>
               </div>
             </div>
           </div>
-          <span className="badge badge-success" style={{ flexShrink: 0 }}>
-            <Check size={12} /> System Master Ready
-          </span>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => onNavigateToTab('staff')}
+            style={{ flexShrink: 0 }}
+          >
+            Manage Staff <ArrowRight size={13} />
+          </button>
         </div>
 
         {/* Phase 5 */}

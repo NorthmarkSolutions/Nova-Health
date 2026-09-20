@@ -18,6 +18,7 @@
 | Department / Station | Role Code | Login Email | Quick Login | What to Test |
 | :--- | :--- | :--- | :--- | :--- |
 | **👑 Hospital Administration** | `HOSPITAL_ADMIN` | `admin@northhospital.com` | `/admin` | Hospital profile, executive KPIs, bed status, tariff setup |
+| **🏢 Department Admin (OPD)** | `DEPARTMENT_ADMIN` | `opd.admin@northhospital.com` | `/department/opd` | Independent department workspace: doctors, chambers, staff roster & settings |
 | **1. Reception Desk** | `RECEPTIONIST` | `reception@northhospital.com` | `/reception` | Patient registration, UHID generation, OPD token issuing |
 | **2. Outpatient Clinic (OPD)** | `DOCTOR` | `doctor@northhospital.com` | `/doctor` | Queue review, SOAP notes, ICD-10 diagnosis, e-Prescriptions |
 | **3. Diagnostic Pathology** | `LAB_TECH` | `lab@northhospital.com` | `/lab` | 5-stage sample tracking (Collected → Processed → Verified) |

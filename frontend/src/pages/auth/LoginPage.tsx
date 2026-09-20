@@ -19,6 +19,7 @@ import {
   UserCircle,
   KeyRound,
   CheckCircle2,
+  Building2,
 } from 'lucide-react';
 import api from '../../services/api';
 
@@ -52,6 +53,15 @@ export const LoginPage: React.FC = () => {
       path: '/admin',
       icon: <ShieldCheck size={18} />,
       description: 'Hospital profile, branch setup & master settings',
+    },
+    {
+      name: 'Department Admin (OPD)',
+      badge: 'OPD Admin',
+      email: 'opd.admin@northhospital.com',
+      role: RoleType.DEPARTMENT_ADMIN,
+      path: '/department/opd',
+      icon: <Building2 size={18} />,
+      description: 'Independent OPD workspace: doctors, chambers, staff & queue',
     },
     {
       name: '1. Reception Desk',
@@ -163,6 +173,9 @@ export const LoginPage: React.FC = () => {
         firstName: dept.name.split(' ')[0],
         lastName: 'Officer',
         role: dept.role,
+        departmentId: dept.role === RoleType.DEPARTMENT_ADMIN ? '1' : undefined,
+        departmentName: dept.role === RoleType.DEPARTMENT_ADMIN ? 'Outpatient Department (OPD)' : undefined,
+        departmentCode: dept.role === RoleType.DEPARTMENT_ADMIN ? 'DEPT-OPD' : undefined,
       };
       login('local-jwt-token-2026', demoUser);
       navigate(dept.path);
@@ -187,6 +200,7 @@ export const LoginPage: React.FC = () => {
         const roleRoutes: Record<string, string> = {
           [RoleType.SUPER_ADMIN]: '/admin',
           [RoleType.HOSPITAL_ADMIN]: '/admin',
+          [RoleType.DEPARTMENT_ADMIN]: '/department/opd',
           [RoleType.RECEPTION_SUPERVISOR]: '/reception',
           [RoleType.RECEPTIONIST]: '/reception',
           [RoleType.DOCTOR]: '/doctor',
@@ -208,17 +222,22 @@ export const LoginPage: React.FC = () => {
       }
     } catch {
       // Fallback
+      const isDeptAdmin = selectedRole === RoleType.DEPARTMENT_ADMIN || emailOrUsername.includes('opd.admin');
       const demoUser = {
         id: 'usr-demo',
         username: emailOrUsername.split('@')[0],
         email: emailOrUsername,
-        firstName: selectedRole.charAt(0) + selectedRole.slice(1).toLowerCase(),
-        lastName: 'Staff',
-        role: selectedRole,
+        firstName: isDeptAdmin ? 'OPD' : selectedRole.charAt(0) + selectedRole.slice(1).toLowerCase(),
+        lastName: isDeptAdmin ? 'Administrator' : 'Staff',
+        role: isDeptAdmin ? RoleType.DEPARTMENT_ADMIN : selectedRole,
+        departmentId: isDeptAdmin ? '1' : undefined,
+        departmentName: isDeptAdmin ? 'Outpatient Department (OPD)' : undefined,
+        departmentCode: isDeptAdmin ? 'DEPT-OPD' : undefined,
       };
       login('mock-jwt-token-2026', demoUser);
       const roleRoutes: Record<string, string> = {
         [RoleType.HOSPITAL_ADMIN]: '/admin',
+        [RoleType.DEPARTMENT_ADMIN]: '/department/opd',
         [RoleType.RECEPTIONIST]: '/reception',
         [RoleType.DOCTOR]: '/doctor',
         [RoleType.SURGEON]: '/ot',
@@ -229,7 +248,7 @@ export const LoginPage: React.FC = () => {
         [RoleType.PHARMACIST]: '/pharmacy',
         [RoleType.PATIENT]: '/patient',
       };
-      navigate(roleRoutes[selectedRole] || '/admin');
+      navigate(roleRoutes[demoUser.role] || '/admin');
     } finally {
       setIsLoading(false);
     }

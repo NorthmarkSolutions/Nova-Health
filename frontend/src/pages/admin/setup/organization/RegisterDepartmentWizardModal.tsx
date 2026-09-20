@@ -28,6 +28,14 @@ import {
   getCampusBuildings,
   syncDepartmentToCampus,
 } from './CampusInfrastructureSection';
+import {
+  HospitalShift,
+  StaffMember,
+  getHospitalShifts,
+  getHospitalStaff,
+  assignStaffMembersToDepartment,
+} from './hospitalStaffStore';
+import { autoProvisionWorkspace } from '../../../department/departmentWorkspaceStore';
 
 interface Props {
   isOpen: boolean;
@@ -40,10 +48,13 @@ export const RegisterDepartmentWizardModal: React.FC<Props> = ({
   onClose,
   onSave,
 }) => {
-  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
+  const [step, setStep] = useState<1 | 2>(1);
   const campusBuildings = useMemo(() => getCampusBuildings(), [isOpen]);
 
   // Pillar 1: Identity & Leadership
+  const hospitalShifts = useMemo(() => getHospitalShifts(), [isOpen]);
+  const hospitalStaff = useMemo(() => getHospitalStaff(), [isOpen]);
+
   const [name, setName] = useState('');
   const [code, setCode] = useState('DEPT-');
   const [shortName, setShortName] = useState('');
@@ -52,9 +63,16 @@ export const RegisterDepartmentWizardModal: React.FC<Props> = ({
   >('clinical');
   const [customCategory, setCustomCategory] = useState('');
   const [head, setHead] = useState('');
-  const [hours, setHours] = useState('08:00 - 20:00 Ambulatory OPD');
+  const [selectedHODStaffId, setSelectedHODStaffId] = useState<string>('');
+  const [isCustomHOD, setIsCustomHOD] = useState<boolean>(false);
+  const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>([]);
+  const [hours, setHours] = useState(
+    hospitalShifts[0]
+      ? `${hospitalShifts[0].name} (${hospitalShifts[0].startTime} - ${hospitalShifts[0].endTime})`
+      : '08:00 - 20:00 Ambulatory OPD'
+  );
   const [customHours, setCustomHours] = useState('');
-  const [shiftPattern, setShiftPattern] = useState('General 2-Shift (08:00 - 20:00)');
+  const [shiftPattern, setShiftPattern] = useState('Rotational Multi-Shift (Morning / Evening / Night)');
   const [customShiftPattern, setCustomShiftPattern] = useState('');
   const [description, setDescription] = useState('');
 
@@ -148,9 +166,7 @@ export const RegisterDepartmentWizardModal: React.FC<Props> = ({
       alert('Please provide the Department Name, Code, and Head of Department.');
       return;
     }
-    if (step < 5) {
-      setStep((step + 1) as any);
-    }
+    setStep(2);
   };
 
   const handleBack = () => {
@@ -236,6 +252,29 @@ export const RegisterDepartmentWizardModal: React.FC<Props> = ({
     // Synchronize claims directly to Campus Infrastructure
     syncDepartmentToCampus(newDept.name, selectedBuildingId, selectedWardIds, selectedRoomIds);
 
+    // Synchronize assigned staff members from Staff Master to this department
+    const allStaffToAssign = Array.from(
+      new Set([
+        ...selectedStaffIds,
+        ...(selectedHODStaffId ? [selectedHODStaffId] : []),
+      ])
+    );
+    if (allStaffToAssign.length > 0) {
+      assignStaffMembersToDepartment(allStaffToAssign, newDept.id, newDept.name);
+    }
+
+    // Auto-provision independent dedicated department workspace
+    autoProvisionWorkspace(newDept.id, {
+      departmentId: newDept.id,
+      departmentCode: newDept.code,
+      departmentName: newDept.name,
+      shortName: newDept.shortName,
+      category: newDept.category as any,
+      adminName: head.trim(),
+      adminEmail: `${code.toLowerCase().replace('dept-', '')}.admin@northhospital.com`,
+      operatingHours: newDept.hours,
+    });
+
     onSave(newDept);
     onClose();
   };
@@ -290,7 +329,7 @@ export const RegisterDepartmentWizardModal: React.FC<Props> = ({
                 </h3>
               </div>
               <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
-                Hospital Enterprise Setup • Commission identity, physical campus space, staff roster, clinical scope, and financials.
+                Hospital Enterprise Setup • Commission identity and physical campus space allocation.
               </span>
             </div>
             <button className="action-btn" onClick={onClose} title="Cancel & Close">
@@ -311,9 +350,6 @@ export const RegisterDepartmentWizardModal: React.FC<Props> = ({
             {[
               { id: 1, label: '1. Identity & Governance' },
               { id: 2, label: '2. Campus Infrastructure' },
-              { id: 3, label: '3. Staff Deployment' },
-              { id: 4, label: '4. Clinical Scope' },
-              { id: 5, label: '5. Financial Ledger' },
             ].map((s) => (
               <button
                 key={s.id}
@@ -437,33 +473,112 @@ export const RegisterDepartmentWizardModal: React.FC<Props> = ({
                 )}
 
                 <div className="form-group">
-                  <label className="form-label">
-                    Head of Department (HOD) / Chief Clinician <span style={{ color: '#ef4444' }}>*</span>
-                  </label>
-                  <input
-                    className="form-input"
-                    value={head}
-                    onChange={(e) => setHead(e.target.value)}
-                    placeholder="e.g. Dr. Sarah Jenkins, MD"
-                    required
-                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label className="form-label">
+                      Head of Department (HOD) <span style={{ color: '#ef4444' }}>*</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsCustomHOD(!isCustomHOD);
+                        if (!isCustomHOD) {
+                          setSelectedHODStaffId('');
+                        }
+                      }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--primary)',
+                        fontSize: '0.75rem',
+                        cursor: 'pointer',
+                        padding: 0,
+                        textDecoration: 'underline',
+                      }}
+                    >
+                      {isCustomHOD ? '← Select from Staff Master' : '+ Custom Clinician Name'}
+                    </button>
+                  </div>
+
+                  {!isCustomHOD ? (
+                    <select
+                      className="form-select"
+                      value={selectedHODStaffId}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === '__custom__') {
+                          setIsCustomHOD(true);
+                          setSelectedHODStaffId('');
+                        } else {
+                          setSelectedHODStaffId(val);
+                          const stf = hospitalStaff.find((s) => s.id === val);
+                          if (stf) {
+                            setHead(stf.fullName);
+                          } else {
+                            setHead('');
+                          }
+                        }
+                      }}
+                      required
+                    >
+                      <option value="">-- Select Qualified Staff Member as HOD --</option>
+                      <optgroup label="Doctors & Specialists (Staff Master)">
+                        {hospitalStaff
+                          .filter((s) => s.role === 'doctor')
+                          .map((doc) => (
+                            <option key={doc.id} value={doc.id}>
+                              {doc.fullName} [{doc.employeeCode}] — {doc.designation}
+                            </option>
+                          ))}
+                      </optgroup>
+                      <optgroup label="Nursing Leaders & Senior Staff">
+                        {hospitalStaff
+                          .filter((s) => s.role !== 'doctor')
+                          .map((stf) => (
+                            <option key={stf.id} value={stf.id}>
+                              {stf.fullName} [{stf.employeeCode}] — {stf.designation}
+                            </option>
+                          ))}
+                      </optgroup>
+                      <option value="__custom__">+ Enter Custom External Clinician...</option>
+                    </select>
+                  ) : (
+                    <input
+                      className="form-input"
+                      value={head}
+                      onChange={(e) => setHead(e.target.value)}
+                      placeholder="e.g. Dr. Arthur Pendelton, MD, FACS"
+                      required
+                    />
+                  )}
                   <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                    Chief physician or administrator legally accountable for division
+                    Chief physician legally and clinically accountable for this department
                   </span>
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Operating Schedule</label>
+                  <label className="form-label">Operating Schedule & Staff Timings</label>
                   <select
                     className="form-select"
                     value={hours}
                     onChange={(e) => setHours(e.target.value)}
                   >
-                    <option value="24/7 Continuous Emergency & Inpatient">24/7 Continuous Emergency & Inpatient</option>
-                    <option value="08:00 - 20:00 Ambulatory OPD">08:00 - 20:00 Ambulatory OPD (Mon - Sat)</option>
-                    <option value="09:00 - 17:00 Administrative / Daycare">09:00 - 17:00 Administrative / Daycare</option>
+                    <optgroup label="Hospital Profile Configured Shifts">
+                      {hospitalShifts.map((sh) => (
+                        <option key={sh.id} value={`${sh.name} (${sh.startTime} - ${sh.endTime})`}>
+                          {sh.name} • {sh.startTime} - {sh.endTime} ({sh.duration})
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Standard Hospital Timings">
+                      <option value="24/7 Continuous Emergency & Inpatient">24/7 Continuous Emergency & Inpatient</option>
+                      <option value="08:00 - 20:00 Ambulatory OPD">08:00 - 20:00 Ambulatory OPD (Mon - Sat)</option>
+                      <option value="09:00 - 17:00 Administrative / Daycare">09:00 - 17:00 Administrative / Daycare</option>
+                    </optgroup>
                     <option value="custom">+ Add Custom Operating Hours...</option>
                   </select>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    Inherited from Hospital Profile Staff Timings Master
+                  </span>
                 </div>
 
                 {hours === 'custom' && (
@@ -485,8 +600,14 @@ export const RegisterDepartmentWizardModal: React.FC<Props> = ({
                     value={shiftPattern}
                     onChange={(e) => setShiftPattern(e.target.value)}
                   >
-                    <option value="3-Shift 24x7 (Rotational)">3-Shift 24x7 (Morning / Evening / Night)</option>
-                    <option value="General 2-Shift (08:00 - 20:00)">General 2-Shift (08:00 - 20:00 OPD)</option>
+                    <option value="Rotational Multi-Shift (Morning / Evening / Night)">Rotational Multi-Shift (Morning / Evening / Night)</option>
+                    <optgroup label="Dedicated Hospital Shifts">
+                      {hospitalShifts.map((sh) => (
+                        <option key={sh.id} value={`Dedicated Shift: ${sh.name} (${sh.startTime} - ${sh.endTime})`}>
+                          {sh.name} ({sh.startTime} - {sh.endTime})
+                        </option>
+                      ))}
+                    </optgroup>
                     <option value="Single Day Shift (09:00 - 17:00)">Single Day Shift (09:00 - 17:00)</option>
                     <option value="On-Call Emergency Rotation">On-Call Emergency Rotation</option>
                     <option value="custom">+ Add Custom Shift Pattern...</option>
@@ -515,6 +636,58 @@ export const RegisterDepartmentWizardModal: React.FC<Props> = ({
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="e.g. Primary acute and elective clinical division specializing in diagnostic catheterization, interventional cardiology, and heart failure telemetry."
                 />
+              </div>
+
+              {/* Dedicated Workspace Automatic Provisioning Banner */}
+              <div
+                style={{
+                  backgroundColor: 'rgba(2, 132, 199, 0.06)',
+                  border: '1px solid rgba(2, 132, 199, 0.25)',
+                  borderRadius: '8px',
+                  padding: '1rem 1.25rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.5rem',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <ShieldCheck size={18} color="var(--primary)" />
+                  <strong style={{ fontSize: '0.875rem', color: 'var(--primary)' }}>
+                    Automatic Independent Workspace Provisioning
+                  </strong>
+                  <span className="badge badge-success" style={{ fontSize: '0.6875rem', marginLeft: 'auto' }}>
+                    Dedicated Engine
+                  </span>
+                </div>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0, lineHeight: 1.4 }}>
+                  Registering this department automatically configures a dedicated, role-scoped workspace accessible by the assigned Department Administrator. The workspace includes independent doctor rostering, room stationing, and shift scheduling.
+                </p>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                    gap: '1rem',
+                    fontSize: '0.75rem',
+                    paddingTop: '0.375rem',
+                    borderTop: '1px dashed rgba(2, 132, 199, 0.2)',
+                  }}
+                >
+                  <div>
+                    <span style={{ color: 'var(--text-muted)' }}>Workspace Admin: </span>
+                    <strong>{head || '(Select HOD above)'}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--text-muted)' }}>Login Account: </span>
+                    <code style={{ color: 'var(--primary)', fontWeight: 600 }}>
+                      {code ? `${code.toLowerCase().replace('dept-', '')}.admin@northhospital.com` : 'dept.admin@northhospital.com'}
+                    </code>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--text-muted)' }}>Scope Security: </span>
+                    <span className="badge badge-secondary" style={{ fontSize: '0.6875rem' }}>Strictly Scoped to {name || 'Department'}</span>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -809,409 +982,6 @@ export const RegisterDepartmentWizardModal: React.FC<Props> = ({
               </div>
             </div>
           )}
-
-          {/* STEP 3: STAFFING DEPLOYMENT */}
-          {step === 3 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <div>
-                <h4 style={{ fontSize: '1rem', fontWeight: 700, margin: '0 0 0.25rem 0' }}>
-                  Pillar 3: Staffing & Human Resources Deployment
-                </h4>
-                <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: 0 }}>
-                  Allocate clinical and support headcount. The nurse-to-bed ratio calculates live from your physical ward selections in Pillar 2.
-                </p>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-                <div className="form-group" style={{ backgroundColor: 'var(--card-bg, #ffffff)', padding: '1rem', borderRadius: '10px', border: '1px solid var(--border-color)', margin: 0 }}>
-                  <label className="form-label" style={{ fontWeight: 600 }}>Consultant Doctors</label>
-                  <input
-                    type="number"
-                    className="form-input"
-                    value={doctorsCount}
-                    onChange={(e) => setDoctorsCount(parseInt(e.target.value) || 0)}
-                  />
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Specialists & residents</span>
-                </div>
-
-                <div className="form-group" style={{ backgroundColor: 'var(--card-bg, #ffffff)', padding: '1rem', borderRadius: '10px', border: '1px solid var(--border-color)', margin: 0 }}>
-                  <label className="form-label" style={{ fontWeight: 600 }}>Registered Nurses</label>
-                  <input
-                    type="number"
-                    className="form-input"
-                    value={nursesCount}
-                    onChange={(e) => setNursesCount(parseInt(e.target.value) || 0)}
-                  />
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Ward sisters & staff nurses</span>
-                </div>
-
-                <div className="form-group" style={{ backgroundColor: 'var(--card-bg, #ffffff)', padding: '1rem', borderRadius: '10px', border: '1px solid var(--border-color)', margin: 0 }}>
-                  <label className="form-label" style={{ fontWeight: 600 }}>Technicians & Paramedics</label>
-                  <input
-                    type="number"
-                    className="form-input"
-                    value={techsCount}
-                    onChange={(e) => setTechsCount(parseInt(e.target.value) || 0)}
-                  />
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Lab, OT & biomed staff</span>
-                </div>
-
-                <div className="form-group" style={{ backgroundColor: 'var(--card-bg, #ffffff)', padding: '1rem', borderRadius: '10px', border: '1px solid var(--border-color)', margin: 0 }}>
-                  <label className="form-label" style={{ fontWeight: 600 }}>Front Desk & Queue Handlers</label>
-                  <input
-                    type="number"
-                    className="form-input"
-                    value={receptionistsCount}
-                    onChange={(e) => setReceptionistsCount(parseInt(e.target.value) || 0)}
-                  />
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Token coordinators</span>
-                </div>
-              </div>
-
-              {/* Staff-to-Bed Safety Metric Banner */}
-              <div
-                style={{
-                  backgroundColor: 'var(--card-bg, #ffffff)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '10px',
-                  padding: '1.25rem',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  flexWrap: 'wrap',
-                  gap: '1rem',
-                }}
-              >
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <ShieldCheck size={20} color={totalSelectedBeds > 0 ? '#10b981' : 'var(--primary)'} />
-                    <strong style={{ fontSize: '0.9375rem' }}>Staff-to-Bed Clinical Safety Metric</strong>
-                  </div>
-                  <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: '0.25rem 0 0 0' }}>
-                    {totalSelectedBeds > 0
-                      ? `Evaluating ${nursesCount} deployed nurses against ${totalSelectedBeds} aggregate hospital beds.`
-                      : 'Ambulatory OPD Model: No inpatient ward beds selected. Nurse-to-bed ratio is not required.'}
-                  </p>
-                </div>
-
-                <div>
-                  {totalSelectedBeds > 0 ? (
-                    <div
-                      style={{
-                        padding: '0.5rem 1rem',
-                        borderRadius: '8px',
-                        backgroundColor:
-                          (nursesCount || 0) >= totalSelectedBeds / 2
-                            ? 'rgba(16, 185, 129, 0.12)'
-                            : 'rgba(245, 158, 11, 0.12)',
-                        border: `1px solid ${
-                          (nursesCount || 0) >= totalSelectedBeds / 2
-                            ? '#10b981'
-                            : '#f59e0b'
-                        }`,
-                        textAlign: 'right',
-                      }}
-                    >
-                      <span style={{ fontSize: '0.875rem', fontWeight: 700, display: 'block', color: (nursesCount || 0) >= totalSelectedBeds / 2 ? '#047857' : '#b45309' }}>
-                        Ratio: 1 Nurse per {nurseToBedRatio} Beds
-                      </span>
-                      <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
-                        {(nursesCount || 0) >= totalSelectedBeds / 2
-                          ? '✓ Meets NABH/JCI Inpatient Acute Threshold'
-                          : '⚠ Consider deploying additional ward nurses'}
-                      </span>
-                    </div>
-                  ) : (
-                    <span className="badge badge-info" style={{ padding: '0.5rem 0.875rem' }}>
-                      Ambulatory OPD / Non-Bed Model
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">On-Call Specialist Emergency Roster & Emergency Pager</label>
-                <textarea
-                  className="form-textarea"
-                  rows={2}
-                  value={onCallRoster}
-                  onChange={(e) => setOnCallRoster(e.target.value)}
-                  placeholder="e.g. Primary On-Call: Dr. Sarah Jenkins (Ext: 104) • Secondary Consultant: Pager #881"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* STEP 4: CLINICAL SCOPE & PRIVILEGES */}
-          {step === 4 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <div>
-                <h4 style={{ fontSize: '1rem', fontWeight: 700, margin: '0 0 0.25rem 0' }}>
-                  Pillar 4: Clinical Scope & Governance Rights
-                </h4>
-                <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: 0 }}>
-                  Define what medical actions doctors and nurses stationed in this department are legally and digitally authorized to perform in the HMS.
-                </p>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
-                <div
-                  style={{
-                    backgroundColor: 'var(--card-bg, #ffffff)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '10px',
-                    padding: '1.25rem',
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: '0.75rem',
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={consultationEnabled}
-                    onChange={(e) => setConsultationEnabled(e.target.checked)}
-                    style={{ width: '18px', height: '18px', marginTop: '2px' }}
-                  />
-                  <div>
-                    <strong style={{ fontSize: '0.9375rem', display: 'block' }}>Consultation SOAP Notes</strong>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      Author OPD and IPD clinical progress notes, symptom evaluations, and diagnosis charting.
-                    </span>
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    backgroundColor: 'var(--card-bg, #ffffff)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '10px',
-                    padding: '1.25rem',
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: '0.75rem',
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={admissionEnabled}
-                    onChange={(e) => setAdmissionEnabled(e.target.checked)}
-                    style={{ width: '18px', height: '18px', marginTop: '2px' }}
-                  />
-                  <div>
-                    <strong style={{ fontSize: '0.9375rem', display: 'block' }}>Inpatient Bed Admission Rights</strong>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      Authorizes physicians to admit patients to hospital beds and assign primary attending care.
-                    </span>
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    backgroundColor: 'var(--card-bg, #ffffff)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '10px',
-                    padding: '1.25rem',
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: '0.75rem',
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={procedureEnabled}
-                    onChange={(e) => setProcedureEnabled(e.target.checked)}
-                    style={{ width: '18px', height: '18px', marginTop: '2px' }}
-                  />
-                  <div>
-                    <strong style={{ fontSize: '0.9375rem', display: 'block' }}>Surgical & OT Procedures</strong>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      Authorizes booking Operation Theatres (OT), endoscopy suites, and minor surgery charting.
-                    </span>
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    backgroundColor: 'var(--card-bg, #ffffff)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '10px',
-                    padding: '1.25rem',
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: '0.75rem',
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={labRequestsEnabled}
-                    onChange={(e) => setLabRequestsEnabled(e.target.checked)}
-                    style={{ width: '18px', height: '18px', marginTop: '2px' }}
-                  />
-                  <div>
-                    <strong style={{ fontSize: '0.9375rem', display: 'block' }}>Lab & Imaging Order Rights</strong>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      Permits clinicians to order biochemistry, hematology, MRI, CT, and X-ray investigations.
-                    </span>
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    backgroundColor: 'var(--card-bg, #ffffff)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '10px',
-                    padding: '1.25rem',
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: '0.75rem',
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={prescriptionEnabled}
-                    onChange={(e) => setPrescriptionEnabled(e.target.checked)}
-                    style={{ width: '18px', height: '18px', marginTop: '2px' }}
-                  />
-                  <div>
-                    <strong style={{ fontSize: '0.9375rem', display: 'block' }}>E-Prescription & Pharmacy Dispense</strong>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      Generates digital prescriptions routed directly to the inpatient and retail pharmacy counters.
-                    </span>
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    backgroundColor: 'var(--card-bg, #ffffff)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '10px',
-                    padding: '1.25rem',
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: '0.75rem',
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={emergencyEnabled}
-                    onChange={(e) => setEmergencyEnabled(e.target.checked)}
-                    style={{ width: '18px', height: '18px', marginTop: '2px' }}
-                  />
-                  <div>
-                    <strong style={{ fontSize: '0.9375rem', display: 'block' }}>Emergency Trauma Intake</strong>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      Marks this department as an emergency triage receiving center for code red/yellow admissions.
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* STEP 5: FINANCIAL ACCOUNTING */}
-          {step === 5 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <div>
-                <h4 style={{ fontSize: '1rem', fontWeight: 700, margin: '0 0 0.25rem 0' }}>
-                  Pillar 5: Financial Accounting & Revenue Center
-                </h4>
-                <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: 0 }}>
-                  Link hospital General Ledger cost centers, revenue tracking, annual operating budget, and patient billing status.
-                </p>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
-                <div className="form-group">
-                  <label className="form-label">Cost Center Code (General Ledger)</label>
-                  <input
-                    className="form-input"
-                    value={costCenter}
-                    onChange={(e) => setCostCenter(e.target.value.toUpperCase())}
-                    placeholder="e.g. CC-CLN-08"
-                    required
-                  />
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                    Tracks departmental supplies and operational expenditures
-                  </span>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Revenue Center Code</label>
-                  <input
-                    className="form-input"
-                    value={revenueCenter}
-                    onChange={(e) => setRevenueCenter(e.target.value.toUpperCase())}
-                    placeholder="e.g. RC-CLN-08"
-                  />
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                    Captures procedure, consultation, and bed charges
-                  </span>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Annual Operating Budget ($ USD)</label>
-                  <input
-                    type="number"
-                    className="form-input"
-                    value={budget}
-                    onChange={(e) => setBudget(parseFloat(e.target.value) || 0)}
-                    placeholder="e.g. 450000"
-                  />
-                </div>
-
-                <div
-                  style={{
-                    backgroundColor: 'var(--card-bg, #ffffff)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '10px',
-                    padding: '1.25rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                  }}
-                >
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={billingEnabled}
-                      onChange={(e) => setBillingEnabled(e.target.checked)}
-                      style={{ width: '18px', height: '18px' }}
-                    />
-                    <div>
-                      <strong style={{ fontSize: '0.875rem', display: 'block' }}>Department Direct Billing Enabled</strong>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        Allows doctors and billing clerks to post line-item charges directly to patient folios.
-                      </span>
-                    </div>
-                  </label>
-                </div>
-              </div>
-
-              {/* Commissioning Summary Card */}
-              <div
-                style={{
-                  backgroundColor: 'rgba(37, 99, 235, 0.05)',
-                  border: '1px solid #93c5fd',
-                  borderRadius: '10px',
-                  padding: '1.25rem',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                  <Sparkles size={18} color="var(--primary)" />
-                  <strong style={{ fontSize: '0.9375rem', color: 'var(--primary)' }}>
-                    Ready to Commission Division: {name || 'New Department'}
-                  </strong>
-                </div>
-                <div style={{ fontSize: '0.8125rem', color: 'var(--text-color)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-                  <div>Code: <strong>{code}</strong> • Head: <strong>{head}</strong></div>
-                  <div>Campus: <strong>{currentBuilding?.name}</strong></div>
-                  <div>Allocated: <strong>{selectedWardIds.length} Wards</strong> (<strong>{totalSelectedBeds} Beds</strong>)</div>
-                  <div>Headcount: <strong>{totalStaffCount} Personnel</strong> ({doctorsCount} Drs, {nursesCount} Nurses)</div>
-                  <div>Ledger: Cost <strong>{costCenter}</strong> • Rev <strong>{revenueCenter}</strong> • Budget: <strong>${budget.toLocaleString()}</strong></div>
-                  <div>Status: <strong>Active Clinical Division</strong></div>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* ================= FIXED FOOTER ================= */}
@@ -1232,7 +1002,7 @@ export const RegisterDepartmentWizardModal: React.FC<Props> = ({
           <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <span className="badge badge-info">{code || 'DEPT'}</span>
             <span>
-              {selectedWardIds.length} Wards ({totalSelectedBeds} Beds) • {totalStaffCount} Staff • ${budget.toLocaleString()}
+              {selectedWardIds.length} Wards ({totalSelectedBeds} Beds) • {selectedRoomIds.length} Rooms Allocated
             </span>
           </div>
 
@@ -1257,7 +1027,7 @@ export const RegisterDepartmentWizardModal: React.FC<Props> = ({
               </button>
             )}
 
-            {step < 5 ? (
+            {step === 1 ? (
               <button
                 type="button"
                 className="btn btn-primary"
@@ -1273,7 +1043,7 @@ export const RegisterDepartmentWizardModal: React.FC<Props> = ({
                 onClick={handleSubmit}
                 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: '#10b981' }}
               >
-                <CheckCircle2 size={16} /> Provision & Commission Department
+                <CheckCircle2 size={16} /> Register & Commission Department
               </button>
             )}
           </div>

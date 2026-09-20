@@ -1,6 +1,7 @@
 export enum RoleType {
   SUPER_ADMIN = 'SUPER_ADMIN',
   HOSPITAL_ADMIN = 'HOSPITAL_ADMIN',
+  DEPARTMENT_ADMIN = 'DEPARTMENT_ADMIN',
   RECEPTION_SUPERVISOR = 'RECEPTION_SUPERVISOR',
   RECEPTIONIST = 'RECEPTIONIST',
   DOCTOR = 'DOCTOR',
@@ -16,6 +17,12 @@ export enum RoleType {
   FINANCE_MANAGER = 'FINANCE_MANAGER',
   CASHIER = 'CASHIER',
   PATIENT = 'PATIENT',
+}
+
+export enum Gender {
+  MALE = 'MALE',
+  FEMALE = 'FEMALE',
+  OTHER = 'OTHER',
 }
 
 export enum AppointmentStatus {
@@ -35,27 +42,243 @@ export enum AppointmentType {
   FOLLOW_UP = 'FOLLOW_UP',
 }
 
-export enum Gender {
-  MALE = 'MALE',
-  FEMALE = 'FEMALE',
-  OTHER = 'OTHER',
-}
-
 export enum InvoiceStatus {
   DRAFT = 'DRAFT',
+  PENDING = 'PENDING',
   UNPAID = 'UNPAID',
   PARTIALLY_PAID = 'PARTIALLY_PAID',
   PAID = 'PAID',
   CANCELLED = 'CANCELLED',
   REFUNDED = 'REFUNDED',
+  INSURANCE_PENDING = 'INSURANCE_PENDING',
 }
 
 export enum PaymentMethod {
   CASH = 'CASH',
   CARD = 'CARD',
   UPI = 'UPI',
-  BANK_TRANSFER = 'BANK_TRANSFER',
-  CHEQUE = 'CHEQUE',
+  INSURANCE = 'INSURANCE',
+  NET_BANKING = 'NET_BANKING',
+}
+
+export interface DepartmentWorkspaceConfig {
+  hasAppointments: boolean;
+  hasQueue: boolean;
+  hasAdmissions: boolean;
+  hasBeds: boolean;
+  hasDoctors: boolean;
+  hasTests: boolean;
+  hasPrescriptions: boolean;
+  hasRooms: boolean;
+  hasSchedules: boolean;
+  hasWalkIn: boolean;
+  hasBilling: boolean;
+
+  // Queue & Capacity Policies (Step 9)
+  dailyCapacity?: number;              // Default: 100 Patients / Day
+  isWalkInAllowed?: boolean;           // Default: true
+  isTokenSystemEnabled?: boolean;      // Default: true
+  isOnlineAppointmentEnabled?: boolean;// Default: true
+}
+
+export interface DepartmentDoctor {
+  id: string;
+  departmentId: string;
+  staffId: string;
+  fullName: string;
+  employeeCode: string;
+  specialization: string;
+  qualification: string;
+  consultationFee: number;
+  consultationStartTime: string; // e.g. "09:00"
+  consultationEndTime: string;   // e.g. "17:00"
+  workingDays: string[];         // e.g. ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+  assignedRoomId?: string;
+  assignedRoomName?: string;
+  patientCapacityPerDay: number; // e.g. 30
+  avgConsultationMinutes: number;// e.g. 15
+  isAvailable: boolean;
+  status: 'ACTIVE' | 'ON_LEAVE' | 'OFF_DUTY';
+}
+
+export interface DepartmentRoom {
+  id: string;
+  departmentId: string;
+  roomNumber: string;
+  name: string;
+  type: 'consultation' | 'procedure' | 'treatment' | 'triage' | 'observation';
+  floorName?: string;
+  buildingName?: string;
+  status: 'AVAILABLE' | 'IN_CONSULTATION' | 'MAINTENANCE' | 'OCCUPIED';
+  assignedDoctorId?: string;
+  assignedDoctorName?: string;
+  assignedNurseId?: string;
+  assignedNurseName?: string;
+  capacity?: number;
+  equipment?: string[];
+  facilityFee?: number;          // Base facility charge per consultation/visit ($)
+  hourlyProcedureRate?: number;  // Hourly rate for minor OT / procedure room ($)
+}
+
+export interface DepartmentWard {
+  id: string;
+  departmentId: string;
+  wardName: string;
+  buildingName?: string;
+  floorName?: string;
+  headNurseId?: string;
+  headNurseName?: string;
+  totalBeds: number;
+  responsibleDoctorId?: string;
+  responsibleDoctorName?: string;
+  responsibleNurseId?: string;
+  responsibleNurseName?: string;
+  notes?: string;
+  dailyRate?: number;            // Standard 24h bed charge ($)
+  hourlyRate?: number;           // Hourly daycare observation rate ($)
+  nursingChargePerDay?: number;  // Inpatient nursing surcharge ($)
+}
+
+export interface DoctorTariffItem {
+  doctorId: string;
+  staffId: string;
+  doctorName: string;
+  employeeCode: string;
+  designation: string;
+  specialization: string;
+  standardFee: number;           // Standard OPD consultation fee ($)
+  followUpFee?: number;          // Follow-up visit consultation fee ($)
+  emergencyFee?: number;         // Emergency / Priority intake fee ($)
+  lastUpdated?: string;
+}
+
+export interface WardTariffItem {
+  wardId: string;
+  wardName: string;
+  totalBeds: number;
+  dailyRate: number;             // $ / 24 hours
+  hourlyRate?: number;           // $ / hour for daycare observation
+  nursingChargePerDay?: number;  // $ / 24 hours
+}
+
+export interface RoomTariffItem {
+  roomId: string;
+  roomNumber: string;
+  roomName: string;
+  type: string;
+  facilityFee: number;           // Per consultation/visit ($)
+  hourlyProcedureRate?: number;  // For minor OT / procedure room ($)
+}
+
+export interface BedCategoryTariffItem {
+  id: string;
+  categoryName: string;          // 'Standard Observation Bed', 'Daycare Bed', 'ICU Step-Down'
+  dailyRate: number;             // $ / day
+  hourlyRate: number;            // $ / hr
+  description?: string;
+}
+
+export interface DepartmentTariffMaster {
+  departmentId: string;
+  currency: string;              // 'USD' ($)
+  doctorTariffs: DoctorTariffItem[];
+  wardTariffs: WardTariffItem[];
+  roomTariffs: RoomTariffItem[];
+  bedCategoryTariffs: BedCategoryTariffItem[];
+  intakeRegistrationFee: number; // Department registration fee ($)
+  triageVitalsFee: number;       // Nurse vitals assessment charge ($)
+  updatedAt: string;
+  updatedBy?: string;
+}
+
+export interface DepartmentShift {
+  id: string;
+  departmentId: string;
+  code: string;
+  name: string;
+  startTime: string; // e.g. "08:00"
+  endTime: string;   // e.g. "16:00"
+  duration: string;  // e.g. "8 hrs"
+  type: 'morning' | 'evening' | 'night' | 'general';
+}
+
+export interface DepartmentQueueToken {
+  id: string;
+  departmentId: string;
+  tokenNumber: string; // e.g. "OPD-101"
+  patientName: string;
+  uhid?: string;
+  age?: number;
+  gender?: string;
+  phone?: string;
+  doctorId: string;
+  doctorName: string;
+  roomId: string;
+  roomName: string;
+  type: 'WALK_IN' | 'ONLINE_APPOINTMENT';
+  status: 'WAITING' | 'IN_CONSULTATION' | 'COMPLETED' | 'CANCELLED';
+  createdAt: string;
+  vitals?: string;
+  chiefComplaint?: string;
+}
+
+export interface DepartmentStaffAssignment {
+  id: string;
+  departmentId: string;
+  staffId: string;
+  fullName: string;
+  employeeCode: string;
+  role: 'doctor' | 'nurse' | 'receptionist' | 'technician' | 'assistant' | 'supervisor';
+  designation: string;
+  shiftId: string;
+  shiftName: string;
+  assignedRoomId?: string;
+  assignedRoomName?: string;
+  status: 'ACTIVE' | 'ON_LEAVE' | 'SUSPENDED' | 'RESIGNED';
+  phone?: string;
+  email?: string;
+  gender?: 'Male' | 'Female' | 'Other';
+  qualification?: string;
+  specialization?: string;
+  joiningDate?: string;
+  licenseNumber?: string;
+  emergencyContact?: string;
+  isDepartmentHead?: boolean;
+}
+
+export interface DepartmentScheduleSlot {
+  id: string;
+  departmentId: string;
+  date: string;
+  dayOfWeek: string;
+  shiftName: string;
+  staffId: string;
+  staffName: string;
+  role: string;
+  roomId?: string;
+  roomName?: string;
+  notes?: string;
+}
+
+export interface DepartmentWorkspace {
+  id: string;
+  departmentId: string;
+  departmentCode: string;
+  departmentName: string;
+  shortName: string;
+  category: 'clinical' | 'diagnostic' | 'revenue' | 'admin' | 'support';
+  adminId?: string;
+  adminName?: string;
+  adminEmail?: string;
+  operatingHours: string;
+  config: DepartmentWorkspaceConfig;
+  createdAt: string;
+  updatedAt: string;
+
+  // Step 1: Department Setup Review & Resource Audit
+  setupVerified?: boolean;
+  setupVerifiedAt?: string;
+  setupVerifiedBy?: string;
 }
 
 export interface User {
@@ -66,6 +289,9 @@ export interface User {
   lastName: string;
   role: RoleType;
   phoneNumber?: string;
+  departmentId?: string;
+  departmentName?: string;
+  departmentCode?: string;
   doctorProfile?: DoctorProfile;
 }
 

@@ -17,6 +17,7 @@ import { OtDashboard } from './pages/ot/OtDashboard';
 import { IpdDashboard } from './pages/ipd/IpdDashboard';
 import { BillingDashboard } from './pages/billing/BillingDashboard';
 import { PatientDashboard } from './pages/patient/PatientDashboard';
+import { DepartmentWorkspaceContainer } from './pages/department/DepartmentWorkspaceContainer';
 import { RoleType } from './types';
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const RoleHomeRedirect: React.FC = () => {
   const roleRoutes: Record<string, string> = {
     [RoleType.SUPER_ADMIN]: '/admin',
     [RoleType.HOSPITAL_ADMIN]: '/admin',
+    [RoleType.DEPARTMENT_ADMIN]: '/department/opd',
     [RoleType.RECEPTION_SUPERVISOR]: '/reception',
     [RoleType.RECEPTIONIST]: '/reception',
     [RoleType.DOCTOR]: '/doctor',
@@ -58,6 +60,22 @@ export function App() {
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/logout" element={<LogoutPage />} />
+
+            {/* Department Workspace: Independent Dedicated Engine */}
+            <Route
+              element={
+                <ProtectedRoute
+                  allowedRoles={[
+                    RoleType.DEPARTMENT_ADMIN,
+                    RoleType.HOSPITAL_ADMIN,
+                    RoleType.SUPER_ADMIN,
+                  ]}
+                />
+              }
+            >
+              <Route path="/department/:deptId/*" element={<DepartmentWorkspaceContainer />} />
+              <Route path="/department/*" element={<DepartmentWorkspaceContainer />} />
+            </Route>
 
             {/* Authenticated Role Workspaces Wrapped in Unified AppLayout */}
             <Route

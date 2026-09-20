@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   LayoutGrid,
   Stethoscope,
@@ -22,12 +22,16 @@ import {
   AlertTriangle,
   CheckCircle2,
   BedDouble,
+  Users,
+  Award,
 } from 'lucide-react';
 import { DepartmentProfileView, DepartmentProfileData } from './DepartmentProfileView';
 import { RegisterDepartmentWizardModal } from './RegisterDepartmentWizardModal';
 import { OnboardingStarterPacksModal } from './OnboardingStarterPacksModal';
 import { CampusSpaceAllocationModal } from './CampusSpaceAllocationModal';
 import { getCampusBuildings } from './CampusInfrastructureSection';
+import { getDepartmentPersonnelStats } from './hospitalStaffStore';
+import { DepartmentAssignedStaffModal } from './DepartmentAssignedStaffModal';
 
 export const DepartmentsSection: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState<
@@ -39,6 +43,8 @@ export const DepartmentsSection: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isStarterPacksOpen, setIsStarterPacksOpen] = useState(false);
   const [isCampusMatrixOpen, setIsCampusMatrixOpen] = useState(false);
+  const [selectedDeptForStaff, setSelectedDeptForStaff] = useState<DepartmentProfileData | null>(null);
+  const [staffVersion, setStaffVersion] = useState(0);
 
   const [departments, setDepartments] = useState<DepartmentProfileData[]>(() => {
     try {
@@ -734,6 +740,26 @@ export const DepartmentsSection: React.FC = () => {
     saveDepartments(nextList);
   };
 
+  // Synchronize department updates and staff changes in real time
+  useEffect(() => {
+    const onDeptUpdate = (e: any) => {
+      if (e.detail && Array.isArray(e.detail)) {
+        setDepartments(e.detail);
+      }
+    };
+    const onStaffUpdate = () => {
+      setStaffVersion((v) => v + 1);
+    };
+
+    window.addEventListener('north_hospital_departments_updated', onDeptUpdate);
+    window.addEventListener('north_hospital_staff_updated', onStaffUpdate);
+
+    return () => {
+      window.removeEventListener('north_hospital_departments_updated', onDeptUpdate);
+      window.removeEventListener('north_hospital_staff_updated', onStaffUpdate);
+    };
+  }, []);
+
   const campusBuildings = useMemo(
     () => getCampusBuildings(),
     [isAddModalOpen, isCampusMatrixOpen, isStarterPacksOpen, departments]
@@ -989,7 +1015,11 @@ export const DepartmentsSection: React.FC = () => {
                     d.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
                     d.costCenter.toLowerCase().includes(searchQuery.toLowerCase()))
               )
-              .map((dept) => (
+              .map((dept) => {
+                const liveStaff = getDepartmentPersonnelStats(dept.id, dept.name);
+                const displayHead = liveStaff.hodName || dept.head;
+
+                return (
                 <tr
                   key={dept.id}
                   style={{ cursor: 'pointer' }}
@@ -1024,7 +1054,16 @@ export const DepartmentsSection: React.FC = () => {
                       {dept.category}
                     </span>
                   </td>
-                  <td>{dept.head}</td>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      {liveStaff.hodName && (
+                        <span title="Assigned Head of Department (HOD) via Staff Master" style={{ color: '#d97706', display: 'flex' }}>
+                          <Award size={14} />
+                        </span>
+                      )}
+                      <span style={{ fontWeight: liveStaff.hodName ? 700 : 400 }}>{displayHead}</span>
+                    </div>
+                  </td>
                   <td>
                     <span style={{ fontSize: '0.8125rem' }}>{dept.hours}</span>
                   </td>
@@ -1032,11 +1071,18 @@ export const DepartmentsSection: React.FC = () => {
                     <code>{dept.costCenter}</code>
                   </td>
                   <td>
-                    <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap' }}>
-                      <span className="badge badge-secondary">{dept.staffCount} Staff</span>
-                      {(dept.bedsCount || 0) > 0 && (
-                        <span className="badge badge-info">{dept.bedsCount} Beds</span>
-                      )}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                      <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                        <span className="badge badge-secondary" style={{ fontWeight: 700 }}>
+                          {liveStaff.total || dept.staffCount} Staff
+                        </span>
+                        {(dept.bedsCount || 0) > 0 && (
+                          <span className="badge badge-info">{dept.bedsCount} Beds</span>
+                        )}
+                      </div>
+                      <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
+                        {liveStaff.doctors} Dr • {liveStaff.nurses} Nu • {liveStaff.techs} Tc
+                      </span>
                     </div>
                   </td>
                   <td>
@@ -1053,7 +1099,25 @@ export const DepartmentsSection: React.FC = () => {
                     </span>
                   </td>
                   <td style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
-                    <div style={{ display: 'inline-flex', gap: '0.375rem' }}>
+                    <div style={{ display: 'inline-flex', gap: '0.375rem', alignItems: 'center' }}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{
+                          padding: '0.375rem 0.625rem',
+                          fontSize: '0.75rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.375rem',
+                          color: '#0369a1',
+                          borderColor: '#bae6fd',
+                          backgroundColor: '#f0f9ff',
+                        }}
+                        onClick={() => setSelectedDeptForStaff(dept)}
+                        title="View Assigned Personnel & Role Roster"
+                      >
+                        <Users size={13} /> View Staff ({liveStaff.total})
+                      </button>
                       <button
                         className="btn btn-secondary"
                         style={{ padding: '0.375rem 0.625rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.375rem' }}
@@ -1072,7 +1136,8 @@ export const DepartmentsSection: React.FC = () => {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
           </tbody>
         </table>
       </div>
@@ -1098,6 +1163,13 @@ export const DepartmentsSection: React.FC = () => {
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         onSave={handleSaveAdd}
+      />
+
+      {/* View Assigned Staff Modal */}
+      <DepartmentAssignedStaffModal
+        isOpen={Boolean(selectedDeptForStaff)}
+        onClose={() => setSelectedDeptForStaff(null)}
+        department={selectedDeptForStaff}
       />
     </div>
   );

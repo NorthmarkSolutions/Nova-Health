@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   Building2,
@@ -48,6 +49,12 @@ import {
   saveCampusBuildings,
   syncDepartmentToCampus,
 } from './CampusInfrastructureSection';
+import {
+  HospitalShift,
+  StaffMember,
+  getHospitalShifts,
+  getHospitalStaff,
+} from './hospitalStaffStore';
 
 export interface DepartmentProfileData {
   id: string;
@@ -160,7 +167,11 @@ export const DepartmentProfileView: React.FC<Props> = ({
     | 'lifecycle'
   >('basic');
 
+  const navigate = useNavigate();
+
   // Initialize editable form with fallback defaults
+  const hospitalShifts = useMemo(() => getHospitalShifts(), []);
+  const hospitalStaff = useMemo(() => getHospitalStaff(), []);
   const [campusBuildings, setCampusBuildings] = useState<BuildingNode[]>(() => getCampusBuildings());
   const [profile, setProfile] = useState<DepartmentProfileData>({
     ...department,
@@ -488,6 +499,27 @@ export const DepartmentProfileView: React.FC<Props> = ({
           >
             <Building2 size={15} /> Reallocate Space
           </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => {
+              const deptTarget = profile.code ? profile.code.toLowerCase().replace('dept-', '') : profile.id;
+              navigate(`/department/${deptTarget}`);
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.375rem',
+              fontSize: '0.8125rem',
+              background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+              border: 'none',
+              color: '#ffffff',
+              fontWeight: 600,
+              boxShadow: '0 2px 8px rgba(2, 132, 199, 0.25)',
+            }}
+          >
+            <LayoutGrid size={15} /> Open Workspace ↗
+          </button>
           {isEditMode ? (
             <div style={{ display: 'flex', gap: '0.375rem' }}>
               <button
@@ -681,6 +713,91 @@ export const DepartmentProfileView: React.FC<Props> = ({
         </div>
       </div>
 
+      {/* Department Dedicated Workspace Gateway Card */}
+      <div
+        style={{
+          backgroundColor: 'rgba(2, 132, 199, 0.05)',
+          border: '1px solid rgba(2, 132, 199, 0.25)',
+          borderRadius: '12px',
+          padding: '1.25rem 1.5rem',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: '1.5rem',
+          flexWrap: 'wrap',
+          boxShadow: '0 2px 8px rgba(2, 132, 199, 0.06)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div
+            style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: '12px',
+              background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+              color: '#ffffff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 4px 12px rgba(2, 132, 199, 0.25)',
+              flexShrink: 0,
+            }}
+          >
+            <LayoutGrid size={24} />
+          </div>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0, color: 'var(--text-main)' }}>
+                {profile.name} Dedicated Workspace
+              </h3>
+              <span className="badge badge-success" style={{ fontSize: '0.6875rem', padding: '0.15rem 0.5rem' }}>
+                Independent Engine Active
+              </span>
+            </div>
+            <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+              Assigned Department Administrator: <strong style={{ color: 'var(--text-main)' }}>{profile.head}</strong> • Login Account:{' '}
+              <code style={{ backgroundColor: 'rgba(0,0,0,0.06)', padding: '0.125rem 0.375rem', borderRadius: '4px' }}>
+                {profile.code.toLowerCase().replace('dept-', '')}.admin@northhospital.com
+              </code>
+              <span style={{ marginLeft: '0.5rem', color: '#10b981', fontWeight: 600 }}>• Role Scoped</span>
+            </p>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setActiveTab('operational')}
+            style={{ fontSize: '0.8125rem', padding: '0.5rem 0.875rem' }}
+          >
+            Configure Policies
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => {
+              const deptTarget = profile.code ? profile.code.toLowerCase().replace('dept-', '') : profile.id;
+              navigate(`/department/${deptTarget}`);
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              fontSize: '0.8125rem',
+              padding: '0.5rem 1.125rem',
+              background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+              border: 'none',
+              color: '#ffffff',
+              fontWeight: 600,
+              boxShadow: '0 4px 12px rgba(2, 132, 199, 0.2)',
+            }}
+          >
+            <LayoutGrid size={16} /> Open {profile.shortName || 'Department'} Workspace ↗
+          </button>
+        </div>
+      </div>
+
       {/* 9 Deep Profile Tabs Navigation */}
       <div
         className="subtab-bar"
@@ -850,6 +967,55 @@ export const DepartmentProfileView: React.FC<Props> = ({
                           <strong>{profile.head}</strong>
                           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>• Chief Clinician</span>
                         </div>
+                      </div>
+                      <div
+                        style={{
+                          gridColumn: 'span 2',
+                          backgroundColor: 'rgba(2, 132, 199, 0.05)',
+                          border: '1px solid rgba(2, 132, 199, 0.2)',
+                          padding: '0.75rem 1rem',
+                          borderRadius: '8px',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          marginTop: '0.25rem',
+                        }}
+                      >
+                        <div>
+                          <span style={{ color: 'var(--primary)', fontSize: '0.75rem', fontWeight: 700, display: 'block' }}>
+                            Dedicated Workspace Administrator
+                          </span>
+                          <div style={{ fontSize: '0.8125rem', marginTop: '2px' }}>
+                            <strong>{profile.head}</strong>{' '}
+                            <code style={{ fontSize: '0.75rem', color: 'var(--primary)' }}>
+                              {profile.code.toLowerCase().replace('dept-', '')}.admin@northhospital.com
+                            </code>
+                          </div>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                            Scope: Strictly scoped to {profile.name} (Zero access to global hospital admin)
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          onClick={() => {
+                            const deptTarget = profile.code ? profile.code.toLowerCase().replace('dept-', '') : profile.id;
+                            navigate(`/department/${deptTarget}`);
+                          }}
+                          style={{
+                            fontSize: '0.75rem',
+                            padding: '0.375rem 0.75rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.375rem',
+                            background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                            border: 'none',
+                            color: '#ffffff',
+                            fontWeight: 600,
+                          }}
+                        >
+                          <LayoutGrid size={13} /> Launch ↗
+                        </button>
                       </div>
                       <div style={{ gridColumn: 'span 2' }}>
                         <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', display: 'block' }}>Emergency Intercom & Escalation</span>
@@ -1703,25 +1869,63 @@ export const DepartmentProfileView: React.FC<Props> = ({
                 <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <User size={16} color="var(--primary)" /> Head of Department (HOD) / Chief Clinician
                 </label>
-                <input
-                  className="form-input"
-                  value={profile.head}
-                  onChange={(e) => setProfile({ ...profile, head: e.target.value })}
-                  placeholder="e.g. Dr. Sarah Jenkins, MD"
-                />
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <select
+                    className="form-select"
+                    value={profile.head}
+                    onChange={(e) => setProfile({ ...profile, head: e.target.value })}
+                  >
+                    <option value="">-- Select Staff from Staff Master --</option>
+                    <optgroup label="Doctors & Clinical Specialists (Staff Master)">
+                      {hospitalStaff
+                        .filter((s) => s.role === 'doctor')
+                        .map((doc) => (
+                          <option key={doc.id} value={doc.fullName}>
+                            {doc.fullName} [{doc.employeeCode}] — {doc.designation}
+                          </option>
+                        ))}
+                    </optgroup>
+                    <optgroup label="All Other Staff Members">
+                      {hospitalStaff
+                        .filter((s) => s.role !== 'doctor')
+                        .map((stf) => (
+                          <option key={stf.id} value={stf.fullName}>
+                            {stf.fullName} [{stf.employeeCode}] — {stf.designation}
+                          </option>
+                        ))}
+                    </optgroup>
+                    {profile.head && !hospitalStaff.some((s) => s.fullName === profile.head) && (
+                      <option value={profile.head}>{profile.head} (Custom HOD)</option>
+                    )}
+                  </select>
+                  <input
+                    className="form-input"
+                    style={{ flex: '1 1 200px' }}
+                    value={profile.head}
+                    onChange={(e) => setProfile({ ...profile, head: e.target.value })}
+                    placeholder="Or type custom clinician name"
+                  />
+                </div>
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                   Primary physician legally and clinically accountable for departmental protocols.
                 </span>
               </div>
 
               <div className="form-group" style={{ margin: 0 }}>
-                <label className="form-label">Duty Shift Pattern</label>
+                <label className="form-label">Duty Shift Pattern & Timings</label>
                 <select
                   className="form-select"
                   value={profile.shiftPattern || ''}
                   onChange={(e) => setProfile({ ...profile, shiftPattern: e.target.value })}
                 >
-                  <option value="3-Shift 24x7 (Rotational)">3-Shift 24x7 (Rotational Morning / Evening / Night)</option>
+                  <option value="Rotational Multi-Shift (Morning / Evening / Night)">Rotational Multi-Shift (Morning / Evening / Night)</option>
+                  <optgroup label="Hospital Profile Configured Shifts">
+                    {hospitalShifts.map((sh) => (
+                      <option key={sh.id} value={`Dedicated Shift: ${sh.name} (${sh.startTime} - ${sh.endTime})`}>
+                        {sh.name} • {sh.startTime} - {sh.endTime} ({sh.duration})
+                      </option>
+                    ))}
+                  </optgroup>
                   <option value="General 2-Shift (08:00 - 20:00)">General 2-Shift (08:00 - 20:00 OPD / Daycare)</option>
                   <option value="Single Day Shift (09:00 - 17:00)">Single Day Shift (09:00 - 17:00 Administrative)</option>
                   <option value="On-Call Emergency Rotation">On-Call Emergency Rotation (Trauma Roster)</option>
@@ -1835,6 +2039,118 @@ export const DepartmentProfileView: React.FC<Props> = ({
                   </span>
                 )}
               </div>
+            </div>
+
+            {/* Roster of Staff Members Assigned from Staff Master */}
+            <div
+              style={{
+                backgroundColor: 'var(--card-bg, #ffffff)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '10px',
+                padding: '1.25rem',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.875rem' }}>
+                <div>
+                  <strong style={{ fontSize: '0.9375rem', color: 'var(--secondary)' }}>
+                    Assigned Personnel from Hospital Staff Master
+                  </strong>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0.2rem 0 0' }}>
+                    Active medical officers, specialists, and nursing sisters registered to this department.
+                  </p>
+                </div>
+                <span className="badge badge-info">
+                  {hospitalStaff.filter(
+                    (s) =>
+                      s.departmentId === profile.id ||
+                      s.departmentName === profile.name ||
+                      s.fullName === profile.head
+                  ).length}{' '}
+                  Staff Linked
+                </span>
+              </div>
+
+              {hospitalStaff.filter(
+                (s) =>
+                  s.departmentId === profile.id ||
+                  s.departmentName === profile.name ||
+                  s.fullName === profile.head
+              ).length === 0 ? (
+                <div
+                  style={{
+                    padding: '1rem',
+                    borderRadius: '8px',
+                    backgroundColor: 'var(--bg-subtle, #f8fafc)',
+                    border: '1px dashed var(--border-color)',
+                    textAlign: 'center',
+                    fontSize: '0.8125rem',
+                    color: 'var(--text-muted)',
+                  }}
+                >
+                  No specific personnel records are currently linked to this department in the Staff Master.
+                  You can assign staff when registering departments or manage their assignments under <strong>4. Staff Master</strong>.
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '0.75rem' }}>
+                  {hospitalStaff
+                    .filter(
+                      (s) =>
+                        s.departmentId === profile.id ||
+                        s.departmentName === profile.name ||
+                        s.fullName === profile.head
+                    )
+                    .map((staff) => (
+                      <div
+                        key={staff.id}
+                        style={{
+                          padding: '0.75rem',
+                          borderRadius: '8px',
+                          backgroundColor: 'var(--bg-subtle, #f8fafc)',
+                          border: '1px solid var(--border-color)',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                            <strong style={{ fontSize: '0.8125rem' }}>{staff.fullName}</strong>
+                            <span
+                              style={{
+                                fontSize: '0.6875rem',
+                                padding: '0.1rem 0.35rem',
+                                borderRadius: '4px',
+                                backgroundColor: staff.role === 'doctor' ? '#e0f2fe' : '#dcfce7',
+                                color: staff.role === 'doctor' ? '#0369a1' : '#15803d',
+                                fontWeight: 600,
+                              }}
+                            >
+                              {staff.employeeCode}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                            {staff.designation}
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <span
+                            style={{
+                              fontSize: '0.6875rem',
+                              fontWeight: 600,
+                              color: '#0369a1',
+                              display: 'block',
+                            }}
+                          >
+                            {staff.shiftHours}
+                          </span>
+                          <span style={{ fontSize: '0.625rem', color: 'var(--text-muted)' }}>
+                            {staff.shiftName.split(' ')[0]} Shift
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
             </div>
 
             <div className="form-group">

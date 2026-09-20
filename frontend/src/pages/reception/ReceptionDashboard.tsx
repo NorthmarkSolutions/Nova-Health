@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   UserPlus,
   Calendar,
@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { Gender, AppointmentType, RoleType } from '../../types';
 import { patientJourneyService, SharedPatient, SharedQueueToken } from '../../services/patientJourneyService';
+import { getDepartmentTariffMaster } from '../department/departmentWorkspaceStore';
 
 export const ReceptionDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'queue' | 'registration' | 'appointments' | 'search'>('queue');
@@ -55,13 +56,37 @@ export const ReceptionDashboard: React.FC = () => {
   // Master Patient Directory (Synchronized with patientJourneyService)
   const [patients, setPatients] = useState<SharedPatient[]>(() => patientJourneyService.getPatients());
 
-  // Doctor Availability Roster
-  const doctorsRoster = [
-    { name: 'Dr. Sarah Jenkins', dept: 'Cardiology', room: 'Room 204', available: true, nextSlot: '10:15 AM', fee: 100 },
-    { name: 'Dr. Michael Chang', dept: 'General Surgery', room: 'Room 102', available: true, nextSlot: '10:30 AM', fee: 90 },
-    { name: 'Dr. Jonathan Reed', dept: 'Orthopedics', room: 'Room 305', available: true, nextSlot: '11:00 AM', fee: 120 },
-    { name: 'Dr. Priya Nair', dept: 'Pediatrics', room: 'Room 108', available: false, nextSlot: '02:00 PM', fee: 85 },
-  ];
+  // Real-Time Doctor Availability Roster synchronized with Department Tariff Master
+  const [tariffMaster, setTariffMaster] = useState(() => getDepartmentTariffMaster('1'));
+
+  useEffect(() => {
+    const handleTariffUpdated = () => {
+      setTariffMaster(getDepartmentTariffMaster('1'));
+    };
+    window.addEventListener('north_hospital_dept_tariffs_updated', handleTariffUpdated);
+    return () => window.removeEventListener('north_hospital_dept_tariffs_updated', handleTariffUpdated);
+  }, []);
+
+  const doctorsRoster = useMemo(() => {
+    if (tariffMaster.doctorTariffs && tariffMaster.doctorTariffs.length > 0) {
+      return tariffMaster.doctorTariffs.map((dt, idx) => ({
+        name: dt.doctorName,
+        dept: dt.specialization || 'Clinical Specialist',
+        room: `Chamber ${101 + idx}`,
+        available: true,
+        nextSlot: idx === 0 ? '10:15 AM' : idx === 1 ? '10:30 AM' : idx === 2 ? '11:00 AM' : '02:00 PM',
+        fee: dt.standardFee,
+        followUpFee: dt.followUpFee || Math.round(dt.standardFee * 0.6),
+        emergencyFee: dt.emergencyFee || Math.round(dt.standardFee * 1.5),
+      }));
+    }
+    return [
+      { name: 'Dr. Sarah Jenkins', dept: 'Cardiology', room: 'Room 204', available: true, nextSlot: '10:15 AM', fee: 100 },
+      { name: 'Dr. Michael Chang', dept: 'General Surgery', room: 'Room 102', available: true, nextSlot: '10:30 AM', fee: 90 },
+      { name: 'Dr. Alisha Patel', dept: 'Obstetrics & Gynaecology', room: 'Room 103', available: true, nextSlot: '11:00 AM', fee: 110 },
+      { name: 'Harah', dept: 'Associate Consultant', room: 'Chamber 104', available: true, nextSlot: '02:00 PM', fee: 80 },
+    ];
+  }, [tariffMaster]);
 
   // Available Time Slots
   const morningSlots = ['09:00 AM', '09:15 AM', '09:30 AM', '09:45 AM', '10:00 AM', '10:15 AM', '10:30 AM', '10:45 AM', '11:00 AM', '11:30 AM'];

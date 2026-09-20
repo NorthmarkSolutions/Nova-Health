@@ -1075,9 +1075,7 @@ export const OnboardingStarterPacksModal: React.FC<Props> = ({
                     <th style={{ padding: '0.5rem' }}>Code</th>
                     <th style={{ padding: '0.5rem' }}>Department</th>
                     <th style={{ padding: '0.5rem' }}>Category</th>
-                    <th style={{ padding: '0.5rem' }}>Clinical Head (HOD)</th>
                     <th style={{ padding: '0.5rem' }}>Assigned Campus Space</th>
-                    <th style={{ padding: '0.5rem' }}>Staff Baseline</th>
                     <th style={{ padding: '0.5rem' }}>Cost Center</th>
                   </tr>
                 </thead>
@@ -1104,20 +1102,12 @@ export const OnboardingStarterPacksModal: React.FC<Props> = ({
                           {d.category}
                         </span>
                       </td>
-                      <td style={{ padding: '0.625rem 0.5rem', color: 'var(--text-muted)' }}>
-                        {d.head}
-                      </td>
                       <td style={{ padding: '0.625rem 0.5rem' }}>
                         <span style={{ fontSize: '0.75rem' }}>
                           {d.floorAssigned || 'Campus Building'}
                           {(d.bedsCount || 0) > 0 && (
                             <strong> • {d.bedsCount} Beds</strong>
                           )}
-                        </span>
-                      </td>
-                      <td style={{ padding: '0.625rem 0.5rem' }}>
-                        <span className="badge badge-secondary" style={{ fontSize: '0.7rem' }}>
-                          {d.staffCount} Staff ({d.doctorsCount} Drs, {d.nursesCount} Nurses)
                         </span>
                       </td>
                       <td style={{ padding: '0.625rem 0.5rem' }}>

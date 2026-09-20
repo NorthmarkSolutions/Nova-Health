@@ -16,16 +16,62 @@ import {
   DollarSign,
   AlertCircle,
   Award,
+  Plus,
+  Trash2,
+  Edit2,
+  RotateCcw,
+  Check,
+  Users,
+  Sparkles,
+  X,
+  ChevronRight,
 } from 'lucide-react';
 import api from '../../../../services/api';
+import {
+  HospitalShift,
+  getHospitalShifts,
+  saveHospitalShifts,
+  addHospitalShift,
+  updateHospitalShift,
+  deleteHospitalShift,
+  resetDefaultHospitalShifts,
+  calculateShiftDuration,
+} from './hospitalStaffStore';
 
 export const ProfileSection: React.FC = () => {
   const [activeSubSection, setActiveSubSection] = useState<
-    'general' | 'contact' | 'address' | 'branding' | 'regulatory' | 'operational'
+    'general' | 'contact' | 'address' | 'branding' | 'regulatory' | 'operational' | 'shifts'
   >('general');
 
   const [saveAlert, setSaveAlert] = useState(false);
   const [isBackendConnected, setIsBackendConnected] = useState(false);
+
+  // Hospital Shifts Configuration State
+  const [hospitalShifts, setHospitalShifts] = useState<HospitalShift[]>(() => getHospitalShifts());
+  const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
+  const [editingShiftId, setEditingShiftId] = useState<string | null>(null);
+  const [shiftForm, setShiftForm] = useState<Partial<HospitalShift>>({
+    name: '',
+    code: '',
+    startTime: '08:00',
+    endTime: '16:00',
+    handoverMinutes: 30,
+    type: 'clinical',
+    applicableDays: 'Mon - Sat',
+    description: '',
+  });
+
+  React.useEffect(() => {
+    const handleShiftsUpdate = (e: any) => {
+      if (e.detail) {
+        setHospitalShifts(e.detail);
+      } else {
+        setHospitalShifts(getHospitalShifts());
+      }
+    };
+    window.addEventListener('north_hospital_shifts_updated', handleShiftsUpdate);
+    return () => window.removeEventListener('north_hospital_shifts_updated', handleShiftsUpdate);
+  }, []);
 
   // General Information State
   const [generalInfo, setGeneralInfo] = useState({
@@ -220,6 +266,12 @@ export const ProfileSection: React.FC = () => {
           onClick={() => setActiveSubSection('operational')}
         >
           <Clock size={15} /> Operational Settings
+        </button>
+        <button
+          className={`subtab-pill ${activeSubSection === 'shifts' ? 'active' : ''}`}
+          onClick={() => setActiveSubSection('shifts')}
+        >
+          <Clock size={15} /> Staff Shifts & Timings ({hospitalShifts.length})
         </button>
       </div>
 
@@ -460,7 +512,478 @@ export const ProfileSection: React.FC = () => {
             <label className="form-label">Working Days & Shifts</label>
             <input className="form-input" value={operational.workingDays} onChange={(e) => setOperational({ ...operational, workingDays: e.target.value })} required />
           </div>
+
+          <div
+            style={{
+              gridColumn: '1 / -1',
+              marginTop: '0.5rem',
+              padding: '1rem 1.25rem',
+              borderRadius: '8px',
+              backgroundColor: 'rgba(37, 99, 235, 0.05)',
+              border: '1px solid rgba(37, 99, 235, 0.15)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
+          >
+            <div>
+              <strong style={{ fontSize: '0.875rem', color: 'var(--primary)' }}>
+                Hospital Staff Shifts & Timings Configured
+              </strong>
+              <p style={{ margin: '0.25rem 0 0', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                {hospitalShifts.length} Shifts defined (Morning, Evening, Night, General). Configure detailed start/end times and handovers.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => setActiveSubSection('shifts')}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}
+            >
+              Manage Shifts & Timings <ChevronRight size={14} />
+            </button>
+          </div>
         </form>
+      )}
+
+      {/* 7. Staff Shifts & Timings */}
+      {activeSubSection === 'shifts' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          {/* Top Actions & Overview */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '1rem',
+              backgroundColor: 'var(--bg-subtle, #f8fafc)',
+              padding: '1rem 1.25rem',
+              borderRadius: '10px',
+              border: '1px solid var(--border-color)',
+            }}
+          >
+            <div>
+              <h4 style={{ margin: '0 0 0.25rem', fontSize: '1rem', fontWeight: 700, color: 'var(--secondary)' }}>
+                Hospital Staff Shifts & Operating Hours Master
+              </h4>
+              <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                Define hospital-wide clinical and operational shifts. Departments and Staff Master dynamically fetch and adhere to these timings.
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  if (window.confirm('Reset all hospital shifts back to standard clinical defaults?')) {
+                    resetDefaultHospitalShifts();
+                  }
+                }}
+                title="Reset to default shifts"
+              >
+                <RotateCcw size={14} /> Reset Standard Shifts
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => {
+                  setEditingShiftId(null);
+                  setShiftForm({
+                    name: '',
+                    code: `SH-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
+                    startTime: '08:00',
+                    endTime: '16:00',
+                    handoverMinutes: 30,
+                    type: 'clinical',
+                    applicableDays: 'Mon - Sat',
+                    description: '',
+                  });
+                  setIsShiftModalOpen(true);
+                }}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}
+              >
+                <Plus size={15} /> Add Hospital Shift
+              </button>
+            </div>
+          </div>
+
+          {/* Shifts Table */}
+          <div className="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th style={{ width: '120px' }}>Shift Code</th>
+                  <th>Shift Name & Description</th>
+                  <th style={{ width: '220px' }}>Timings & Duration</th>
+                  <th style={{ width: '140px' }}>Handover</th>
+                  <th style={{ width: '130px' }}>Shift Type</th>
+                  <th style={{ width: '150px' }}>Applicable Days</th>
+                  <th style={{ width: '130px', textAlign: 'right' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {hospitalShifts.map((shift) => (
+                  <tr key={shift.id}>
+                    <td>
+                      <span
+                        style={{
+                          fontWeight: 700,
+                          fontSize: '0.75rem',
+                          padding: '0.25rem 0.5rem',
+                          borderRadius: '4px',
+                          backgroundColor: '#f1f5f9',
+                          color: '#0f172a',
+                          border: '1px solid #cbd5e1',
+                          letterSpacing: '0.04em',
+                          fontFamily: 'monospace',
+                        }}
+                      >
+                        {shift.code}
+                      </span>
+                    </td>
+                    <td>
+                      <div style={{ fontWeight: 600, color: 'var(--secondary)' }}>
+                        {shift.name}
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        {shift.description || 'Standard hospital staff shift'}
+                      </div>
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ fontWeight: 700, fontSize: '0.875rem' }}>
+                          {shift.startTime} - {shift.endTime}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: '0.6875rem',
+                            fontWeight: 600,
+                            padding: '0.15rem 0.4rem',
+                            borderRadius: '12px',
+                            backgroundColor: '#e0f2fe',
+                            color: '#0284c7',
+                          }}
+                        >
+                          {shift.duration || calculateShiftDuration(shift.startTime, shift.endTime)}
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <span
+                        style={{
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          color: '#475569',
+                          backgroundColor: '#f8fafc',
+                          padding: '0.2rem 0.45rem',
+                          borderRadius: '4px',
+                          border: '1px solid #e2e8f0',
+                        }}
+                      >
+                        {shift.handoverMinutes} mins
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        className={`badge ${
+                          shift.type === 'emergency'
+                            ? 'badge-danger'
+                            : shift.type === 'clinical'
+                            ? 'badge-primary'
+                            : shift.type === 'opd'
+                            ? 'badge-success'
+                            : 'badge-info'
+                        }`}
+                        style={{ textTransform: 'uppercase', fontSize: '0.6875rem' }}
+                      >
+                        {shift.type}
+                      </span>
+                    </td>
+                    <td>
+                      <span style={{ fontSize: '0.75rem', color: '#334155' }}>
+                        {shift.applicableDays || 'Mon - Sat'}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      <div style={{ display: 'flex', gap: '0.375rem', justifyContent: 'flex-end' }}>
+                        <button
+                          type="button"
+                          className="action-btn"
+                          title="Edit Shift"
+                          onClick={() => {
+                            setEditingShiftId(shift.id);
+                            setShiftForm({ ...shift });
+                            setIsShiftModalOpen(true);
+                          }}
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          className="action-btn text-danger"
+                          title="Delete Shift"
+                          disabled={hospitalShifts.length <= 1}
+                          onClick={() => {
+                            if (window.confirm(`Delete shift "${shift.name}" (${shift.code})?`)) {
+                              deleteHospitalShift(shift.id);
+                            }
+                          }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Clinical Shift Guidelines Alert */}
+          <div
+            style={{
+              padding: '1rem',
+              borderRadius: '8px',
+              backgroundColor: '#f0fdf4',
+              border: '1px solid #bbf7d0',
+              display: 'flex',
+              gap: '0.75rem',
+              alignItems: 'flex-start',
+            }}
+          >
+            <CheckCircle size={18} color="#15803d" style={{ marginTop: '2px', flexShrink: 0 }} />
+            <div style={{ fontSize: '0.8125rem', color: '#166534' }}>
+              <strong>JCI & NABH Compliance Notice:</strong> Hospital staff shifts configured here are automatically synchronized with Department operating hours and Staff Master rosters. Ensure morning, evening, and night rotations maintain uninterrupted coverage for emergency resuscitation and critical bed monitoring.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add / Edit Shift Modal */}
+      {isShiftModalOpen && (
+        <div className="modal-overlay">
+          <div
+            className="modal-content"
+            style={{
+              maxWidth: '560px',
+              padding: '1.5rem',
+              borderRadius: '12px',
+              backgroundColor: '#ffffff',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                borderBottom: '1px solid var(--border-color)',
+                paddingBottom: '0.875rem',
+                marginBottom: '1.25rem',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span
+                  style={{
+                    backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                    color: 'var(--primary)',
+                    padding: '0.375rem',
+                    borderRadius: '6px',
+                    display: 'flex',
+                  }}
+                >
+                  <Clock size={18} />
+                </span>
+                <h4 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 700 }}>
+                  {editingShiftId ? 'Edit Hospital Shift Timing' : 'Add New Hospital Shift'}
+                </h4>
+              </div>
+              <button
+                className="action-btn"
+                onClick={() => setIsShiftModalOpen(false)}
+                title="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!shiftForm.name || !shiftForm.code || !shiftForm.startTime || !shiftForm.endTime) {
+                  alert('Please fill out all required shift fields.');
+                  return;
+                }
+                const duration = calculateShiftDuration(shiftForm.startTime, shiftForm.endTime);
+                const shiftPayload: HospitalShift = {
+                  id: editingShiftId || `shift-${Date.now()}`,
+                  code: (shiftForm.code || 'SH-NEW').toUpperCase().trim(),
+                  name: shiftForm.name.trim(),
+                  startTime: shiftForm.startTime,
+                  endTime: shiftForm.endTime,
+                  duration,
+                  handoverMinutes: Number(shiftForm.handoverMinutes) || 30,
+                  type: (shiftForm.type as any) || 'clinical',
+                  description: shiftForm.description?.trim() || '',
+                  applicableDays: shiftForm.applicableDays?.trim() || 'Mon - Sat',
+                };
+
+                if (editingShiftId) {
+                  updateHospitalShift(shiftPayload);
+                } else {
+                  addHospitalShift(shiftPayload);
+                }
+                setIsShiftModalOpen(false);
+              }}
+              style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}
+            >
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '0.875rem' }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">
+                    Shift Name <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input
+                    className="form-input"
+                    value={shiftForm.name || ''}
+                    onChange={(e) => setShiftForm({ ...shiftForm, name: e.target.value })}
+                    placeholder="e.g. Morning Shift (OPD & General Wards)"
+                    required
+                  />
+                </div>
+
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">
+                    Shift Code <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input
+                    className="form-input"
+                    value={shiftForm.code || ''}
+                    onChange={(e) => setShiftForm({ ...shiftForm, code: e.target.value.toUpperCase() })}
+                    placeholder="e.g. SH-MORN"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.875rem' }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">
+                    Start Time <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input
+                    type="time"
+                    className="form-input"
+                    value={shiftForm.startTime || '08:00'}
+                    onChange={(e) => setShiftForm({ ...shiftForm, startTime: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">
+                    End Time <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input
+                    type="time"
+                    className="form-input"
+                    value={shiftForm.endTime || '16:00'}
+                    onChange={(e) => setShiftForm({ ...shiftForm, endTime: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Handover (Mins)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="120"
+                    className="form-input"
+                    value={shiftForm.handoverMinutes ?? 30}
+                    onChange={(e) => setShiftForm({ ...shiftForm, handoverMinutes: parseInt(e.target.value) || 0 })}
+                  />
+                </div>
+              </div>
+
+              {/* Duration Live Preview */}
+              <div
+                style={{
+                  fontSize: '0.8125rem',
+                  color: '#0369a1',
+                  backgroundColor: '#f0f9ff',
+                  padding: '0.5rem 0.75rem',
+                  borderRadius: '6px',
+                  border: '1px solid #bae6fd',
+                }}
+              >
+                <strong>Calculated Shift Length:</strong>{' '}
+                {calculateShiftDuration(shiftForm.startTime || '08:00', shiftForm.endTime || '16:00')}
+                {' • '}
+                Handover window: {shiftForm.handoverMinutes ?? 30} minutes
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.875rem' }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Shift Category / Type</label>
+                  <select
+                    className="form-select"
+                    value={shiftForm.type || 'clinical'}
+                    onChange={(e) => setShiftForm({ ...shiftForm, type: e.target.value as any })}
+                  >
+                    <option value="opd">OPD Consultation</option>
+                    <option value="clinical">Clinical & Inpatient Ward</option>
+                    <option value="emergency">Emergency / 24x7 Critical Care</option>
+                    <option value="general">Administrative & Support</option>
+                  </select>
+                </div>
+
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Applicable Days</label>
+                  <input
+                    className="form-input"
+                    value={shiftForm.applicableDays || ''}
+                    onChange={(e) => setShiftForm({ ...shiftForm, applicableDays: e.target.value })}
+                    placeholder="e.g. Mon - Sat, All 7 Days"
+                  />
+                </div>
+              </div>
+
+              <div className="form-group" style={{ margin: 0 }}>
+                <label className="form-label">Shift Description & Department Guidelines</label>
+                <textarea
+                  className="form-textarea"
+                  rows={2}
+                  value={shiftForm.description || ''}
+                  onChange={(e) => setShiftForm({ ...shiftForm, description: e.target.value })}
+                  placeholder="e.g. Primary ambulatory consultations, routine procedures and ward rounds."
+                />
+              </div>
+
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  gap: '0.75rem',
+                  marginTop: '0.5rem',
+                  borderTop: '1px solid var(--border-color)',
+                  paddingTop: '1rem',
+                }}
+              >
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setIsShiftModalOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  {editingShiftId ? 'Update Shift' : 'Save & Register Shift'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* Permissions / Responsible Roles Banner */}
@@ -469,7 +992,7 @@ export const ProfileSection: React.FC = () => {
           <strong>Governing Roles:</strong> Hospital Owner, Hospital Director, Compliance Manager, IT Administrator
         </div>
         <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-          <strong>Authorized Actions:</strong> View/Edit Profile, Upload Branding, Manage Licenses, Configure Settings
+          <strong>Authorized Actions:</strong> View/Edit Profile, Upload Branding, Manage Licenses, Configure Settings, Staff Shift Timings
         </div>
       </div>
     </div>

@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   Scissors,
   BedDouble,
+  Building2,
 } from 'lucide-react';
 
 interface NavItem {
@@ -35,6 +36,13 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
       label: 'Admin Overview',
       path: '/admin',
       icon: <ShieldCheck size={20} />,
+      allowedRoles: [RoleType.SUPER_ADMIN, RoleType.HOSPITAL_ADMIN],
+    },
+    {
+      label: 'Dept. Workspaces',
+      path: '/department/opd',
+      badge: 'Engine',
+      icon: <Building2 size={20} />,
       allowedRoles: [RoleType.SUPER_ADMIN, RoleType.HOSPITAL_ADMIN],
     },
     {
@@ -131,6 +139,8 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
         return 'Billing & Accounts';
       case RoleType.PATIENT:
         return 'Patient Portal';
+      case RoleType.DEPARTMENT_ADMIN:
+        return `${user?.departmentName || 'Department'} Workspace`;
       default:
         return 'Department Workspace';
     }
@@ -142,6 +152,7 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
     const roleRoutes: Record<RoleType, string> = {
       [RoleType.SUPER_ADMIN]: '/admin',
       [RoleType.HOSPITAL_ADMIN]: '/admin',
+      [RoleType.DEPARTMENT_ADMIN]: user?.departmentCode ? `/department/${user.departmentCode.toLowerCase().replace('dept-', '')}` : '/department/opd',
       [RoleType.RECEPTION_SUPERVISOR]: '/reception',
       [RoleType.RECEPTIONIST]: '/reception',
       [RoleType.DOCTOR]: '/doctor',
@@ -234,6 +245,7 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
               }}
             >
               <option value={RoleType.HOSPITAL_ADMIN}>Hospital Admin</option>
+              <option value={RoleType.DEPARTMENT_ADMIN}>Department Admin (OPD)</option>
               <option value={RoleType.RECEPTIONIST}>Receptionist</option>
               <option value={RoleType.DOCTOR}>Doctor (OPD)</option>
               <option value={RoleType.SURGEON}>Surgeon (OT)</option>
