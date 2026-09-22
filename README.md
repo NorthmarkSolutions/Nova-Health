@@ -1,4 +1,4 @@
-# 🏥 North Hospital Enterprise HMS
+# 🏥 Nova-Health Enterprise HMS
 
 A modern, full-stack Hospital Management System (HMS) built with a **Python / Django REST Framework** backend and a high-performance **React + TypeScript** frontend. Designed for complete hospital operations across 10 specialized departments.
 
