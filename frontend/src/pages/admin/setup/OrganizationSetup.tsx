@@ -34,16 +34,16 @@ export const OrganizationSetup: React.FC = () => {
           <Layers size={16} /> 2. Campus Infrastructure
         </button>
         <button
-          className={`subtab-pill ${activeSubTab === 'departments' ? 'active' : ''}`}
-          onClick={() => setActiveSubTab('departments')}
-        >
-          <LayoutGrid size={16} /> 3. Departments Master
-        </button>
-        <button
           className={`subtab-pill ${activeSubTab === 'staff' ? 'active' : ''}`}
           onClick={() => setActiveSubTab('staff')}
         >
-          <Users size={16} /> 4. Staff Master
+          <Users size={16} /> 3. Staff Master
+        </button>
+        <button
+          className={`subtab-pill ${activeSubTab === 'departments' ? 'active' : ''}`}
+          onClick={() => setActiveSubTab('departments')}
+        >
+          <LayoutGrid size={16} /> 4. Departments Master
         </button>
         <button
           className={`subtab-pill ${activeSubTab === 'onboarding' ? 'active' : ''}`}
@@ -56,8 +56,8 @@ export const OrganizationSetup: React.FC = () => {
       {/* Render selected onboarding module */}
       {activeSubTab === 'profile' && <ProfileSection />}
       {activeSubTab === 'infrastructure' && <CampusInfrastructureSection />}
-      {activeSubTab === 'departments' && <DepartmentsSection />}
       {activeSubTab === 'staff' && <StaffMasterSection />}
+      {activeSubTab === 'departments' && <DepartmentsSection />}
       {activeSubTab === 'onboarding' && (
         <OnboardingProgressSection
           onNavigateToTab={(tab) => setActiveSubTab(tab)}

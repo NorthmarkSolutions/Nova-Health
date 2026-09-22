@@ -14,6 +14,30 @@ export interface HospitalShift {
 
 export type StaffRole = 'doctor' | 'nurse' | 'technician' | 'paramedic' | 'admin' | 'support';
 export type StaffStatus = 'ACTIVE' | 'ON_LEAVE' | 'SUSPENDED' | 'RESIGNED';
+export type StaffOnboardingStage =
+  | 'BASIC_CREATED'
+  | 'DEPARTMENT_PENDING'
+  | 'CLINICAL_PENDING'
+  | 'DOCS_PENDING'
+  | 'COMPLETE';
+
+export interface StaffMemberAddress {
+  street?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+}
+
+export interface StaffDocuments {
+  aadhaarNumber?: string;
+  aadhaarVerified?: boolean;
+  panNumber?: string;
+  medicalRegCertUploaded?: boolean;
+  medicalRegistrationDocName?: string;
+  educationDocName?: string;
+  certificatesCount?: number;
+  verified?: boolean;
+}
 
 export interface StaffMember {
   id: string;
@@ -43,14 +67,49 @@ export interface StaffMember {
   shiftName: string;
   shiftHours: string;
 
+  // Workstation / Campus Location
+  buildingId?: string;
+  buildingName?: string;
+  floorId?: string;
+  floorName?: string;
+  wardId?: string;
+  wardName?: string;
+  roomId?: string;
+  roomName?: string;
+
   email: string;
   phone: string;
-  qualification?: string;
-  specialization?: string;
-  licenseNumber?: string;
-  emergencyContact?: string;
   status: StaffStatus;
+
+  // Personal Information
+  dob?: string;
   gender?: 'Male' | 'Female' | 'Other';
+  bloodGroup?: string;
+  address?: StaffMemberAddress | string;
+  emergencyContact?: string;
+  emergencyContactName?: string;
+  emergencyContactRelation?: string;
+  emergencyContactPhone?: string;
+
+  // Professional Information
+  qualification?: string;
+  experienceYears?: number | string;
+  registrationNumber?: string;
+  licenseNumber?: string;
+
+  // Doctor Details
+  specialization?: string;
+  consultationDurationMinutes?: number;
+  dailyPatientCapacity?: number;
+  consultationFee?: number;
+
+  // Documents
+  documents?: StaffDocuments;
+
+  // Onboarding Lifecycle & Completion
+  profileCompletion?: number; // 35 to 100
+  onboardingStage?: StaffOnboardingStage;
+
   joiningDate?: string;
 }
 
@@ -403,6 +462,69 @@ export function calculateShiftDuration(startTime: string, endTime: string): stri
   return `${hours}h ${mins > 0 ? `${mins}m` : '00m'}`;
 }
 
+// ----------------- PROFILE COMPLETION CALCULATOR -----------------
+export function calculateStaffProfileCompletion(m: Partial<StaffMember>): {
+  score: number;
+  stage: StaffOnboardingStage;
+} {
+  let score = 0;
+
+  // 1. Essential Information (Target 35%)
+  if (m.fullName?.trim()) score += 6;
+  if (m.employeeCode?.trim()) score += 5;
+  if (m.phone?.trim()) score += 5;
+  if (m.email?.trim()) score += 5;
+  if (m.role) score += 4;
+  if ((m.departmentIds && m.departmentIds.length > 0) || m.departmentId) score += 4;
+  if ((m.shiftIds && m.shiftIds.length > 0) || m.shiftId) score += 3;
+  if (m.status) score += 3;
+
+  // 2. Personal Information (Target 20%)
+  if (m.dob?.trim()) score += 4;
+  if (m.gender) score += 4;
+  if (m.bloodGroup?.trim()) score += 4;
+  if (m.address) {
+    if (typeof m.address === 'string' && m.address.trim()) score += 4;
+    else if (typeof m.address === 'object' && (m.address.street || m.address.city)) score += 4;
+  }
+  if (m.emergencyContactPhone?.trim() || m.emergencyContact?.trim()) score += 4;
+
+  // 3. Professional Information (Target 20%)
+  if (m.qualification?.trim()) score += 5;
+  if (m.experienceYears !== undefined && m.experienceYears !== '') score += 5;
+  if (m.registrationNumber?.trim()) score += 5;
+  if (m.licenseNumber?.trim()) score += 5;
+
+  // 4. Doctor Specifics / Workstation (Target 15%)
+  if (m.role === 'doctor') {
+    if (m.specialization?.trim()) score += 4;
+    if (m.consultationDurationMinutes) score += 4;
+    if (m.dailyPatientCapacity) score += 3;
+    if (m.consultationFee !== undefined && m.consultationFee > 0) score += 4;
+  } else {
+    if (m.buildingName || m.buildingId) score += 5;
+    if (m.floorName || m.floorId) score += 5;
+    if (m.roomName || m.roomId || m.wardName) score += 5;
+  }
+
+  // 5. Documents (Target 10%)
+  if (m.documents?.aadhaarNumber?.trim()) score += 3;
+  if (m.documents?.panNumber?.trim()) score += 3;
+  if (m.documents?.medicalRegCertUploaded) score += 2;
+  if (m.documents?.certificatesCount && m.documents.certificatesCount > 0) score += 2;
+
+  score = Math.min(100, Math.max(0, score));
+
+  let stage: StaffOnboardingStage = 'BASIC_CREATED';
+  if (score >= 90) {
+    stage = 'COMPLETE';
+  } else if (score >= 35) {
+    stage = 'DEPARTMENT_PENDING';
+  }
+
+  return { score, stage };
+}
+
 // ----------------- SHIFTS GETTERS / SETTERS -----------------
 export function getHospitalShifts(): HospitalShift[] {
   try {
@@ -507,22 +629,33 @@ export function getHospitalStaff(): StaffMember[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        // Ensure legacy fields have array fallbacks
-        return parsed.map((m: any) => ({
-          ...m,
-          departmentIds: m.departmentIds || (m.departmentId ? [m.departmentId] : []),
-          departmentNames: m.departmentNames || (m.departmentName ? [m.departmentName] : []),
-          shiftIds: m.shiftIds || (m.shiftId ? [m.shiftId] : []),
-          shiftNames: m.shiftNames || (m.shiftName ? [m.shiftName] : []),
-          shiftHoursList: m.shiftHoursList || (m.shiftHours ? [m.shiftHours] : []),
-          status: m.status === 'INACTIVE' ? 'RESIGNED' : m.status || 'ACTIVE',
-        }));
+        return parsed.map((m: any) => {
+          const comp = calculateStaffProfileCompletion(m);
+          return {
+            ...m,
+            departmentIds: m.departmentIds || (m.departmentId ? [m.departmentId] : []),
+            departmentNames: m.departmentNames || (m.departmentName ? [m.departmentName] : []),
+            shiftIds: m.shiftIds || (m.shiftId ? [m.shiftId] : []),
+            shiftNames: m.shiftNames || (m.shiftName ? [m.shiftName] : []),
+            shiftHoursList: m.shiftHoursList || (m.shiftHours ? [m.shiftHours] : []),
+            status: m.status === 'INACTIVE' ? 'RESIGNED' : m.status || 'ACTIVE',
+            profileCompletion: m.profileCompletion !== undefined ? m.profileCompletion : comp.score,
+            onboardingStage: m.onboardingStage || comp.stage,
+          };
+        });
       }
     }
   } catch (err) {
     console.error('Failed to read hospital staff from localStorage', err);
   }
-  return DEFAULT_HOSPITAL_STAFF;
+  return DEFAULT_HOSPITAL_STAFF.map((m) => {
+    const comp = calculateStaffProfileCompletion(m);
+    return {
+      ...m,
+      profileCompletion: m.profileCompletion !== undefined ? m.profileCompletion : comp.score,
+      onboardingStage: m.onboardingStage || comp.stage,
+    };
+  });
 }
 
 export function saveHospitalStaff(staffList: StaffMember[]): void {

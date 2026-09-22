@@ -34,6 +34,13 @@ export interface SharedQueueToken {
   time: string;
   type: string;
   status: string;
+  priority?: 'NORMAL' | 'URGENT' | 'VIP';
+  feePaid?: boolean;
+  totalFee?: number;
+  paymentMode?: string;
+  invoiceNo?: string;
+  callingStatus?: 'IDLE' | 'CALLING' | 'ACCEPTED';
+  checkoutTime?: string;
   allergies?: string[];
   chronicConditions?: string[];
   vitals?: {
@@ -46,6 +53,18 @@ export interface SharedQueueToken {
     bmi: number;
     triageNotes?: string;
   };
+}
+
+export interface DailyCounterSession {
+  id: string;
+  counterNumber: string;
+  receptionistName: string;
+  shift: string;
+  openedAt: string;
+  closedAt?: string;
+  status: 'OPEN' | 'CLOSED';
+  openingFloat: number;
+  notes?: string;
 }
 
 export interface SharedLabOrder {
@@ -296,6 +315,18 @@ export const patientJourneyService = {
     localStorage.setItem('nh_queue', JSON.stringify(updated));
   },
 
+  updateQueueToken(tokenNo: number, updates: Partial<SharedQueueToken>): void {
+    const list = this.getQueue();
+    const updated = list.map((q) => (q.token === tokenNo ? { ...q, ...updates } : q));
+    localStorage.setItem('nh_queue', JSON.stringify(updated));
+  },
+
+  deleteQueueToken(tokenNo: number): void {
+    const list = this.getQueue();
+    const updated = list.filter((q) => q.token !== tokenNo);
+    localStorage.setItem('nh_queue', JSON.stringify(updated));
+  },
+
   // --- Laboratory Orders ---
   getLabOrders(): SharedLabOrder[] {
     const raw = localStorage.getItem('nh_lab_orders');
@@ -348,6 +379,64 @@ export const patientJourneyService = {
     const list = this.getInvoices();
     const updated = list.map((i) => (i.id === invoiceId ? { ...i, ...updates } : i));
     localStorage.setItem('nh_invoices', JSON.stringify(updated));
+  },
+
+  // --- Daily Counter Shift Session ---
+  getCounterSession(): DailyCounterSession {
+    const raw = localStorage.getItem('nh_counter_session');
+    if (!raw) {
+      const defaultSession: DailyCounterSession = {
+        id: `cnt-${new Date().toISOString().slice(0, 10)}`,
+        counterNumber: 'Desk #1',
+        receptionistName: 'Emma FrontDesk',
+        shift: 'Morning Shift (08:00 - 16:00)',
+        openedAt: '08:00 AM',
+        status: 'OPEN',
+        openingFloat: 150.0,
+        notes: 'Daily counter opened with $150 opening float cash.',
+      };
+      localStorage.setItem('nh_counter_session', JSON.stringify(defaultSession));
+      return defaultSession;
+    }
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return {
+        id: `cnt-${new Date().toISOString().slice(0, 10)}`,
+        counterNumber: 'Desk #1',
+        receptionistName: 'Emma FrontDesk',
+        shift: 'Morning Shift (08:00 - 16:00)',
+        openedAt: '08:00 AM',
+        status: 'OPEN',
+        openingFloat: 150.0,
+      };
+    }
+  },
+
+  openCounterSession(data: Partial<DailyCounterSession>): DailyCounterSession {
+    const current = this.getCounterSession();
+    const newSession: DailyCounterSession = {
+      ...current,
+      id: `cnt-${Date.now()}`,
+      status: 'OPEN',
+      openedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      closedAt: undefined,
+      ...data,
+    };
+    localStorage.setItem('nh_counter_session', JSON.stringify(newSession));
+    return newSession;
+  },
+
+  closeCounterSession(closingNotes?: string): DailyCounterSession {
+    const current = this.getCounterSession();
+    const closedSession: DailyCounterSession = {
+      ...current,
+      status: 'CLOSED',
+      closedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      notes: closingNotes || current.notes,
+    };
+    localStorage.setItem('nh_counter_session', JSON.stringify(closedSession));
+    return closedSession;
   },
 
   resetDemo(): void {

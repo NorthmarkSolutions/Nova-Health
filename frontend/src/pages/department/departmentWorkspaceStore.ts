@@ -571,7 +571,7 @@ export function getDepartmentStaffAssignments(departmentId: string): DepartmentS
   });
 
   return filtered.map((s, idx) => {
-    const room = rooms[idx % Math.max(1, rooms.length)];
+    const room = rooms.find((r) => r.id === s.roomId) || rooms[idx % Math.max(1, rooms.length)];
     return {
       id: `dsa-${departmentId}-${s.id}`,
       departmentId,
@@ -582,8 +582,8 @@ export function getDepartmentStaffAssignments(departmentId: string): DepartmentS
       designation: s.designation,
       shiftId: s.shiftId || 'shift-morn',
       shiftName: s.shiftName || 'Morning Shift',
-      assignedRoomId: room?.id,
-      assignedRoomName: room?.name,
+      assignedRoomId: s.roomId || room?.id,
+      assignedRoomName: s.roomName || room?.name,
       status: s.status,
       phone: s.phone,
       email: s.email,
@@ -594,6 +594,8 @@ export function getDepartmentStaffAssignments(departmentId: string): DepartmentS
       licenseNumber: s.licenseNumber,
       emergencyContact: s.emergencyContact,
       isDepartmentHead: s.isDepartmentHead,
+      profileCompletion: s.profileCompletion ?? 100,
+      onboardingStage: s.onboardingStage || (s.profileCompletion && s.profileCompletion < 90 ? 'BASIC_CREATED' : 'COMPLETE'),
     };
   });
 }

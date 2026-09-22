@@ -244,6 +244,8 @@ export interface DepartmentStaffAssignment {
   licenseNumber?: string;
   emergencyContact?: string;
   isDepartmentHead?: boolean;
+  profileCompletion?: number;
+  onboardingStage?: 'BASIC_CREATED' | 'DEPARTMENT_PENDING' | 'CLINICAL_PENDING' | 'DOCS_PENDING' | 'COMPLETE';
 }
 
 export interface DepartmentScheduleSlot {

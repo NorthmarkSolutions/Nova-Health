@@ -2088,7 +2088,7 @@ export const DepartmentProfileView: React.FC<Props> = ({
                   }}
                 >
                   No specific personnel records are currently linked to this department in the Staff Master.
-                  You can assign staff when registering departments or manage their assignments under <strong>4. Staff Master</strong>.
+                  You can assign staff when registering departments or manage their assignments under <strong>3. Staff Master</strong>.
                 </div>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '0.75rem' }}>

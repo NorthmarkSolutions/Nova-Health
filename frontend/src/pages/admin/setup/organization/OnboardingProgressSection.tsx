@@ -59,7 +59,7 @@ export const OnboardingProgressSection: React.FC<OnboardingProgressSectionProps>
             )}
           </div>
           <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: '0.25rem 0 0' }}>
-            Structured hospital onboarding sequence: Profile $\rightarrow$ Campus Infrastructure $\rightarrow$ Departments Space Allocation $\rightarrow$ System Masters $\rightarrow$ Live Clinical Intake
+            Structured hospital onboarding sequence: Profile $\rightarrow$ Campus Infrastructure $\rightarrow$ Staff Master $\rightarrow$ Departments Space Allocation $\rightarrow$ Live Clinical Intake
           </p>
         </div>
 
@@ -111,8 +111,8 @@ export const OnboardingProgressSection: React.FC<OnboardingProgressSectionProps>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.625rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
           <span>Phase 1: Legal Base (25%)</span>
           <span>Phase 2: Campus Hierarchy (25%)</span>
-          <span>Phase 3: Departments (25%)</span>
-          <span>Phase 4: System Masters (15%)</span>
+          <span>Phase 3: Staff Master (15%)</span>
+          <span>Phase 4: Departments (25%)</span>
           <span>Phase 5: Live Intake (10%)</span>
         </div>
       </div>
@@ -209,7 +209,51 @@ export const OnboardingProgressSection: React.FC<OnboardingProgressSectionProps>
           </button>
         </div>
 
-        {/* Phase 3 */}
+        {/* Phase 3: Staff Master */}
+        <div
+          style={{
+            padding: '1.25rem',
+            border: '1px solid #fed7aa',
+            borderRadius: '10px',
+            backgroundColor: '#fff7ed',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '1rem',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
+            <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: '#ffedd5', color: '#c2410c', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <ShieldCheck size={22} />
+            </div>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <strong style={{ fontSize: '0.9375rem', color: '#9a3412' }}>
+                  Phase 3: Staff Master & Hospital Shifts Roster (Admin Level)
+                </strong>
+                <span className="badge badge-warning">14% / 15% Configured</span>
+              </div>
+              <p style={{ fontSize: '0.8125rem', color: '#c2410c', margin: '0.25rem 0 0.5rem' }}>
+                Hospital staff credentials, clinical shift definitions, doctor & nursing rosters, and department leadership bindings configured.
+              </p>
+              <div style={{ display: 'flex', gap: '1rem', fontSize: '0.75rem', color: '#9a3412' }}>
+                <span>✓ Staff Master Active</span>
+                <span>✓ Shift Timings Synchronized</span>
+                <span>✓ Department HODs Bound</span>
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => onNavigateToTab('staff')}
+            style={{ flexShrink: 0 }}
+          >
+            Manage Staff <ArrowRight size={13} />
+          </button>
+        </div>
+
+        {/* Phase 4: Departments Creation */}
         <div
           style={{
             padding: '1.25rem',
@@ -229,7 +273,7 @@ export const OnboardingProgressSection: React.FC<OnboardingProgressSectionProps>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <strong style={{ fontSize: '0.9375rem', color: '#0369a1' }}>
-                  Phase 3: Departments Creation & Physical Space Allocation
+                  Phase 4: Departments Creation & Physical Space Allocation
                 </strong>
                 <span className="badge badge-info">22% / 25% Configured</span>
               </div>
@@ -251,50 +295,6 @@ export const OnboardingProgressSection: React.FC<OnboardingProgressSectionProps>
             style={{ flexShrink: 0 }}
           >
             Configure Units <ArrowRight size={13} />
-          </button>
-        </div>
-
-        {/* Phase 4 */}
-        <div
-          style={{
-            padding: '1.25rem',
-            border: '1px solid #fed7aa',
-            borderRadius: '10px',
-            backgroundColor: '#fff7ed',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: '1rem',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
-            <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: '#ffedd5', color: '#c2410c', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <ShieldCheck size={22} />
-            </div>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <strong style={{ fontSize: '0.9375rem', color: '#9a3412' }}>
-                  Phase 4: Staff Master & Hospital Shifts Roster (Admin Level)
-                </strong>
-                <span className="badge badge-warning">14% / 15% Configured</span>
-              </div>
-              <p style={{ fontSize: '0.8125rem', color: '#c2410c', margin: '0.25rem 0 0.5rem' }}>
-                Hospital staff credentials, clinical shift definitions, doctor & nursing rosters, and department leadership bindings configured.
-              </p>
-              <div style={{ display: 'flex', gap: '1rem', fontSize: '0.75rem', color: '#9a3412' }}>
-                <span>✓ Staff Master Active</span>
-                <span>✓ Shift Timings Synchronized</span>
-                <span>✓ Department HODs Bound</span>
-              </div>
-            </div>
-          </div>
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={() => onNavigateToTab('staff')}
-            style={{ flexShrink: 0 }}
-          >
-            Manage Staff <ArrowRight size={13} />
           </button>
         </div>
 

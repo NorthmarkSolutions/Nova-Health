@@ -32,11 +32,18 @@ import {
   ChevronRight,
   ChevronUp,
   Layers,
+  FileText,
+  DollarSign,
+  MapPin,
+  Briefcase,
+  GraduationCap,
+  Shield,
 } from 'lucide-react';
 import { DepartmentWorkspace, DepartmentStaffAssignment, DepartmentRoom } from '../../types';
 import {
   getDepartmentStaffAssignments,
   getDepartmentRooms,
+  saveDepartmentDoctor,
 } from './departmentWorkspaceStore';
 import {
   getHospitalStaff,
@@ -48,6 +55,7 @@ import {
   unassignStaffFromDepartment,
   bulkAddHospitalStaff,
   HospitalShift,
+  calculateStaffProfileCompletion,
 } from '../admin/setup/organization/hospitalStaffStore';
 
 export interface CadreGroupConfig {
@@ -215,9 +223,12 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
     });
   };
 
-  // Modal State for Add/Edit Staff
+  // Completion filter state
+  const [completionFilter, setCompletionFilter] = useState<'all' | 'pending' | 'complete'>('all');
+
+  // Modal State for Add/Edit/Complete Staff
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalTab, setModalTab] = useState<'personal' | 'professional' | 'stationing'>('personal');
+  const [modalTab, setModalTab] = useState<'personal' | 'professional' | 'stationing' | 'documents'>('personal');
   const [editingStaff, setEditingStaff] = useState<DepartmentStaffAssignment | null>(null);
   const [selectedStaffId, setSelectedStaffId] = useState('');
 
@@ -225,6 +236,12 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
   const [fullName, setFullName] = useState('');
   const [employeeCode, setEmployeeCode] = useState('');
   const [gender, setGender] = useState<'Male' | 'Female' | 'Other'>('Male');
+  const [dob, setDob] = useState('');
+  const [bloodGroup, setBloodGroup] = useState('O+');
+  const [addressStreet, setAddressStreet] = useState('');
+  const [addressCity, setAddressCity] = useState('');
+  const [addressState, setAddressState] = useState('');
+  const [addressPincode, setAddressPincode] = useState('');
   const [joiningDate, setJoiningDate] = useState(new Date().toISOString().slice(0, 10));
   const [status, setStatus] = useState<'ACTIVE' | 'ON_LEAVE' | 'SUSPENDED' | 'RESIGNED'>('ACTIVE');
 
@@ -239,11 +256,86 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
   const [qualification, setQualification] = useState('MBBS, MD');
   const [specialization, setSpecialization] = useState('Cardiology');
   const [licenseNumber, setLicenseNumber] = useState('');
+  const [experienceYears, setExperienceYears] = useState<number>(5);
 
-  // 4. Deployment & Stationing
+  // 4. Deployment & Clinical Stationing
   const [assignedShiftId, setAssignedShiftId] = useState('');
   const [assignedRoomId, setAssignedRoomId] = useState('');
   const [isDepartmentHead, setIsDepartmentHead] = useState(false);
+  const [consultationFee, setConsultationFee] = useState<number>(75);
+  const [consultationDurationMinutes, setConsultationDurationMinutes] = useState<number>(15);
+  const [dailyPatientCapacity, setDailyPatientCapacity] = useState<number>(30);
+
+  // 5. Compliance & Documents
+  const [aadhaarNumber, setAadhaarNumber] = useState('');
+  const [panNumber, setPanNumber] = useState('');
+  const [medicalRegistrationDocName, setMedicalRegistrationDocName] = useState('');
+  const [educationDocName, setEducationDocName] = useState('');
+
+  // Live modal profile completion calculation
+  const liveCompletion = useMemo(() => {
+    let score = 0;
+    // Essential (35%)
+    if (employeeCode.trim() && fullName.trim() && assignedRole && assignedShiftId) {
+      score += 35;
+    }
+    // Personal (20%)
+    let personal = 0;
+    if (phone.trim() && email.trim()) personal += 10;
+    if (dob || emergencyContact.trim()) personal += 5;
+    if (addressStreet.trim() || addressCity.trim()) personal += 5;
+    score += personal;
+
+    // Professional (20%)
+    let prof = 0;
+    if (qualification.trim()) prof += 10;
+    if (licenseNumber.trim() || specialization.trim()) prof += 5;
+    if (experienceYears && experienceYears > 0) prof += 5;
+    score += prof;
+
+    // Stationing / Doctor Tariff (15%)
+    let station = 0;
+    if (assignedRoomId) station += 5;
+    if (assignedRole === 'doctor') {
+      if (consultationFee && consultationDurationMinutes && dailyPatientCapacity) {
+        station += 10;
+      }
+    } else {
+      station += 10;
+    }
+    score += station;
+
+    // Documents (10%)
+    let docs = 0;
+    if (aadhaarNumber.trim() || panNumber.trim()) docs += 5;
+    if (medicalRegistrationDocName.trim() || educationDocName.trim()) docs += 5;
+    score += docs;
+
+    return Math.min(100, Math.max(35, score));
+  }, [
+    employeeCode,
+    fullName,
+    assignedRole,
+    assignedShiftId,
+    phone,
+    email,
+    dob,
+    emergencyContact,
+    addressStreet,
+    addressCity,
+    qualification,
+    licenseNumber,
+    specialization,
+    experienceYears,
+    assignedRoomId,
+    consultationFee,
+    consultationDurationMinutes,
+    dailyPatientCapacity,
+    aadhaarNumber,
+    panNumber,
+    medicalRegistrationDocName,
+    educationDocName,
+  ]);
 
   // Delete Modal State
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -335,6 +427,8 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
     return staff.filter((s) => {
       if (roleFilter !== 'all' && s.role !== roleFilter) return false;
       if (statusFilter !== 'all' && s.status !== statusFilter) return false;
+      if (completionFilter === 'pending' && (s.profileCompletion ?? 100) >= 90) return false;
+      if (completionFilter === 'complete' && (s.profileCompletion ?? 100) < 90) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         return (
@@ -346,7 +440,7 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
       }
       return true;
     });
-  }, [staff, roleFilter, statusFilter, searchQuery]);
+  }, [staff, roleFilter, statusFilter, completionFilter, searchQuery]);
 
   const stats = useMemo(() => {
     const total = staff.length;
@@ -355,7 +449,8 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
     const nurses = staff.filter((s) => s.role === 'nurse').length;
     const receptionists = staff.filter((s) => s.role === 'receptionist').length;
     const techs = staff.filter((s) => s.role === 'technician').length;
-    return { total, active, doctors, nurses, receptionists, techs };
+    const pendingCompletion = staff.filter((s) => (s.profileCompletion ?? 100) < 90).length;
+    return { total, active, doctors, nurses, receptionists, techs, pendingCompletion };
   }, [staff]);
 
   const handleOpenAdd = () => {
@@ -365,6 +460,12 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
     setAssignedRole('doctor');
     setEmployeeCode(generateEmployeeCode('doctor'));
     setGender('Male');
+    setDob('');
+    setBloodGroup('O+');
+    setAddressStreet('');
+    setAddressCity('');
+    setAddressState('');
+    setAddressPincode('');
     setJoiningDate(new Date().toISOString().slice(0, 10));
     setStatus('ACTIVE');
     setPhone('+91 98');
@@ -374,14 +475,22 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
     setQualification('MBBS, MD');
     setSpecialization('Cardiology');
     setLicenseNumber('');
+    setExperienceYears(5);
     setAssignedShiftId(shifts[0]?.id || 'shift-morn');
     setAssignedRoomId(rooms[0]?.id || '');
     setIsDepartmentHead(false);
+    setConsultationFee(75);
+    setConsultationDurationMinutes(15);
+    setDailyPatientCapacity(30);
+    setAadhaarNumber('');
+    setPanNumber('');
+    setMedicalRegistrationDocName('');
+    setEducationDocName('');
     setModalTab('personal');
     setIsModalOpen(true);
   };
 
-  const handleOpenEdit = (assignment: DepartmentStaffAssignment) => {
+  const populateStaffForm = (assignment: DepartmentStaffAssignment) => {
     setEditingStaff(assignment);
     const existing = hospitalStaffPool.find(
       (s) => s.id === assignment.staffId || s.employeeCode === assignment.employeeCode
@@ -391,6 +500,13 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
     setFullName(assignment.fullName);
     setEmployeeCode(assignment.employeeCode);
     setGender(existing?.gender || assignment.gender || 'Male');
+    setDob(existing?.dob || '');
+    setBloodGroup(existing?.bloodGroup || 'O+');
+    const addrObj = typeof existing?.address === 'object' && existing.address !== null ? existing.address : undefined;
+    setAddressStreet(addrObj?.street || '');
+    setAddressCity(addrObj?.city || '');
+    setAddressState(addrObj?.state || '');
+    setAddressPincode(addrObj?.pincode || '');
     setJoiningDate(existing?.joiningDate || assignment.joiningDate || new Date().toISOString().slice(0, 10));
     setStatus(assignment.status);
     setPhone(assignment.phone || existing?.phone || '');
@@ -401,10 +517,28 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
     setQualification(existing?.qualification || assignment.qualification || '');
     setSpecialization(existing?.specialization || assignment.specialization || '');
     setLicenseNumber(existing?.licenseNumber || assignment.licenseNumber || '');
+    setExperienceYears(Number(existing?.experienceYears) || 5);
     setAssignedShiftId(assignment.shiftId);
-    setAssignedRoomId(assignment.assignedRoomId || '');
+    setAssignedRoomId(assignment.assignedRoomId || existing?.roomId || '');
     setIsDepartmentHead(existing?.isDepartmentHead || assignment.isDepartmentHead || false);
+    setConsultationFee(existing?.consultationFee || 75);
+    setConsultationDurationMinutes(existing?.consultationDurationMinutes || 15);
+    setDailyPatientCapacity(existing?.dailyPatientCapacity || 30);
+    setAadhaarNumber(existing?.documents?.aadhaarNumber || '');
+    setPanNumber(existing?.documents?.panNumber || '');
+    setMedicalRegistrationDocName(existing?.documents?.medicalRegistrationDocName || '');
+    setEducationDocName(existing?.documents?.educationDocName || '');
+  };
+
+  const handleOpenEdit = (assignment: DepartmentStaffAssignment) => {
+    populateStaffForm(assignment);
     setModalTab('personal');
+    setIsModalOpen(true);
+  };
+
+  const handleOpenCompleteProfile = (assignment: DepartmentStaffAssignment) => {
+    populateStaffForm(assignment);
+    setModalTab(assignment.role === 'doctor' ? 'stationing' : 'professional');
     setIsModalOpen(true);
   };
 
@@ -424,6 +558,21 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
       setSpecialization(found.specialization || '');
       setLicenseNumber(found.licenseNumber || '');
       setGender(found.gender || 'Male');
+      setDob(found.dob || '');
+      setBloodGroup(found.bloodGroup || 'O+');
+      const foundAddr = typeof found.address === 'object' && found.address !== null ? found.address : undefined;
+      setAddressStreet(foundAddr?.street || '');
+      setAddressCity(foundAddr?.city || '');
+      setAddressState(foundAddr?.state || '');
+      setAddressPincode(foundAddr?.pincode || '');
+      setExperienceYears(Number(found.experienceYears) || 5);
+      setConsultationFee(found.consultationFee || 75);
+      setConsultationDurationMinutes(found.consultationDurationMinutes || 15);
+      setDailyPatientCapacity(found.dailyPatientCapacity || 30);
+      setAadhaarNumber(found.documents?.aadhaarNumber || '');
+      setPanNumber(found.documents?.panNumber || '');
+      setMedicalRegistrationDocName(found.documents?.medicalRegistrationDocName || '');
+      setEducationDocName(found.documents?.educationDocName || '');
       setStatus(found.status);
       setJoiningDate(found.joiningDate || new Date().toISOString().slice(0, 10));
     }
@@ -437,6 +586,7 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
     }
 
     const selectedShift = shifts.find((s) => s.id === assignedShiftId) || shifts[0];
+    const assignedRoom = rooms.find((r) => r.id === assignedRoomId);
 
     // Maintain single source of truth in HospitalStaffStore
     const staffId = selectedStaffId || editingStaff?.staffId || `stf-${Date.now()}`;
@@ -448,7 +598,10 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
     const currentDeptNames = existingMember?.departmentNames || [workspace.departmentName];
     const newDeptNames = Array.from(new Set([...currentDeptNames, workspace.departmentName]));
 
+    const finalCompletionScore = Math.max(existingMember?.profileCompletion || 35, liveCompletion);
+
     const staffPayload: StaffMember = {
+      ...existingMember,
       id: staffId,
       employeeCode: employeeCode.toUpperCase().trim(),
       fullName: fullName.trim(),
@@ -457,8 +610,17 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
       qualification: qualification.trim(),
       specialization: specialization.trim(),
       licenseNumber: licenseNumber.trim(),
+      experienceYears,
       emergencyContact: emergencyContact.trim(),
       gender,
+      dob,
+      bloodGroup: bloodGroup as any,
+      address: {
+        street: addressStreet.trim(),
+        city: addressCity.trim(),
+        state: addressState.trim(),
+        pincode: addressPincode.trim(),
+      },
       joiningDate,
       departmentIds: newDeptIds,
       departmentNames: newDeptNames,
@@ -476,12 +638,48 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
       email: email.trim(),
       phone: phone.trim(),
       status,
+      roomId: assignedRoom?.id || existingMember?.roomId,
+      roomName: assignedRoom?.name || existingMember?.roomName,
+      consultationFee: assignedRole === 'doctor' ? consultationFee : undefined,
+      consultationDurationMinutes: assignedRole === 'doctor' ? consultationDurationMinutes : undefined,
+      dailyPatientCapacity: assignedRole === 'doctor' ? dailyPatientCapacity : undefined,
+      documents: {
+        aadhaarNumber: aadhaarNumber.trim(),
+        panNumber: panNumber.trim(),
+        medicalRegistrationDocName: medicalRegistrationDocName.trim(),
+        educationDocName: educationDocName.trim(),
+        verified: !!(medicalRegistrationDocName || aadhaarNumber),
+      },
+      profileCompletion: finalCompletionScore,
+      onboardingStage: finalCompletionScore >= 90 ? 'COMPLETE' : 'CLINICAL_PENDING',
     };
 
     if (existingMember || editingStaff) {
       updateHospitalStaff(staffPayload);
     } else {
       addHospitalStaff(staffPayload);
+    }
+
+    // Synchronize department doctor roster if role is doctor
+    if (assignedRole === 'doctor') {
+      saveDepartmentDoctor({
+        id: `doc-${workspace.departmentId}-${staffId}`,
+        departmentId: workspace.departmentId,
+        staffId: staffId,
+        fullName: fullName.trim(),
+        employeeCode: employeeCode.toUpperCase().trim(),
+        specialization: specialization.trim() || designation.trim() || 'Attending Physician',
+        qualification: qualification.trim() || 'MBBS, MD',
+        consultationFee: consultationFee || 75,
+        consultationStartTime: selectedShift?.startTime || '09:00',
+        consultationEndTime: selectedShift?.endTime || '17:00',
+        workingDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+        assignedRoomName: assignedRoom?.name || existingMember?.roomName || 'Chamber 101',
+        patientCapacityPerDay: dailyPatientCapacity || 30,
+        avgConsultationMinutes: consultationDurationMinutes || 15,
+        isAvailable: status === 'ACTIVE',
+        status: status === 'ACTIVE' ? 'ACTIVE' : 'ON_LEAVE',
+      });
     }
 
     setIsModalOpen(false);
@@ -750,6 +948,61 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
 
       {subTab === 'roster' ? (
         <>
+          {/* Pending Profile Completion Alert Banner */}
+          {stats.pendingCompletion > 0 && (
+            <div
+              style={{
+                padding: '0.875rem 1.25rem',
+                borderRadius: '10px',
+                backgroundColor: '#fffbeb',
+                border: '1px solid #fde68a',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '1rem',
+                flexWrap: 'wrap',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <span
+                  style={{
+                    backgroundColor: '#fef3c7',
+                    color: '#b45309',
+                    padding: '0.45rem',
+                    borderRadius: '8px',
+                    display: 'flex',
+                  }}
+                >
+                  <Sparkles size={20} />
+                </span>
+                <div>
+                  <div style={{ fontSize: '0.875rem', fontWeight: 800, color: '#92400e' }}>
+                    {stats.pendingCompletion} Staff Member{stats.pendingCompletion > 1 ? 's' : ''} Awaiting Department Profile Completion (35% Basic Profile Created)
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: '#b45309' }}>
+                    Hospital Admin entered required fields. Complete their room/chamber stationing, clinical tariffs, and credentials.
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setCompletionFilter(completionFilter === 'pending' ? 'all' : 'pending')}
+                style={{
+                  fontSize: '0.75rem',
+                  padding: '0.4rem 0.85rem',
+                  backgroundColor: '#ffffff',
+                  borderColor: '#fcd34d',
+                  color: '#92400e',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                {completionFilter === 'pending' ? 'Show All Staff Pool' : '⚡ Filter Pending Completion (35%)'}
+              </button>
+            </div>
+          )}
+
           {/* KPI Cards */}
           <div
             style={{
@@ -861,6 +1114,17 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
               <option value="RESIGNED">Resigned</option>
             </select>
 
+            <select
+              className="form-select"
+              style={{ width: 'auto', fontWeight: 600 }}
+              value={completionFilter}
+              onChange={(e) => setCompletionFilter(e.target.value as any)}
+            >
+              <option value="all">All Profile States</option>
+              <option value="pending">⚡ Pending Dept Completion (35%)</option>
+              <option value="complete">✓ Fully Onboarded (100%)</option>
+            </select>
+
             {/* Expand / Collapse Controls */}
             <div style={{ display: 'flex', gap: '0.375rem', marginLeft: 'auto' }}>
               <button
@@ -889,20 +1153,21 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
             <table>
               <thead>
                 <tr>
-                  <th style={{ width: '100px' }}>Staff ID</th>
+                  <th style={{ width: '90px' }}>Staff ID</th>
                   <th>Personnel & Designation</th>
-                  <th style={{ width: '140px' }}>Assigned Role</th>
-                  <th style={{ width: '180px' }}>Shift Window</th>
-                  <th style={{ width: '180px' }}>Stationed Room</th>
-                  <th style={{ width: '180px' }}>Contact</th>
-                  <th style={{ width: '90px' }}>Status</th>
-                  <th style={{ width: '100px', textAlign: 'right' }}>Actions</th>
+                  <th style={{ width: '130px' }}>Assigned Role</th>
+                  <th style={{ width: '150px' }}>Shift Window</th>
+                  <th style={{ width: '150px' }}>Stationed Room</th>
+                  <th style={{ width: '150px' }}>Contact</th>
+                  <th style={{ width: '160px' }}>Profile Status</th>
+                  <th style={{ width: '80px' }}>Status</th>
+                  <th style={{ width: '95px', textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredStaff.length === 0 ? (
                   <tr>
-                    <td colSpan={8} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+                    <td colSpan={9} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
                       No staff members match the selected filters for {workspace.shortName}. Click <strong>"+ Add New Staff Member"</strong> to register personnel.
                     </td>
                   </tr>
@@ -934,7 +1199,7 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
                           }}
                           className="cadre-header-row"
                         >
-                          <td colSpan={8} style={{ padding: '0.625rem 1rem' }}>
+                          <td colSpan={9} style={{ padding: '0.625rem 1rem' }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', flexWrap: 'wrap' }}>
                                 <span
@@ -1000,7 +1265,7 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
                           cadreMembers.length === 0 ? (
                             <tr>
                               <td
-                                colSpan={8}
+                                colSpan={9}
                                 style={{
                                   padding: '0.875rem 1.5rem',
                                   color: 'var(--text-muted)',
@@ -1100,6 +1365,52 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
                                   </div>
                                 </td>
                                 <td>
+                                  {(member.profileCompletion ?? 100) < 90 ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '135px' }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <span style={{ fontSize: '0.6875rem', fontWeight: 800, color: '#b45309', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                          <Sparkles size={11} color="#d97706" /> {member.profileCompletion || 35}% Basic Profile
+                                        </span>
+                                      </div>
+                                      <div style={{ width: '100%', height: '5px', backgroundColor: '#fed7aa', borderRadius: '999px', overflow: 'hidden' }}>
+                                        <div style={{ width: `${member.profileCompletion || 35}%`, height: '100%', backgroundColor: '#ea580c', borderRadius: '999px' }} />
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenCompleteProfile(member)}
+                                        style={{
+                                          marginTop: '2px',
+                                          fontSize: '0.6875rem',
+                                          fontWeight: 700,
+                                          color: '#0284c7',
+                                          backgroundColor: '#eff6ff',
+                                          border: '1px solid #bfdbfe',
+                                          borderRadius: '4px',
+                                          padding: '2px 6px',
+                                          cursor: 'pointer',
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '3px',
+                                          width: 'fit-content',
+                                        }}
+                                        title="Complete remaining clinical & personal information"
+                                      >
+                                        <Edit2 size={10} /> Complete Profile
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: '110px' }}>
+                                      <span style={{ fontSize: '0.6875rem', fontWeight: 800, color: '#059669', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                        <CheckCircle2 size={12} color="#059669" /> 100% Complete
+                                      </span>
+                                      <div style={{ width: '100%', height: '5px', backgroundColor: '#dcfce7', borderRadius: '999px', overflow: 'hidden' }}>
+                                        <div style={{ width: '100%', height: '100%', backgroundColor: '#10b981', borderRadius: '999px' }} />
+                                      </div>
+                                      <span style={{ fontSize: '0.625rem', color: '#64748b' }}>Fully Onboarded</span>
+                                    </div>
+                                  )}
+                                </td>
+                                <td>
                                   <span
                                     className={`badge ${
                                       member.status === 'ACTIVE'
@@ -1114,7 +1425,18 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
                                   </span>
                                 </td>
                                 <td style={{ textAlign: 'right' }}>
-                                  <div style={{ display: 'inline-flex', gap: '0.4rem', alignItems: 'center' }}>
+                                  <div style={{ display: 'inline-flex', gap: '0.35rem', alignItems: 'center' }}>
+                                    {(member.profileCompletion ?? 100) < 90 && (
+                                      <button
+                                        type="button"
+                                        className="action-btn"
+                                        onClick={() => handleOpenCompleteProfile(member)}
+                                        title="Complete Staff Profile (35% Basic Profile Created)"
+                                        style={{ color: '#0284c7', backgroundColor: '#eff6ff', borderColor: '#bfdbfe' }}
+                                      >
+                                        <Sparkles size={14} />
+                                      </button>
+                                    )}
                                     <button
                                       type="button"
                                       className="action-btn"
@@ -1390,44 +1712,135 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
         </div>
       )}
 
-      {/* Comprehensive Add / Edit Staff Modal */}
+      {/* Comprehensive Add / Edit / Complete Staff Modal */}
       {isModalOpen && (
-        <div className="modal-overlay">
+        <div className="modal-overlay" style={{ zIndex: 1100 }}>
           <div
             className="modal-content"
             style={{
-              width: '90vw',
-              maxWidth: '780px',
-              padding: '1.75rem',
+              width: '92vw',
+              maxWidth: '920px',
+              padding: '1.75rem 2rem',
               borderRadius: '16px',
               backgroundColor: '#ffffff',
-              maxHeight: '90vh',
+              maxHeight: '92vh',
               overflowY: 'auto',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
             }}
           >
             {/* Modal Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.875rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span style={{ backgroundColor: 'rgba(2, 132, 199, 0.1)', color: '#0284c7', padding: '0.375rem', borderRadius: '8px', display: 'flex' }}>
-                  <Users size={20} />
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '1rem',
+                borderBottom: '1px solid var(--border-color)',
+                paddingBottom: '0.875rem',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <span
+                  style={{
+                    backgroundColor: 'rgba(2, 132, 199, 0.1)',
+                    color: '#0284c7',
+                    padding: '0.5rem',
+                    borderRadius: '10px',
+                    display: 'flex',
+                  }}
+                >
+                  <Users size={22} />
                 </span>
                 <div>
-                  <h4 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800 }}>
-                    {editingStaff ? `Update ${editingStaff.fullName} Details` : `Register New Staff to ${workspace.shortName}`}
+                  <h4 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: 'var(--secondary)' }}>
+                    {editingStaff
+                      ? (editingStaff.profileCompletion ?? 100) < 90
+                        ? `Complete Profile: ${editingStaff.fullName}`
+                        : `Edit Credentials: ${editingStaff.fullName}`
+                      : `Register New Staff Member to ${workspace.shortName}`}
                   </h4>
-                  <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                    Complete personnel profile, clinical cadre, contact details, and chamber stationing.
+                  <p style={{ margin: '0.15rem 0 0', fontSize: '0.7813rem', color: 'var(--text-muted)' }}>
+                    {editingStaff && (editingStaff.profileCompletion ?? 100) < 90
+                      ? 'Hospital Admin created this basic record. Fill remaining clinical, stationing, and compliance details to reach 100% completion.'
+                      : 'Configure personal credentials, physical room stationing, shift window, and clinical parameters.'}
                   </p>
                 </div>
               </div>
-              <button className="action-btn" onClick={() => setIsModalOpen(false)}>
-                <X size={18} />
+              <button
+                type="button"
+                className="action-btn"
+                onClick={() => setIsModalOpen(false)}
+                title="Close Modal"
+              >
+                <X size={20} />
               </button>
+            </div>
+
+            {/* Live Profile Completion Status Bar */}
+            <div
+              style={{
+                padding: '0.875rem 1.25rem',
+                backgroundColor: liveCompletion >= 90 ? '#f0fdf4' : '#fffbeb',
+                borderRadius: '12px',
+                border: `1px solid ${liveCompletion >= 90 ? '#bbf7d0' : '#fde68a'}`,
+                marginBottom: '1.25rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.5rem',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+                  <span style={{ fontSize: '0.875rem', fontWeight: 800, color: liveCompletion >= 90 ? '#15803d' : '#92400e' }}>
+                    Profile Completion: {liveCompletion}%
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '0.6875rem',
+                      fontWeight: 700,
+                      padding: '0.15rem 0.55rem',
+                      borderRadius: '999px',
+                      backgroundColor: liveCompletion >= 90 ? '#dcfce7' : '#fef3c7',
+                      color: liveCompletion >= 90 ? '#166534' : '#b45309',
+                      border: `1px solid ${liveCompletion >= 90 ? '#86efac' : '#fcd34d'}`,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '3px',
+                    }}
+                  >
+                    {liveCompletion >= 90 ? (
+                      <>
+                        <CheckCircle2 size={11} color="#166534" /> Complete & Ready for Clinical Operations
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={11} color="#b45309" /> Basic Profile Created (35%) • Complete Remaining Fields
+                      </>
+                    )}
+                  </span>
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                  {liveCompletion >= 90 ? '✓ 100% Fully Onboarded' : `+${100 - liveCompletion}% needed for full onboarding`}
+                </div>
+              </div>
+
+              {/* Progress bar */}
+              <div style={{ width: '100%', height: '8px', backgroundColor: '#e2e8f0', borderRadius: '999px', overflow: 'hidden' }}>
+                <div
+                  style={{
+                    width: `${liveCompletion}%`,
+                    height: '100%',
+                    backgroundColor: liveCompletion >= 90 ? '#10b981' : '#f59e0b',
+                    borderRadius: '999px',
+                    transition: 'width 0.3s ease',
+                  }}
+                />
+              </div>
             </div>
 
             {/* Optional Existing Pool Picker when adding new */}
             {!editingStaff && (
-              <div style={{ backgroundColor: '#f8fafc', padding: '0.75rem 1rem', borderRadius: '10px', border: '1px solid var(--border-color)', marginBottom: '1rem' }}>
+              <div style={{ backgroundColor: '#f8fafc', padding: '0.75rem 1rem', borderRadius: '10px', border: '1px solid var(--border-color)', marginBottom: '1.25rem' }}>
                 <label className="form-label" style={{ fontWeight: 600, fontSize: '0.8125rem', marginBottom: '0.35rem', display: 'flex', justifyContent: 'space-between' }}>
                   <span>Fast Option: Populate from Existing Hospital Staff Pool</span>
                   <span style={{ fontSize: '0.6875rem', color: '#0284c7' }}>Optional</span>
@@ -1436,7 +1849,7 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
                   <option value="">— Or Fill New Staff Details Below —</option>
                   {hospitalStaffPool.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.fullName} ({s.employeeCode} • {s.designation})
+                      {s.fullName} ({s.employeeCode} • {s.designation} • {s.profileCompletion || 35}%)
                     </option>
                   ))}
                 </select>
@@ -1444,54 +1857,89 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
             )}
 
             {/* Modal Internal Section Tabs */}
-            <div style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem', marginBottom: '1.25rem' }}>
+            <div style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem', marginBottom: '1.25rem', overflowX: 'auto' }}>
               <button
                 type="button"
                 onClick={() => setModalTab('personal')}
                 style={{
-                  padding: '0.4rem 0.875rem',
-                  borderRadius: '6px',
+                  padding: '0.45rem 1rem',
+                  borderRadius: '8px',
                   border: 'none',
                   fontSize: '0.8125rem',
                   fontWeight: 700,
                   cursor: 'pointer',
                   backgroundColor: modalTab === 'personal' ? '#0284c7' : '#f1f5f9',
                   color: modalTab === 'personal' ? '#ffffff' : '#64748b',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
                 }}
               >
-                1. Personal & Contact
+                <span>1. Personal & Contact</span>
+                {fullName && phone && email && <Check size={13} />}
               </button>
+
               <button
                 type="button"
                 onClick={() => setModalTab('professional')}
                 style={{
-                  padding: '0.4rem 0.875rem',
-                  borderRadius: '6px',
+                  padding: '0.45rem 1rem',
+                  borderRadius: '8px',
                   border: 'none',
                   fontSize: '0.8125rem',
                   fontWeight: 700,
                   cursor: 'pointer',
                   backgroundColor: modalTab === 'professional' ? '#0284c7' : '#f1f5f9',
                   color: modalTab === 'professional' ? '#ffffff' : '#64748b',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
                 }}
               >
-                2. Role & Credentials
+                <span>2. Role & Credentials</span>
+                {qualification && <Check size={13} />}
               </button>
+
               <button
                 type="button"
                 onClick={() => setModalTab('stationing')}
                 style={{
-                  padding: '0.4rem 0.875rem',
-                  borderRadius: '6px',
+                  padding: '0.45rem 1rem',
+                  borderRadius: '8px',
                   border: 'none',
                   fontSize: '0.8125rem',
                   fontWeight: 700,
                   cursor: 'pointer',
                   backgroundColor: modalTab === 'stationing' ? '#0284c7' : '#f1f5f9',
                   color: modalTab === 'stationing' ? '#ffffff' : '#64748b',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
                 }}
               >
-                3. Deployment & Stationing
+                <span>3. Clinical & Stationing</span>
+                {assignedRoomId && <Check size={13} />}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setModalTab('documents')}
+                style={{
+                  padding: '0.45rem 1rem',
+                  borderRadius: '8px',
+                  border: 'none',
+                  fontSize: '0.8125rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  backgroundColor: modalTab === 'documents' ? '#0284c7' : '#f1f5f9',
+                  color: modalTab === 'documents' ? '#ffffff' : '#64748b',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                }}
+              >
+                <span>4. Compliance & Documents</span>
+                {(aadhaarNumber || medicalRegistrationDocName) && <Check size={13} />}
               </button>
             </div>
 
@@ -1547,7 +1995,7 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
                     </div>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.875rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '0.875rem' }}>
                     <div className="form-group" style={{ margin: 0 }}>
                       <label className="form-label" style={{ fontWeight: 600 }}>
                         Gender
@@ -1565,6 +2013,35 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
 
                     <div className="form-group" style={{ margin: 0 }}>
                       <label className="form-label" style={{ fontWeight: 600 }}>
+                        Date of Birth
+                      </label>
+                      <input
+                        type="date"
+                        className="form-input"
+                        value={dob}
+                        onChange={(e) => setDob(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label" style={{ fontWeight: 600 }}>
+                        Blood Group
+                      </label>
+                      <select
+                        className="form-select"
+                        value={bloodGroup}
+                        onChange={(e) => setBloodGroup(e.target.value)}
+                      >
+                        {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((bg) => (
+                          <option key={bg} value={bg}>
+                            {bg}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label" style={{ fontWeight: 600 }}>
                         Date of Joining
                       </label>
                       <input
@@ -1574,21 +2051,60 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
                         onChange={(e) => setJoiningDate(e.target.value)}
                       />
                     </div>
+                  </div>
 
+                  {/* Address Fields */}
+                  <div
+                    style={{
+                      padding: '1rem',
+                      borderRadius: '10px',
+                      backgroundColor: '#f8fafc',
+                      border: '1px solid var(--border-color)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.75rem',
+                    }}
+                  >
+                    <div style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--secondary)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <MapPin size={14} color="#0284c7" /> Residential & Communication Address
+                    </div>
                     <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label" style={{ fontWeight: 600 }}>
-                        Status
-                      </label>
-                      <select
-                        className="form-select"
-                        value={status}
-                        onChange={(e) => setStatus(e.target.value as any)}
-                      >
-                        <option value="ACTIVE">Active</option>
-                        <option value="ON_LEAVE">On Leave</option>
-                        <option value="SUSPENDED">Suspended</option>
-                        <option value="RESIGNED">Resigned</option>
-                      </select>
+                      <label className="form-label" style={{ fontSize: '0.75rem' }}>Street Address</label>
+                      <input
+                        className="form-input"
+                        value={addressStreet}
+                        onChange={(e) => setAddressStreet(e.target.value)}
+                        placeholder="e.g. 42 Medical Enclave, Sector 12"
+                      />
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
+                      <div className="form-group" style={{ margin: 0 }}>
+                        <label className="form-label" style={{ fontSize: '0.75rem' }}>City</label>
+                        <input
+                          className="form-input"
+                          value={addressCity}
+                          onChange={(e) => setAddressCity(e.target.value)}
+                          placeholder="e.g. New Delhi"
+                        />
+                      </div>
+                      <div className="form-group" style={{ margin: 0 }}>
+                        <label className="form-label" style={{ fontSize: '0.75rem' }}>State</label>
+                        <input
+                          className="form-input"
+                          value={addressState}
+                          onChange={(e) => setAddressState(e.target.value)}
+                          placeholder="e.g. Delhi"
+                        />
+                      </div>
+                      <div className="form-group" style={{ margin: 0 }}>
+                        <label className="form-label" style={{ fontSize: '0.75rem' }}>PIN Code</label>
+                        <input
+                          className="form-input"
+                          value={addressPincode}
+                          onChange={(e) => setAddressPincode(e.target.value)}
+                          placeholder="e.g. 110001"
+                        />
+                      </div>
                     </div>
                   </div>
 
@@ -1621,16 +2137,34 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
                     </div>
                   </div>
 
-                  <div className="form-group" style={{ margin: 0 }}>
-                    <label className="form-label" style={{ fontWeight: 600 }}>
-                      Emergency Contact (Name & Phone)
-                    </label>
-                    <input
-                      className="form-input"
-                      value={emergencyContact}
-                      onChange={(e) => setEmergencyContact(e.target.value)}
-                      placeholder="e.g. Spouse: +91 98111 22222"
-                    />
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '0.875rem' }}>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label" style={{ fontWeight: 600 }}>
+                        Emergency Contact (Name & Relationship)
+                      </label>
+                      <input
+                        className="form-input"
+                        value={emergencyContact}
+                        onChange={(e) => setEmergencyContact(e.target.value)}
+                        placeholder="e.g. Priya Roy (Spouse: +91 98111 22222)"
+                      />
+                    </div>
+
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label" style={{ fontWeight: 600 }}>
+                        Duty Status
+                      </label>
+                      <select
+                        className="form-select"
+                        value={status}
+                        onChange={(e) => setStatus(e.target.value as any)}
+                      >
+                        <option value="ACTIVE">Active</option>
+                        <option value="ON_LEAVE">On Leave</option>
+                        <option value="SUSPENDED">Suspended</option>
+                        <option value="RESIGNED">Resigned</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1721,21 +2255,38 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
                     </div>
                   </div>
 
-                  <div className="form-group" style={{ margin: 0 }}>
-                    <label className="form-label" style={{ fontWeight: 600 }}>
-                      Medical / Nursing Registration No. (License)
-                    </label>
-                    <input
-                      className="form-input"
-                      value={licenseNumber}
-                      onChange={(e) => setLicenseNumber(e.target.value)}
-                      placeholder="e.g. MCI-2019-48192 or SNC-88192"
-                    />
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '0.875rem' }}>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label" style={{ fontWeight: 600 }}>
+                        Medical / Nursing Registration No. (License)
+                      </label>
+                      <input
+                        className="form-input"
+                        value={licenseNumber}
+                        onChange={(e) => setLicenseNumber(e.target.value)}
+                        placeholder="e.g. MCI-2019-48192 or SNC-88192"
+                      />
+                    </div>
+
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label" style={{ fontWeight: 600 }}>
+                        Years of Experience
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={60}
+                        className="form-input"
+                        value={experienceYears}
+                        onChange={(e) => setExperienceYears(parseInt(e.target.value) || 0)}
+                        placeholder="e.g. 8"
+                      />
+                    </div>
                   </div>
                 </div>
               )}
 
-              {/* SECTION 3: DEPLOYMENT & STATIONING */}
+              {/* SECTION 3: CLINICAL & STATIONING */}
               {modalTab === 'stationing' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.875rem' }}>
@@ -1772,7 +2323,7 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
 
                   <div className="form-group" style={{ margin: 0 }}>
                     <label className="form-label" style={{ fontWeight: 600 }}>
-                      Station to Room / Chamber / Desk
+                      Station to Room / Chamber / Desk <span style={{ color: '#0284c7' }}>(Department Level)</span>
                     </label>
                     <select
                       className="form-select"
@@ -1787,6 +2338,68 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
                       ))}
                     </select>
                   </div>
+
+                  {/* Doctor Consultation Parameters (If Doctor) */}
+                  {assignedRole === 'doctor' && (
+                    <div
+                      style={{
+                        padding: '1rem',
+                        borderRadius: '10px',
+                        backgroundColor: '#eff6ff',
+                        border: '1px solid #bfdbfe',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.75rem',
+                      }}
+                    >
+                      <div style={{ fontSize: '0.8125rem', fontWeight: 800, color: '#1e40af', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <Stethoscope size={16} color="#0284c7" /> OPD Consultation & Token Booking Parameters
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
+                        <div className="form-group" style={{ margin: 0 }}>
+                          <label className="form-label" style={{ fontSize: '0.75rem', fontWeight: 600 }}>
+                            Consultation Fee ($/₹)
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            className="form-input"
+                            value={consultationFee}
+                            onChange={(e) => setConsultationFee(parseInt(e.target.value) || 0)}
+                            placeholder="75"
+                          />
+                        </div>
+                        <div className="form-group" style={{ margin: 0 }}>
+                          <label className="form-label" style={{ fontSize: '0.75rem', fontWeight: 600 }}>
+                            Slot Duration (Mins)
+                          </label>
+                          <input
+                            type="number"
+                            min={5}
+                            max={60}
+                            className="form-input"
+                            value={consultationDurationMinutes}
+                            onChange={(e) => setConsultationDurationMinutes(parseInt(e.target.value) || 15)}
+                            placeholder="15"
+                          />
+                        </div>
+                        <div className="form-group" style={{ margin: 0 }}>
+                          <label className="form-label" style={{ fontSize: '0.75rem', fontWeight: 600 }}>
+                            Daily Capacity (Patients)
+                          </label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={200}
+                            className="form-input"
+                            value={dailyPatientCapacity}
+                            onChange={(e) => setDailyPatientCapacity(parseInt(e.target.value) || 30)}
+                            placeholder="30"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* HOD Checkbox */}
                   <div
@@ -1814,24 +2427,115 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
                 </div>
               )}
 
+              {/* SECTION 4: DOCUMENTS & COMPLIANCE */}
+              {modalTab === 'documents' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.875rem' }}>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label" style={{ fontWeight: 600 }}>
+                        National ID / Aadhaar Number
+                      </label>
+                      <input
+                        className="form-input"
+                        value={aadhaarNumber}
+                        onChange={(e) => setAadhaarNumber(e.target.value)}
+                        placeholder="XXXX-XXXX-XXXX"
+                      />
+                    </div>
+
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label" style={{ fontWeight: 600 }}>
+                        Tax ID / PAN Number
+                      </label>
+                      <input
+                        className="form-input"
+                        value={panNumber}
+                        onChange={(e) => setPanNumber(e.target.value.toUpperCase())}
+                        placeholder="ABCDE1234F"
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.875rem' }}>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label" style={{ fontWeight: 600 }}>
+                        Medical Council / Board Registration Certificate
+                      </label>
+                      <input
+                        className="form-input"
+                        value={medicalRegistrationDocName}
+                        onChange={(e) => setMedicalRegistrationDocName(e.target.value)}
+                        placeholder="e.g. MCI_Registration_Certificate.pdf"
+                      />
+                    </div>
+
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label" style={{ fontWeight: 600 }}>
+                        Degree / Specialization Certificate
+                      </label>
+                      <input
+                        className="form-input"
+                        value={educationDocName}
+                        onChange={(e) => setEducationDocName(e.target.value)}
+                        placeholder="e.g. MD_Cardiology_Degree.pdf"
+                      />
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      padding: '0.875rem 1rem',
+                      borderRadius: '8px',
+                      backgroundColor: '#f8fafc',
+                      border: '1px solid var(--border-color)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.625rem',
+                      fontSize: '0.8125rem',
+                      color: 'var(--text-muted)',
+                    }}
+                  >
+                    <ShieldCheck size={18} color="#059669" />
+                    <span>Uploaded credentials will be marked as verified upon submission and archived in the central compliance repository.</span>
+                  </div>
+                </div>
+              )}
+
               {/* Modal Footer Actions */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginTop: '0.5rem',
+                  borderTop: '1px solid var(--border-color)',
+                  paddingTop: '1rem',
+                }}
+              >
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                   {modalTab !== 'personal' && (
                     <button
                       type="button"
                       className="btn btn-secondary"
-                      onClick={() => setModalTab(modalTab === 'stationing' ? 'professional' : 'personal')}
+                      onClick={() => {
+                        if (modalTab === 'documents') setModalTab('stationing');
+                        else if (modalTab === 'stationing') setModalTab('professional');
+                        else setModalTab('personal');
+                      }}
                       style={{ fontSize: '0.8125rem' }}
                     >
                       ← Back
                     </button>
                   )}
-                  {modalTab !== 'stationing' && (
+                  {modalTab !== 'documents' && (
                     <button
                       type="button"
                       className="btn btn-secondary"
-                      onClick={() => setModalTab(modalTab === 'personal' ? 'professional' : 'stationing')}
+                      onClick={() => {
+                        if (modalTab === 'personal') setModalTab('professional');
+                        else if (modalTab === 'professional') setModalTab('stationing');
+                        else setModalTab('documents');
+                      }}
                       style={{ fontSize: '0.8125rem', color: '#0284c7' }}
                     >
                       Next Step →
@@ -1843,8 +2547,21 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
                   <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>
                     Cancel
                   </button>
-                  <button type="submit" className="btn btn-primary" style={{ padding: '0.625rem 1.5rem', fontWeight: 800 }}>
-                    {editingStaff ? 'Update Staff Member' : 'Save & Register Staff'}
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    style={{
+                      padding: '0.625rem 1.5rem',
+                      fontWeight: 800,
+                      backgroundColor: liveCompletion >= 90 ? '#059669' : 'var(--primary)',
+                      borderColor: liveCompletion >= 90 ? '#059669' : 'var(--primary)',
+                    }}
+                  >
+                    {editingStaff
+                      ? liveCompletion >= 90
+                        ? '✓ Save & Complete Profile (100%)'
+                        : 'Save Changes'
+                      : 'Save & Register Staff'}
                   </button>
                 </div>
               </div>
