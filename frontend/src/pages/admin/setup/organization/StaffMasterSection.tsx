@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Users,
   UserCheck,
@@ -34,6 +34,7 @@ import {
   HeartPulse,
   CheckCircle,
   Shield,
+  ChevronDown,
 } from 'lucide-react';
 import {
   StaffMember,
@@ -134,6 +135,93 @@ export const StaffMasterSection: React.FC = () => {
     profileCompletion: 35,
     onboardingStage: 'BASIC_CREATED',
   });
+
+  // Department Searchable Combobox & Dropdown State
+  const [deptSearchQuery, setDeptSearchQuery] = useState('');
+  const [isDeptDropdownOpen, setIsDeptDropdownOpen] = useState(false);
+  const [highlightedDeptIndex, setHighlightedDeptIndex] = useState(0);
+  const deptDropdownRef = useRef<HTMLDivElement>(null);
+  const deptSearchInputRef = useRef<HTMLInputElement>(null);
+  const fullNameInputRef = useRef<HTMLInputElement>(null);
+
+  // Filtered departments for combobox
+  const filteredDepts = useMemo(() => {
+    if (!deptSearchQuery.trim()) return departments;
+    const q = deptSearchQuery.toLowerCase().trim();
+    return departments.filter(
+      (d) => d.name.toLowerCase().includes(q) || d.code.toLowerCase().includes(q)
+    );
+  }, [departments, deptSearchQuery]);
+
+  // Click-outside listener for Department Combobox
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (deptDropdownRef.current && !deptDropdownRef.current.contains(e.target as Node)) {
+        setIsDeptDropdownOpen(false);
+      }
+    };
+    window.addEventListener('mousedown', handleClickOutside);
+    return () => window.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Autofocus Full Name input when modal opens in quick mode
+  useEffect(() => {
+    if (isModalOpen && onboardingMode === 'quick') {
+      const timer = setTimeout(() => {
+        fullNameInputRef.current?.focus();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isModalOpen, onboardingMode]);
+
+  // Global Keyboard Shortcuts (Ctrl+Enter to save, Escape to dismiss)
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (!isModalOpen) return;
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        const form = document.getElementById('staff-registration-form') as HTMLFormElement;
+        if (form) {
+          form.requestSubmit();
+        }
+      } else if (e.key === 'Escape' && !isDeptDropdownOpen) {
+        setIsModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [isModalOpen, isDeptDropdownOpen]);
+
+  // Department combobox keyboard navigation
+  const handleDeptKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!isDeptDropdownOpen) {
+      if (e.key === 'ArrowDown' || e.key === 'Enter') {
+        setIsDeptDropdownOpen(true);
+        e.preventDefault();
+        return;
+      }
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedDeptIndex((prev) => (prev + 1) % (filteredDepts.length || 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedDeptIndex((prev) => (prev - 1 + (filteredDepts.length || 1)) % (filteredDepts.length || 1));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (filteredDepts[highlightedDeptIndex]) {
+        toggleDepartmentSelection(filteredDepts[highlightedDeptIndex].id);
+      }
+    } else if (e.key === 'Backspace' && !deptSearchQuery && (formData.departmentIds?.length || 0) > 0) {
+      const currentIds = formData.departmentIds || [];
+      const lastId = currentIds[currentIds.length - 1];
+      toggleDepartmentSelection(lastId);
+    } else if (e.key === 'Escape') {
+      setIsDeptDropdownOpen(false);
+      e.stopPropagation();
+    }
+  };
 
   // Campus Physical Infrastructure for Workstation allocation
   const campusBuildings = useMemo<BuildingNode[]>(() => getCampusBuildings(), [isModalOpen]);
@@ -283,6 +371,8 @@ export const StaffMasterSection: React.FC = () => {
     const prefix =
       role === 'doctor'
         ? 'DOC'
+        : role === 'assistant'
+        ? 'AST'
         : role === 'nurse'
         ? 'NUR'
         : role === 'technician'
@@ -446,8 +536,11 @@ export const StaffMasterSection: React.FC = () => {
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.fullName || !formData.employeeCode) {
-      alert('Please fill out all required fields.');
+    if (!formData.fullName?.trim() || !formData.employeeCode?.trim()) {
+      if (onboardingMode === 'complete') {
+        setOnboardingMode('quick');
+      }
+      alert('Please fill out the essential workforce identity (Full Name and Employee Code) under Quick Onboarding first.');
       return;
     }
 
@@ -914,6 +1007,7 @@ export const StaffMasterSection: React.FC = () => {
         >
           <option value="all">All Roles & Cadres</option>
           <option value="doctor">Doctors / Specialists</option>
+          <option value="assistant">Doctor Assistants</option>
           <option value="nurse">Registered Nurses</option>
           <option value="technician">Technicians</option>
           <option value="paramedic">Paramedics</option>
@@ -1254,14 +1348,14 @@ export const StaffMasterSection: React.FC = () => {
 
       {/* Add / Edit Staff Modal - Large Enterprise Dual-Mode Window */}
       {isModalOpen && (
-        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+        <div className="modal-overlay" style={{ zIndex: 1100, padding: '0.75rem' }}>
           <div
             className="modal-content"
             style={{
               width: '96vw',
-              maxWidth: '1240px',
-              height: '92vh',
-              maxHeight: '92vh',
+              maxWidth: '1600px',
+              height: '95vh',
+              maxHeight: '95vh',
               display: 'flex',
               flexDirection: 'column',
               padding: 0,
@@ -1336,7 +1430,7 @@ export const StaffMasterSection: React.FC = () => {
                       display: 'flex',
                       alignItems: 'center',
                       gap: '0.5rem',
-                      padding: '0.55rem 1.15rem',
+                      padding: '0.55rem 1.25rem',
                       borderRadius: '8px',
                       fontSize: '0.8125rem',
                       fontWeight: 800,
@@ -1349,7 +1443,7 @@ export const StaffMasterSection: React.FC = () => {
                     }}
                   >
                     <Sparkles size={16} color={onboardingMode === 'quick' ? '#0284c7' : '#64748b'} />
-                    Option 1: Quick Onboarding (Recommended)
+                    Quick Onboarding
                   </button>
 
                   <button
@@ -1359,7 +1453,7 @@ export const StaffMasterSection: React.FC = () => {
                       display: 'flex',
                       alignItems: 'center',
                       gap: '0.5rem',
-                      padding: '0.55rem 1.15rem',
+                      padding: '0.55rem 1.25rem',
                       borderRadius: '8px',
                       fontSize: '0.8125rem',
                       fontWeight: 800,
@@ -1372,7 +1466,7 @@ export const StaffMasterSection: React.FC = () => {
                     }}
                   >
                     <FileText size={16} color={onboardingMode === 'complete' ? '#0f766e' : '#64748b'} />
-                    Option 2: Complete Onboarding (100% Profile)
+                    Complete Onboarding
                   </button>
                 </div>
 
@@ -1421,11 +1515,11 @@ export const StaffMasterSection: React.FC = () => {
                 <span>
                   {onboardingMode === 'quick' ? (
                     <>
-                      <strong>Quick Mode:</strong> Hospital Admin enters only required fields. Staff activates immediately with <strong>35% completion</strong>. Department Admin can finalize clinical details later.
+                      <strong>Quick Onboarding:</strong> Hospital Admin enters only required fields. Staff activates immediately with <strong>35% completion</strong>. Department Admin can finalize clinical details later.
                     </>
                   ) : (
                     <>
-                      <strong>Complete Mode:</strong> Enter full personal background, credentials, doctor clinical fee/duration, and verification documents for <strong>100% full profile completion</strong>.
+                      <strong>Complete Onboarding:</strong> Enter full personal background, credentials, doctor clinical fee/duration, and verification documents for <strong>100% full profile completion</strong>.
                     </>
                   )}
                 </span>
@@ -1437,7 +1531,9 @@ export const StaffMasterSection: React.FC = () => {
 
             {/* Scrollable Form Content */}
             <form
+              id="staff-registration-form"
               onSubmit={handleFormSubmit}
+              noValidate
               style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, margin: 0 }}
             >
               <div
@@ -1453,42 +1549,44 @@ export const StaffMasterSection: React.FC = () => {
                 {/* ======================================================== */}
                 {/* SECTION 1: ESSENTIAL WORKFORCE IDENTITY (Quick Mode)     */}
                 {/* ======================================================== */}
-                <div
-                  className="card"
-                  style={{
-                    padding: '1.25rem',
-                    borderRadius: '12px',
-                    border: '1px solid #cbd5e1',
-                    backgroundColor: '#ffffff',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '1.15rem',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.625rem' }}>
-                    <Users size={18} color="#0284c7" />
-                    <h5 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 800, color: 'var(--secondary)' }}>
-                      1. Essential Workforce Identity (Hospital Admin Required)
-                    </h5>
-                    <span className="badge badge-info" style={{ fontSize: '0.6875rem' }}>
-                      Required for All Staff
-                    </span>
-                  </div>
-
-                  {/* Row 1: Full Name, Role, Employee Code */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1.2fr 1fr', gap: '1rem' }}>
-                    <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label" style={{ fontWeight: 600, fontSize: '0.8125rem' }}>
-                        Full Name <span style={{ color: '#ef4444' }}>*</span>
-                      </label>
-                      <input
-                        className="form-input"
-                        value={formData.fullName || ''}
-                        onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                        placeholder="e.g. Dr. Arthur Pendelton"
-                        required
-                      />
+                {onboardingMode === 'quick' && (
+                  <div
+                    className="card"
+                    style={{
+                      padding: '1.25rem',
+                      borderRadius: '12px',
+                      border: '1px solid #cbd5e1',
+                      backgroundColor: '#ffffff',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '1.15rem',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.625rem' }}>
+                      <Users size={18} color="#0284c7" />
+                      <h5 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 800, color: 'var(--secondary)' }}>
+                        1. Essential Workforce Identity (Hospital Admin Required)
+                      </h5>
+                      <span className="badge badge-info" style={{ fontSize: '0.6875rem' }}>
+                        Required for All Staff
+                      </span>
                     </div>
+
+                    {/* Row 1: Full Name, Role, Employee Code */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1.2fr 1fr', gap: '1rem' }}>
+                      <div className="form-group" style={{ margin: 0 }}>
+                        <label className="form-label" style={{ fontWeight: 600, fontSize: '0.8125rem' }}>
+                          Full Name <span style={{ color: '#ef4444' }}>*</span>
+                        </label>
+                        <input
+                          ref={fullNameInputRef}
+                          className="form-input"
+                          value={formData.fullName || ''}
+                          onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                          placeholder="e.g. Dr. Arthur Pendelton"
+                          required
+                        />
+                      </div>
 
                     <div className="form-group" style={{ margin: 0 }}>
                       <label className="form-label" style={{ fontWeight: 600, fontSize: '0.8125rem' }}>
@@ -1507,6 +1605,7 @@ export const StaffMasterSection: React.FC = () => {
                         }}
                       >
                         <option value="doctor">Doctor / Specialist</option>
+                        <option value="assistant">Doctor Assistant / Clinical Assistant</option>
                         <option value="nurse">Registered Nurse</option>
                         <option value="technician">Technician</option>
                         <option value="paramedic">Paramedic</option>
@@ -1602,57 +1701,302 @@ export const StaffMasterSection: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Multi-Department Assignment */}
+                  {/* Multi-Department Assignment Searchable Combobox */}
                   <div className="form-group" style={{ margin: 0 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.5rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.45rem' }}>
                       <label className="form-label" style={{ margin: 0, fontWeight: 600, fontSize: '0.8125rem' }}>
                         Assigned Department(s) <span style={{ color: '#ef4444' }}>*</span>
                       </label>
                       <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        Select one or more departments this staff member is stationed at
+                        Search & select departments (type name to filter instantly)
                       </span>
                     </div>
 
-                    <div
-                      style={{
-                        display: 'flex',
-                        flexWrap: 'wrap',
-                        gap: '0.5rem',
-                        padding: '0.75rem',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: '10px',
-                        backgroundColor: '#f8fafc',
-                        maxHeight: '140px',
-                        overflowY: 'auto',
-                      }}
-                    >
-                      {departments.map((dept) => {
-                        const isSelected = formData.departmentIds?.includes(dept.id);
-                        return (
+                    {/* Selected Department Tags */}
+                    {(formData.departmentIds?.length || 0) > 0 && (
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexWrap: 'wrap',
+                          gap: '0.4rem',
+                          marginBottom: '0.5rem',
+                          alignItems: 'center',
+                        }}
+                      >
+                        {formData.departmentIds?.map((deptId) => {
+                          const dept = departments.find((d) => d.id === deptId);
+                          return (
+                            <span
+                              key={deptId}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.35rem',
+                                padding: '0.3rem 0.6rem',
+                                borderRadius: '6px',
+                                fontSize: '0.7813rem',
+                                fontWeight: 600,
+                                backgroundColor: '#eff6ff',
+                                border: '1px solid #bfdbfe',
+                                color: '#0284c7',
+                              }}
+                            >
+                              <span>{dept?.name || deptId}</span>
+                              {dept?.code && (
+                                <span
+                                  style={{
+                                    fontSize: '0.6875rem',
+                                    padding: '0.05rem 0.3rem',
+                                    borderRadius: '3px',
+                                    backgroundColor: '#dbeafe',
+                                    color: '#1d4ed8',
+                                    fontFamily: 'monospace',
+                                  }}
+                                >
+                                  {dept.code}
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => toggleDepartmentSelection(deptId)}
+                                style={{
+                                  border: 'none',
+                                  background: 'transparent',
+                                  cursor: 'pointer',
+                                  color: '#0284c7',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  padding: 0,
+                                  marginLeft: '0.15rem',
+                                }}
+                                title="Remove department"
+                              >
+                                <X size={13} />
+                              </button>
+                            </span>
+                          );
+                        })}
+                        {(formData.departmentIds?.length || 0) > 1 && (
                           <button
-                            key={dept.id}
                             type="button"
-                            onClick={() => toggleDepartmentSelection(dept.id)}
+                            onClick={() => setFormData({ ...formData, departmentIds: [], departmentNames: [] })}
                             style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '0.35rem',
-                              padding: '0.35rem 0.65rem',
-                              borderRadius: '6px',
-                              fontSize: '0.7813rem',
-                              fontWeight: 600,
+                              border: 'none',
+                              background: 'transparent',
+                              fontSize: '0.7188rem',
+                              color: '#64748b',
                               cursor: 'pointer',
-                              transition: 'all 0.15s ease',
-                              border: isSelected ? '1px solid #0284c7' : '1px solid #cbd5e1',
-                              backgroundColor: isSelected ? '#eff6ff' : '#ffffff',
-                              color: isSelected ? '#0284c7' : '#475569',
+                              textDecoration: 'underline',
+                              padding: '0.2rem 0.4rem',
                             }}
                           >
-                            {isSelected ? <Check size={13} strokeWidth={2.5} /> : <Plus size={13} />}
-                            <span>{dept.name}</span>
+                            Clear all
                           </button>
-                        );
-                      })}
+                        )}
+                      </div>
+                    )}
+
+                    {/* Combobox Search Input & Dropdown Menu Container */}
+                    <div ref={deptDropdownRef} style={{ position: 'relative' }}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          border: isDeptDropdownOpen ? '1px solid #0284c7' : '1px solid var(--border-color)',
+                          boxShadow: isDeptDropdownOpen ? '0 0 0 3px rgba(2, 132, 199, 0.15)' : 'none',
+                          borderRadius: '8px',
+                          backgroundColor: '#ffffff',
+                          padding: '0 0.75rem',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        <Search size={16} color="#94a3b8" style={{ flexShrink: 0, marginRight: '0.5rem' }} />
+                        <input
+                          ref={deptSearchInputRef}
+                          type="text"
+                          value={deptSearchQuery}
+                          onChange={(e) => {
+                            setDeptSearchQuery(e.target.value);
+                            setIsDeptDropdownOpen(true);
+                            setHighlightedDeptIndex(0);
+                          }}
+                          onFocus={() => setIsDeptDropdownOpen(true)}
+                          onKeyDown={handleDeptKeyDown}
+                          placeholder={
+                            (formData.departmentIds?.length || 0) === 0
+                              ? 'Search or select department (e.g. Cardiology, Emergency, Radiology)...'
+                              : 'Type department name or code to filter...'
+                          }
+                          style={{
+                            border: 'none',
+                            outline: 'none',
+                            width: '100%',
+                            padding: '0.55rem 0',
+                            fontSize: '0.8125rem',
+                            backgroundColor: 'transparent',
+                          }}
+                        />
+                        {deptSearchQuery && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDeptSearchQuery('');
+                              deptSearchInputRef.current?.focus();
+                            }}
+                            style={{
+                              border: 'none',
+                              background: 'transparent',
+                              color: '#94a3b8',
+                              cursor: 'pointer',
+                              padding: '0.2rem',
+                              display: 'flex',
+                              alignItems: 'center',
+                            }}
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setIsDeptDropdownOpen((prev) => !prev)}
+                          style={{
+                            border: 'none',
+                            background: 'transparent',
+                            color: '#64748b',
+                            cursor: 'pointer',
+                            padding: '0.25rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            marginLeft: '0.25rem',
+                          }}
+                          title="Toggle departments menu"
+                        >
+                          <ChevronDown
+                            size={16}
+                            style={{
+                              transform: isDeptDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                              transition: 'transform 0.2s ease',
+                            }}
+                          />
+                        </button>
+                      </div>
+
+                      {/* Dropdown Menu */}
+                      {isDeptDropdownOpen && (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: 'calc(100% + 4px)',
+                            left: 0,
+                            right: 0,
+                            backgroundColor: '#ffffff',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: '10px',
+                            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15)',
+                            maxHeight: '220px',
+                            overflowY: 'auto',
+                            zIndex: 50,
+                          }}
+                        >
+                          <div
+                            style={{
+                              padding: '0.45rem 0.75rem',
+                              backgroundColor: '#f8fafc',
+                              borderBottom: '1px solid #f1f5f9',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              fontSize: '0.6875rem',
+                              fontWeight: 700,
+                              color: '#64748b',
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.04em',
+                            }}
+                          >
+                            <span>Available Departments ({filteredDepts.length})</span>
+                            <span style={{ fontWeight: 500, textTransform: 'none' }}>Use ↑ ↓ + Enter to select</span>
+                          </div>
+
+                          {filteredDepts.length === 0 ? (
+                            <div style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8125rem' }}>
+                              No departments found matching "{deptSearchQuery}"
+                            </div>
+                          ) : (
+                            filteredDepts.map((dept, idx) => {
+                              const isSelected = formData.departmentIds?.includes(dept.id);
+                              const isHighlighted = idx === highlightedDeptIndex;
+                              return (
+                                <div
+                                  key={dept.id}
+                                  onClick={() => {
+                                    toggleDepartmentSelection(dept.id);
+                                    deptSearchInputRef.current?.focus();
+                                  }}
+                                  onMouseEnter={() => setHighlightedDeptIndex(idx)}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    padding: '0.55rem 0.85rem',
+                                    cursor: 'pointer',
+                                    backgroundColor: isHighlighted
+                                      ? isSelected
+                                        ? '#e0f2fe'
+                                        : '#f1f5f9'
+                                      : isSelected
+                                      ? '#eff6ff'
+                                      : 'transparent',
+                                    borderBottom: '1px solid #f8fafc',
+                                    transition: 'background-color 0.1s ease',
+                                  }}
+                                >
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                                    <div
+                                      style={{
+                                        width: '18px',
+                                        height: '18px',
+                                        borderRadius: '4px',
+                                        border: isSelected ? '1.5px solid #0284c7' : '1.5px solid #cbd5e1',
+                                        backgroundColor: isSelected ? '#0284c7' : '#ffffff',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        color: '#ffffff',
+                                        flexShrink: 0,
+                                      }}
+                                    >
+                                      {isSelected && <Check size={12} strokeWidth={3} />}
+                                    </div>
+                                    <span
+                                      style={{
+                                        fontSize: '0.8125rem',
+                                        fontWeight: isSelected ? 700 : 500,
+                                        color: isSelected ? '#0369a1' : 'var(--text-main)',
+                                      }}
+                                    >
+                                      {dept.name}
+                                    </span>
+                                  </div>
+
+                                  <span
+                                    style={{
+                                      fontSize: '0.6875rem',
+                                      padding: '0.15rem 0.45rem',
+                                      borderRadius: '4px',
+                                      backgroundColor: isSelected ? '#bae6fd' : '#f1f5f9',
+                                      color: isSelected ? '#0369a1' : '#64748b',
+                                      fontFamily: 'monospace',
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    {dept.code}
+                                  </span>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -1957,12 +2301,96 @@ export const StaffMasterSection: React.FC = () => {
                     </div>
                   )}
                 </div>
+                )}
 
                 {/* ======================================================== */}
-                {/* ADVANCED SECTIONS (Only visible in Complete Mode)        */}
+                {/* COMPLETE ONBOARDING (Directly starts with Section 2)    */}
                 {/* ======================================================== */}
                 {onboardingMode === 'complete' && (
                   <>
+                    {/* Compact Staff Identity Summary Bar */}
+                    <div
+                      style={{
+                        backgroundColor: '#f0fdf4',
+                        border: '1px solid #bbf7d0',
+                        borderRadius: '12px',
+                        padding: '0.875rem 1.25rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        flexWrap: 'wrap',
+                        gap: '0.75rem',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <div
+                          style={{
+                            width: '38px',
+                            height: '38px',
+                            borderRadius: '8px',
+                            backgroundColor: '#dcfce7',
+                            color: '#15803d',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: 800,
+                            flexShrink: 0,
+                          }}
+                        >
+                          <UserCheck size={20} />
+                        </div>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            <strong style={{ fontSize: '0.9375rem', color: '#166534' }}>
+                              {formData.fullName?.trim() || 'New Staff Candidate'}
+                            </strong>
+                            <span className="badge badge-info" style={{ fontSize: '0.6875rem', textTransform: 'capitalize' }}>
+                              {formData.role || 'Staff'}
+                            </span>
+                            {formData.employeeCode && (
+                              <span style={{ fontSize: '0.75rem', color: '#64748b', fontFamily: 'monospace' }}>
+                                [{formData.employeeCode}]
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: '0.7813rem', color: '#15803d', marginTop: '0.15rem' }}>
+                            {formData.departmentNames && formData.departmentNames.length > 0 ? (
+                              <span>
+                                <strong>Departments:</strong> {formData.departmentNames.join(', ')}
+                                {formData.designation ? ` • ${formData.designation}` : ''}
+                              </span>
+                            ) : (
+                              <span style={{ color: '#b45309' }}>
+                                ⚠️ No departments assigned yet. Basic workforce identity is configured in Quick Onboarding.
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setOnboardingMode('quick')}
+                        style={{
+                          padding: '0.45rem 0.85rem',
+                          borderRadius: '8px',
+                          border: '1px solid #86efac',
+                          backgroundColor: '#ffffff',
+                          color: '#166534',
+                          fontSize: '0.7813rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.4rem',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        <Users size={14} />
+                        <span>Edit Essential Identity in Quick Mode</span>
+                      </button>
+                    </div>
+
                     {/* SECTION 2: PERSONAL INFORMATION */}
                     <div
                       className="card"
@@ -2505,7 +2933,7 @@ export const StaffMasterSection: React.FC = () => {
                   </span>
                 </div>
 
-                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                   <button
                     type="button"
                     className="btn btn-secondary"
@@ -2517,9 +2945,37 @@ export const StaffMasterSection: React.FC = () => {
                   <button
                     type="submit"
                     className="btn btn-primary"
-                    style={{ padding: '0.625rem 1.75rem', fontWeight: 800 }}
+                    style={{
+                      padding: '0.625rem 1.75rem',
+                      fontWeight: 800,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.625rem',
+                    }}
                   >
-                    {editingStaffId ? 'Save Staff Changes' : 'Register Staff Member'}
+                    <span>
+                      {editingStaffId
+                        ? 'Save Staff Changes'
+                        : onboardingMode === 'quick'
+                        ? 'Save Quick Profile (35%)'
+                        : 'Complete Staff Onboarding (100%)'}
+                    </span>
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        fontSize: '0.6875rem',
+                        padding: '0.15rem 0.45rem',
+                        borderRadius: '4px',
+                        backgroundColor: 'rgba(255, 255, 255, 0.22)',
+                        color: '#ffffff',
+                        fontWeight: 700,
+                        letterSpacing: '0.03em',
+                      }}
+                      title="Press Ctrl+Enter to save immediately"
+                    >
+                      Ctrl + ↵
+                    </span>
                   </button>
                 </div>
               </div>

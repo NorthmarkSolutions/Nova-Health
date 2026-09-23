@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   UserPlus,
   Calendar,
@@ -56,12 +57,33 @@ import { CounterBillingModal } from './components/CounterBillingModal';
 import { LobbyTvDisplayModal } from './components/LobbyTvDisplayModal';
 import { PatientDossierModal } from './components/PatientDossierModal';
 import { DaycareBedModal } from './components/DaycareBedModal';
+import { BedOccupancyDossierModal } from './components/BedOccupancyDossierModal';
 import { OpenCounterModal } from './components/OpenCounterModal';
 import { DailyClosingReportModal } from './components/DailyClosingReportModal';
+import { FlatCampusBed } from '../../services/patientJourneyService';
+import { BuildingNode, WardNode, BedNode } from '../admin/setup/organization/CampusInfrastructureSection';
+import { HeartPulse, Layers, Activity } from 'lucide-react';
 
 export const ReceptionDashboard: React.FC = () => {
-  // Navigation Tabs
-  const [activeTab, setActiveTab] = useState<'queue' | 'appointments' | 'billing' | 'search' | 'daycare'>('queue');
+  // Navigation Tabs & Deep-link URL Query Param Synchronization
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlTab = searchParams.get('tab') as 'queue' | 'appointments' | 'billing' | 'search' | 'daycare' | null;
+  const validTabs: Array<'queue' | 'appointments' | 'billing' | 'search' | 'daycare'> = ['queue', 'appointments', 'billing', 'search', 'daycare'];
+
+  const [activeTab, setActiveTabState] = useState<'queue' | 'appointments' | 'billing' | 'search' | 'daycare'>(
+    urlTab && validTabs.includes(urlTab) ? urlTab : 'queue'
+  );
+
+  const setActiveTab = (tab: 'queue' | 'appointments' | 'billing' | 'search' | 'daycare') => {
+    setActiveTabState(tab);
+    setSearchParams({ tab });
+  };
+
+  useEffect(() => {
+    if (urlTab && validTabs.includes(urlTab) && urlTab !== activeTab) {
+      setActiveTabState(urlTab);
+    }
+  }, [urlTab]);
   const [queueFilter, setQueueFilter] = useState<'ALL' | 'WAITING' | 'TRIAGED' | 'IN_CONSULTATION' | 'COMPLETED' | 'URGENT'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -72,6 +94,9 @@ export const ReceptionDashboard: React.FC = () => {
   const [showBillingModal, setShowBillingModal] = useState(false);
   const [showDossierModal, setShowDossierModal] = useState(false);
   const [showDaycareModal, setShowDaycareModal] = useState(false);
+  const [showOccupancyDossierModal, setShowOccupancyDossierModal] = useState(false);
+  const [selectedOccupiedBedForDossier, setSelectedOccupiedBedForDossier] = useState<FlatCampusBed | null>(null);
+  const [preselectedBedForAllocation, setPreselectedBedForAllocation] = useState<FlatCampusBed | null>(null);
   const [showTokenPrintModal, setShowTokenPrintModal] = useState(false);
   const [showOpenCounterModal, setShowOpenCounterModal] = useState(false);
   const [showClosingReportModal, setShowClosingReportModal] = useState(false);
@@ -100,6 +125,155 @@ export const ReceptionDashboard: React.FC = () => {
 
   // Department Consultation Chambers & Rooms
   const [rooms, setRooms] = useState<DepartmentRoom[]>(() => getDepartmentRooms('1'));
+
+  // Live Campus Infrastructure & Bed Management State (Directly synced with Admin Infrastructure)
+  const [campusBuildings, setCampusBuildings] = useState<BuildingNode[]>(() =>
+    patientJourneyService.getCampusBuildings()
+  );
+  const [flatBeds, setFlatBeds] = useState<FlatCampusBed[]>(() =>
+    patientJourneyService.getFlatBedsList()
+  );
+
+  // Filters for Tab 5: Bed Management
+  const [bedScope, setBedScope] = useState<'daycare' | 'all_hospital'>('daycare');
+  const [selectedBuildingIdFilter, setSelectedBuildingIdFilter] = useState<string>('all');
+  const [selectedWardIdFilter, setSelectedWardIdFilter] = useState<string>('all');
+  const [bedStatusFilter, setBedStatusFilter] = useState<'ALL' | 'AVAILABLE' | 'OCCUPIED' | 'CLEANING' | 'RESERVED'>('ALL');
+  const [bedSearchQuery, setBedSearchQuery] = useState('');
+
+  // Live Auto-Sync Listener for Campus Infrastructure Updates (from Admin or cross-tab)
+  useEffect(() => {
+    const syncCampusState = () => {
+      const blds = patientJourneyService.getCampusBuildings();
+      const beds = patientJourneyService.getFlatBedsList();
+      setCampusBuildings(blds);
+      setFlatBeds(beds);
+    };
+
+    window.addEventListener('nh_campus_updated', syncCampusState);
+    window.addEventListener('storage', syncCampusState);
+    window.addEventListener('focus', syncCampusState);
+
+    return () => {
+      window.removeEventListener('nh_campus_updated', syncCampusState);
+      window.removeEventListener('storage', syncCampusState);
+      window.removeEventListener('focus', syncCampusState);
+    };
+  }, []);
+
+  // Filtered Wards & Beds
+  const filteredCampusWards = useMemo(() => {
+    const wardsWithBeds: Array<{
+      buildingId: string;
+      buildingName: string;
+      floorId: string;
+      floorName: string;
+      ward: WardNode;
+      isDaycare: boolean;
+      roomsMap: Record<string, { roomName: string; beds: FlatCampusBed[] }>;
+    }> = [];
+
+    campusBuildings.forEach((bld) => {
+      if (selectedBuildingIdFilter !== 'all' && bld.id !== selectedBuildingIdFilter) return;
+
+      (bld.floors || []).forEach((fl) => {
+        (fl.wards || []).forEach((w) => {
+          const isDaycareWard =
+            w.id === 'wd-opd-a' ||
+            w.id === 'wd-opd-b' ||
+            w.name.toLowerCase().includes('daycare') ||
+            w.name.toLowerCase().includes('observation');
+
+          if (bedScope === 'daycare' && !isDaycareWard) return;
+          if (selectedWardIdFilter !== 'all' && w.id !== selectedWardIdFilter) return;
+
+          const wardFlatBeds = flatBeds.filter(
+            (fb) => fb.buildingId === bld.id && fb.floorId === fl.id && fb.wardId === w.id
+          );
+
+          const matchingBeds = wardFlatBeds.filter((fb) => {
+            if (bedStatusFilter === 'AVAILABLE' && (fb.bed.status !== 'AVAILABLE' || fb.bed.cleanlinessStatus === 'NEEDS_CLEANING')) return false;
+            if (bedStatusFilter === 'OCCUPIED' && fb.bed.status !== 'OCCUPIED') return false;
+            if (
+              bedStatusFilter === 'CLEANING' &&
+              fb.bed.cleanlinessStatus !== 'NEEDS_CLEANING' &&
+              fb.bed.cleanlinessStatus !== 'CLEANING_IN_PROGRESS'
+            )
+              return false;
+            if (bedStatusFilter === 'RESERVED' && fb.bed.status !== 'RESERVED') return false;
+
+            if (bedSearchQuery.trim()) {
+              const q = bedSearchQuery.toLowerCase();
+              const ptName = fb.bed.inpatientDetails?.patientName?.toLowerCase() || '';
+              const uhid = fb.bed.inpatientDetails?.uhid?.toLowerCase() || '';
+              const docName = fb.bed.inpatientDetails?.primaryDoctor?.name?.toLowerCase() || '';
+              const diag = fb.bed.inpatientDetails?.diagnosis?.toLowerCase() || '';
+              const bedNum = fb.bed.bedNumber.toLowerCase();
+              const rmNum = fb.roomNumber.toLowerCase();
+
+              return (
+                ptName.includes(q) ||
+                uhid.includes(q) ||
+                docName.includes(q) ||
+                diag.includes(q) ||
+                bedNum.includes(q) ||
+                rmNum.includes(q)
+              );
+            }
+            return true;
+          });
+
+          const roomsMap: Record<string, { roomName: string; beds: FlatCampusBed[] }> = {};
+          matchingBeds.forEach((fb) => {
+            const rmKey = fb.roomNumber || 'General Bay';
+            if (!roomsMap[rmKey]) {
+              roomsMap[rmKey] = { roomName: rmKey, beds: [] };
+            }
+            roomsMap[rmKey].beds.push(fb);
+          });
+
+          if (matchingBeds.length > 0 || !bedSearchQuery.trim()) {
+            wardsWithBeds.push({
+              buildingId: bld.id,
+              buildingName: bld.name,
+              floorId: fl.id,
+              floorName: fl.floorNumber,
+              ward: w,
+              isDaycare: isDaycareWard,
+              roomsMap,
+            });
+          }
+        });
+      });
+    });
+
+    return wardsWithBeds;
+  }, [campusBuildings, flatBeds, selectedBuildingIdFilter, selectedWardIdFilter, bedStatusFilter, bedSearchQuery, bedScope]);
+
+  // Overall Statistics for Bed Command Center
+  const bedStats = useMemo(() => {
+    const relevantBeds = flatBeds.filter((b) => {
+      const isDaycare =
+        b.wardId === 'wd-opd-a' ||
+        b.wardId === 'wd-opd-b' ||
+        b.wardName.toLowerCase().includes('daycare') ||
+        b.wardName.toLowerCase().includes('observation');
+      return bedScope === 'daycare' ? isDaycare : true;
+    });
+
+    const total = relevantBeds.length;
+    const occupied = relevantBeds.filter((b) => b.bed.status === 'OCCUPIED').length;
+    const available = relevantBeds.filter(
+      (b) => b.bed.status === 'AVAILABLE' && b.bed.cleanlinessStatus !== 'NEEDS_CLEANING'
+    ).length;
+    const cleaning = relevantBeds.filter(
+      (b) => b.bed.cleanlinessStatus === 'NEEDS_CLEANING' || b.bed.cleanlinessStatus === 'CLEANING_IN_PROGRESS'
+    ).length;
+    const reserved = relevantBeds.filter((b) => b.bed.status === 'RESERVED').length;
+    const occupancyRate = total > 0 ? Math.round((occupied / total) * 100) : 0;
+
+    return { total, occupied, available, cleaning, reserved, occupancyRate };
+  }, [flatBeds, bedScope]);
 
   const toggleRoomStatus = (roomId: string) => {
     const target = rooms.find((r) => r.id === roomId);
@@ -381,7 +555,7 @@ export const ReceptionDashboard: React.FC = () => {
     return queue.filter((q) => {
       // Category filter
       if (queueFilter === 'WAITING' && q.status !== 'WAITING') return false;
-      if (queueFilter === 'TRIAGED' && q.status !== 'TRIAGED') return false;
+      if (queueFilter === 'TRIAGED' && q.status !== 'TRIAGED' && q.status !== 'READY_FOR_DOCTOR' && q.status !== 'IN_TRIAGE') return false;
       if (queueFilter === 'IN_CONSULTATION' && q.status !== 'IN_CONSULTATION') return false;
       if (queueFilter === 'COMPLETED' && q.status !== 'COMPLETED') return false;
       if (queueFilter === 'URGENT' && q.priority !== 'URGENT') return false;
@@ -418,7 +592,7 @@ export const ReceptionDashboard: React.FC = () => {
   // Shift Financial KPIs
   const totalVisitsToday = queue.length;
   const waitingInLobby = queue.filter((q) => q.status === 'WAITING').length;
-  const inTriage = queue.filter((q) => q.status === 'TRIAGED').length;
+  const inTriage = queue.filter((q) => q.status === 'TRIAGED' || q.status === 'READY_FOR_DOCTOR' || q.status === 'IN_TRIAGE').length;
   const inConsultation = queue.filter((q) => q.status === 'IN_CONSULTATION').length;
   const completedToday = queue.filter((q) => q.status === 'COMPLETED').length;
   const totalCollectionsToday = invoices.reduce((acc, inv) => acc + (inv.paid || 0), 0);
@@ -460,35 +634,55 @@ export const ReceptionDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Welcome / Station Gradient Hero Banner (Aligned with Department Workspace standard) */}
+      {/* Welcome / Station Gradient Hero Banner (Executive Command Center Aesthetic) */}
       <div
         style={{
-          background: 'linear-gradient(135deg, #1e3a8a 0%, #0369a1 100%)',
-          borderRadius: '16px',
+          background: 'linear-gradient(135deg, #0b1528 0%, #1e3a8a 45%, #0284c7 100%)',
+          borderRadius: '18px',
           padding: '1.75rem 2rem',
           color: '#ffffff',
-          boxShadow: '0 10px 25px -5px rgba(2, 132, 199, 0.3)',
+          boxShadow: '0 12px 30px -6px rgba(2, 132, 199, 0.35), 0 4px 12px rgba(11, 21, 40, 0.15)',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           flexWrap: 'wrap',
-          gap: '1.25rem',
+          gap: '1.5rem',
+          position: 'relative',
+          overflow: 'hidden',
         }}
       >
-        <div style={{ maxWidth: '640px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+        {/* Subtle Decorative Ambient Background Rings */}
+        <div
+          style={{
+            position: 'absolute',
+            right: '-40px',
+            top: '-50px',
+            width: '260px',
+            height: '260px',
+            borderRadius: '50%',
+            background: 'radial-gradient(circle, rgba(56, 189, 248, 0.15) 0%, rgba(2, 132, 199, 0) 70%)',
+            pointerEvents: 'none',
+          }}
+        />
+
+        <div style={{ maxWidth: '660px', position: 'relative', zIndex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', marginBottom: '0.625rem', flexWrap: 'wrap' }}>
             <span
               style={{
                 fontSize: '0.75rem',
                 fontWeight: 800,
                 letterSpacing: '0.06em',
                 textTransform: 'uppercase',
-                backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                padding: '0.2rem 0.6rem',
+                backgroundColor: 'rgba(255, 255, 255, 0.16)',
+                padding: '0.25rem 0.65rem',
                 borderRadius: '6px',
+                border: '1px solid rgba(255, 255, 255, 0.25)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
               }}
             >
-              Reception Desk 01
+              <Shield size={12} color="#7dd3fc" /> Reception Desk 01
             </span>
             <span
               style={{
@@ -500,7 +694,7 @@ export const ReceptionDashboard: React.FC = () => {
                 gap: '0.35rem',
               }}
             >
-              <Building2 size={13} /> OPD - Outpatient Department
+              <Building2 size={13} /> OPD Ambulatory Care
             </span>
             <span
               style={{
@@ -512,16 +706,17 @@ export const ReceptionDashboard: React.FC = () => {
                 gap: '0.35rem',
               }}
             >
-              <Clock size={13} /> {counterSession.shift}
+              <Clock size={13} /> {counterSession.shift} (08:00 - 16:00)
             </span>
             <span
               style={{
                 fontSize: '0.75rem',
                 fontWeight: 800,
-                color: counterSession.status === 'OPEN' ? '#bbf7d0' : '#fecaca',
-                backgroundColor: counterSession.status === 'OPEN' ? 'rgba(34, 197, 94, 0.25)' : 'rgba(239, 68, 68, 0.25)',
-                padding: '0.2rem 0.6rem',
-                borderRadius: '6px',
+                color: counterSession.status === 'OPEN' ? '#a7f3d0' : '#fecaca',
+                backgroundColor: counterSession.status === 'OPEN' ? 'rgba(16, 185, 129, 0.22)' : 'rgba(239, 68, 68, 0.22)',
+                border: counterSession.status === 'OPEN' ? '1px solid rgba(52, 211, 153, 0.35)' : '1px solid rgba(248, 113, 113, 0.35)',
+                padding: '0.2rem 0.65rem',
+                borderRadius: '999px',
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '0.35rem',
@@ -532,47 +727,75 @@ export const ReceptionDashboard: React.FC = () => {
                   width: '7px',
                   height: '7px',
                   borderRadius: '50%',
-                  backgroundColor: counterSession.status === 'OPEN' ? '#4ade80' : '#ef4444',
+                  backgroundColor: counterSession.status === 'OPEN' ? '#34d399' : '#ef4444',
+                  boxShadow: counterSession.status === 'OPEN' ? '0 0 6px #34d399' : 'none',
                 }}
               />
               {counterSession.status === 'OPEN' ? 'Active / Online' : 'Counter Closed'}
             </span>
           </div>
-          <h2 style={{ fontSize: '1.65rem', fontWeight: 900, margin: '0 0 0.35rem 0', letterSpacing: '-0.02em' }}>
-            OPD Reception & Calling Desk
+
+          <h2 style={{ fontSize: '1.75rem', fontWeight: 900, margin: '0 0 0.4rem 0', letterSpacing: '-0.025em' }}>
+            OPD Reception & Calling Cockpit
           </h2>
-          <p style={{ margin: 0, fontSize: '0.875rem', color: '#e0f2fe', lineHeight: 1.5 }}>
-            Logged-in: <strong>{counterSession.receptionistName}</strong> (Front Desk Staff) • Patient onboarding, slot booking, live queue dispatch & cashier settlement.
+          <p style={{ margin: 0, fontSize: '0.875rem', color: '#e0f2fe', lineHeight: 1.55, display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', backgroundColor: 'rgba(255,255,255,0.14)', padding: '0.15rem 0.5rem', borderRadius: '6px', fontSize: '0.8125rem', fontWeight: 700 }}>
+              👤 {counterSession.receptionistName}
+            </span>
+            <span>Station Lead • Patient intake, doctor queue dispatch, counter settlement & bed admissions.</span>
           </p>
         </div>
 
-        {/* Primary Header Actions - Maximum 4 actions */}
-        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+        {/* Primary Header Actions */}
+        <div style={{ display: 'flex', gap: '0.625rem', flexWrap: 'wrap', position: 'relative', zIndex: 1 }}>
           <button
             type="button"
-            className="btn btn-secondary"
+            className="btn"
             onClick={() => setShowClosingReportModal(true)}
             style={{
-              backgroundColor: '#ffffff',
-              color: '#0369a1',
-              borderColor: '#ffffff',
+              backgroundColor: 'rgba(255, 255, 255, 0.12)',
+              color: '#ffffff',
+              border: '1px solid rgba(255, 255, 255, 0.25)',
               fontWeight: 700,
               display: 'flex',
               alignItems: 'center',
               gap: '0.5rem',
-              padding: '0.625rem 1.15rem',
+              padding: '0.625rem 1rem',
               borderRadius: '10px',
+              backdropFilter: 'blur(8px)',
+              transition: 'var(--transition)',
             }}
           >
-            <FileSpreadsheet size={16} /> Daily Closing Report
+            <FileSpreadsheet size={16} /> Daily Closing
+          </button>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => setShowTvDisplayModal(true)}
+            style={{
+              backgroundColor: 'rgba(255, 255, 255, 0.12)',
+              color: '#ffffff',
+              border: '1px solid rgba(255, 255, 255, 0.25)',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              padding: '0.625rem 1rem',
+              borderRadius: '10px',
+              backdropFilter: 'blur(8px)',
+              transition: 'var(--transition)',
+            }}
+            title="Open Waiting Lobby TV Display in new window or modal"
+          >
+            <Tv size={16} /> Lobby TV
           </button>
           <button
             type="button"
             className="btn btn-primary"
             onClick={handleCallNext}
             style={{
-              backgroundColor: '#f59e0b',
-              borderColor: '#d97706',
+              background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+              border: '1px solid #b45309',
               color: '#ffffff',
               fontWeight: 800,
               display: 'flex',
@@ -580,7 +803,8 @@ export const ReceptionDashboard: React.FC = () => {
               gap: '0.5rem',
               padding: '0.625rem 1.15rem',
               borderRadius: '10px',
-              boxShadow: '0 2px 8px rgba(245, 158, 11, 0.3)',
+              boxShadow: '0 4px 14px rgba(217, 119, 6, 0.35)',
+              transition: 'var(--transition)',
             }}
           >
             <Volume2 size={16} /> Call Next Patient
@@ -591,7 +815,7 @@ export const ReceptionDashboard: React.FC = () => {
             onClick={() => setShowQuickWalkInModal(true)}
             style={{
               backgroundColor: '#0284c7',
-              borderColor: '#38bdf8',
+              border: '1px solid #38bdf8',
               color: '#ffffff',
               fontWeight: 800,
               display: 'flex',
@@ -599,39 +823,43 @@ export const ReceptionDashboard: React.FC = () => {
               gap: '0.5rem',
               padding: '0.625rem 1.15rem',
               borderRadius: '10px',
+              boxShadow: '0 4px 14px rgba(2, 132, 199, 0.3)',
+              transition: 'var(--transition)',
             }}
           >
             <Zap size={16} /> Walk-In Token
           </button>
           <button
             type="button"
-            className="btn btn-primary"
+            className="btn"
             onClick={() => setShowRegWizardModal(true)}
             style={{
-              backgroundColor: '#0f172a',
-              borderColor: '#1e293b',
-              color: '#ffffff',
+              backgroundColor: '#ffffff',
+              border: '1px solid #ffffff',
+              color: '#0f172a',
               fontWeight: 800,
               display: 'flex',
               alignItems: 'center',
               gap: '0.5rem',
               padding: '0.625rem 1.25rem',
               borderRadius: '10px',
+              boxShadow: '0 4px 14px rgba(0, 0, 0, 0.12)',
+              transition: 'var(--transition)',
             }}
           >
-            <Plus size={16} /> Register Patient
+            <Plus size={16} color="#0284c7" /> Register Patient
           </button>
         </div>
       </div>
 
-      {/* Daily Counter Shift Session Bar (Subtle, matching Step 1 Setup card from Department Workspace) */}
+      {/* Daily Counter Shift Session Bar (Elevated Glassmorphic Telemetry Strip) */}
       <div
         style={{
           backgroundColor: '#ffffff',
           borderRadius: '14px',
-          border: '1px solid var(--border-color)',
+          border: '1.5px solid var(--border-color)',
           padding: '0.875rem 1.5rem',
-          boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
+          boxShadow: '0 4px 16px -2px rgba(0,0,0,0.03)',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -639,35 +867,37 @@ export const ReceptionDashboard: React.FC = () => {
           gap: '1rem',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
           <div
             style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '8px',
+              width: '42px',
+              height: '42px',
+              borderRadius: '10px',
               backgroundColor: counterSession.status === 'OPEN' ? '#dcfce7' : '#fee2e2',
               color: counterSession.status === 'OPEN' ? '#15803d' : '#991b1b',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              boxShadow: counterSession.status === 'OPEN' ? '0 2px 6px rgba(22, 163, 74, 0.15)' : 'none',
             }}
           >
-            <Shield size={18} />
+            <Shield size={20} />
           </div>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ fontSize: '0.8125rem', fontWeight: 800, color: 'var(--text-main)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.875rem', fontWeight: 800, color: 'var(--secondary)' }}>
                 {counterSession.counterNumber} • {counterSession.shift}
               </span>
               <span
                 style={{
                   fontSize: '0.6875rem',
                   fontWeight: 800,
-                  backgroundColor: counterSession.status === 'OPEN' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                  backgroundColor: counterSession.status === 'OPEN' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
                   color: counterSession.status === 'OPEN' ? '#059669' : '#dc2626',
-                  padding: '0.15rem 0.45rem',
-                  borderRadius: '4px',
+                  padding: '0.2rem 0.5rem',
+                  borderRadius: '6px',
                   textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
                 }}
               >
                 {counterSession.status}
@@ -678,19 +908,29 @@ export const ReceptionDashboard: React.FC = () => {
                   fontWeight: 700,
                   color: '#0369a1',
                   backgroundColor: '#e0f2fe',
-                  padding: '0.15rem 0.45rem',
-                  borderRadius: '4px',
+                  border: '1px solid #bae6fd',
+                  padding: '0.2rem 0.55rem',
+                  borderRadius: '6px',
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: '0.25rem',
+                  gap: '0.3rem',
                 }}
               >
-                <Sparkles size={11} /> Tariffs Synced
+                <Sparkles size={12} /> Tariffs Synced Live
               </span>
             </div>
-            <p style={{ fontSize: '0.7813rem', color: 'var(--text-muted)', margin: '0.15rem 0 0 0' }}>
-              Opening Cash Float: <strong>${counterSession.openingFloat}.00</strong> • Total Collections: <strong>${totalCollectionsToday}.00</strong> • Live Drawer Balance: <strong style={{ color: '#15803d' }}>${counterSession.openingFloat + totalCollectionsToday}.00</strong>
-            </p>
+            <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: '0.25rem 0 0 0', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <span>Opening Float: <strong style={{ color: 'var(--secondary)' }}>${counterSession.openingFloat}.00</strong></span>
+              <span style={{ color: 'var(--border-color)' }}>•</span>
+              <span>Total Collections: <strong style={{ color: 'var(--secondary)' }}>${totalCollectionsToday}.00</strong></span>
+              <span style={{ color: 'var(--border-color)' }}>•</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                Live In-Drawer Cash:
+                <strong style={{ backgroundColor: '#dcfce7', color: '#15803d', padding: '0.15rem 0.5rem', borderRadius: '6px', fontSize: '0.875rem', fontWeight: 800 }}>
+                  ${counterSession.openingFloat + totalCollectionsToday}.00
+                </strong>
+              </span>
+            </div>
           </div>
         </div>
 
@@ -699,7 +939,7 @@ export const ReceptionDashboard: React.FC = () => {
             type="button"
             className="btn btn-secondary btn-sm"
             onClick={() => setShowOpenCounterModal(true)}
-            style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem' }}
+            style={{ fontSize: '0.75rem', padding: '0.4rem 0.85rem', fontWeight: 700 }}
           >
             {counterSession.status === 'OPEN' ? 'Edit Float' : 'Open Counter'}
           </button>
@@ -707,42 +947,62 @@ export const ReceptionDashboard: React.FC = () => {
             type="button"
             className="btn btn-secondary btn-sm"
             onClick={() => setShowClosingReportModal(true)}
-            style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem', color: '#0284c7', fontWeight: 700 }}
+            style={{ fontSize: '0.75rem', padding: '0.4rem 0.85rem', color: '#0284c7', fontWeight: 700, borderColor: '#bae6fd', backgroundColor: '#f0f9ff' }}
           >
             Shift Handover →
           </button>
         </div>
       </div>
 
-      {/* KPI Summary Cards (4 Cards matching Department Workspace) */}
+      {/* KPI Summary Cards (Elevated Cards matching Department & Admin Standards) */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
-          gap: '1rem',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          gap: '1.25rem',
         }}
       >
         {/* Total Patients Today */}
         <div
           className="card"
           style={{
-            padding: '1.25rem',
-            borderRadius: '12px',
-            border: '1px solid #bfdbfe',
-            backgroundColor: '#eff6ff',
+            padding: '1.25rem 1.35rem',
+            borderRadius: '14px',
+            border: '1.5px solid #bfdbfe',
+            backgroundColor: '#ffffff',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.02)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            gap: '0.75rem',
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#1e40af' }}>
-              Total Patients Today
+            <span style={{ fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', color: '#1e40af', letterSpacing: '0.04em' }}>
+              Total Visits Today
             </span>
-            <Users size={18} color="#2563eb" />
+            <div
+              style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '10px',
+                backgroundColor: '#eff6ff',
+                color: '#2563eb',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Users size={20} />
+            </div>
           </div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#1d4ed8', marginTop: '0.5rem' }}>
-            {totalVisitsToday} <span style={{ fontSize: '0.875rem', color: '#60a5fa', fontWeight: 600 }}>Visits</span>
-          </div>
-          <div style={{ fontSize: '0.75rem', color: '#2563eb', marginTop: '0.35rem' }}>
-            All active & checked-in tokens
+          <div>
+            <div style={{ fontSize: '1.85rem', fontWeight: 900, color: '#1e3a8a', lineHeight: 1 }}>
+              {totalVisitsToday} <span style={{ fontSize: '0.875rem', color: '#60a5fa', fontWeight: 700 }}>Visits</span>
+            </div>
+            <div style={{ fontSize: '0.75rem', color: '#3b82f6', marginTop: '0.35rem', fontWeight: 600 }}>
+              All active & checked-in tokens
+            </div>
           </div>
         </div>
 
@@ -750,23 +1010,43 @@ export const ReceptionDashboard: React.FC = () => {
         <div
           className="card"
           style={{
-            padding: '1.25rem',
-            borderRadius: '12px',
-            border: '1px solid #fed7aa',
-            backgroundColor: '#fff7ed',
+            padding: '1.25rem 1.35rem',
+            borderRadius: '14px',
+            border: '1.5px solid #fed7aa',
+            backgroundColor: '#ffffff',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.02)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            gap: '0.75rem',
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#9a3412' }}>
-              Waiting Queue
+            <span style={{ fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', color: '#9a3412', letterSpacing: '0.04em' }}>
+              Waiting in Lobby
             </span>
-            <Clock size={18} color="#ea580c" />
+            <div
+              style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '10px',
+                backgroundColor: '#fff7ed',
+                color: '#ea580c',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Clock size={20} />
+            </div>
           </div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#c2410c', marginTop: '0.5rem' }}>
-            {waitingInLobby} <span style={{ fontSize: '0.875rem', color: '#f97316', fontWeight: 600 }}>In Lobby</span>
-          </div>
-          <div style={{ fontSize: '0.75rem', color: '#c2410c', marginTop: '0.35rem' }}>
-            Patients awaiting consultation
+          <div>
+            <div style={{ fontSize: '1.85rem', fontWeight: 900, color: '#c2410c', lineHeight: 1 }}>
+              {waitingInLobby} <span style={{ fontSize: '0.875rem', color: '#fb923c', fontWeight: 700 }}>In Lobby</span>
+            </div>
+            <div style={{ fontSize: '0.75rem', color: '#c2410c', marginTop: '0.35rem', fontWeight: 600 }}>
+              Awaiting doctor chamber calling
+            </div>
           </div>
         </div>
 
@@ -774,23 +1054,43 @@ export const ReceptionDashboard: React.FC = () => {
         <div
           className="card"
           style={{
-            padding: '1.25rem',
-            borderRadius: '12px',
-            border: '1px solid #bbf7d0',
-            backgroundColor: '#f0fdf4',
+            padding: '1.25rem 1.35rem',
+            borderRadius: '14px',
+            border: '1.5px solid #bbf7d0',
+            backgroundColor: '#ffffff',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.02)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            gap: '0.75rem',
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#166534' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', color: '#166534', letterSpacing: '0.04em' }}>
               In Consultation
             </span>
-            <CheckCircle size={18} color="#16a34a" />
+            <div
+              style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '10px',
+                backgroundColor: '#f0fdf4',
+                color: '#16a34a',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <CheckCircle2 size={20} />
+            </div>
           </div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#15803d', marginTop: '0.5rem' }}>
-            {inConsultation} <span style={{ fontSize: '0.875rem', color: '#4ade80', fontWeight: 600 }}>Active</span>
-          </div>
-          <div style={{ fontSize: '0.75rem', color: '#15803d', marginTop: '0.35rem' }}>
-            Currently inside doctor chambers
+          <div>
+            <div style={{ fontSize: '1.85rem', fontWeight: 900, color: '#15803d', lineHeight: 1 }}>
+              {inConsultation} <span style={{ fontSize: '0.875rem', color: '#4ade80', fontWeight: 700 }}>Active</span>
+            </div>
+            <div style={{ fontSize: '0.75rem', color: '#15803d', marginTop: '0.35rem', fontWeight: 600 }}>
+              Currently inside doctor chambers
+            </div>
           </div>
         </div>
 
@@ -798,72 +1098,107 @@ export const ReceptionDashboard: React.FC = () => {
         <div
           className="card"
           style={{
-            padding: '1.25rem',
-            borderRadius: '12px',
-            border: '1px solid #99f6e4',
-            backgroundColor: '#f0fdfa',
+            padding: '1.25rem 1.35rem',
+            borderRadius: '14px',
+            border: '1.5px solid #99f6e4',
+            backgroundColor: '#ffffff',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.02)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            gap: '0.75rem',
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#115e59' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', color: '#115e59', letterSpacing: '0.04em' }}>
               Counter Revenue
             </span>
-            <DollarSign size={18} color="#0d9488" />
+            <div
+              style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '10px',
+                backgroundColor: '#f0fdfa',
+                color: '#0d9488',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <DollarSign size={20} />
+            </div>
           </div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#0f766e', marginTop: '0.5rem' }}>
-            ${totalCollectionsToday}.00 <span style={{ fontSize: '0.875rem', color: '#2dd4bf', fontWeight: 600 }}>USD</span>
-          </div>
-          <div style={{ fontSize: '0.75rem', color: '#0f766e', marginTop: '0.35rem' }}>
-            Consultation & desk collections
+          <div>
+            <div style={{ fontSize: '1.85rem', fontWeight: 900, color: '#0f766e', lineHeight: 1 }}>
+              ${totalCollectionsToday}.00 <span style={{ fontSize: '0.875rem', color: '#2dd4bf', fontWeight: 700 }}>USD</span>
+            </div>
+            <div style={{ fontSize: '0.75rem', color: '#0f766e', marginTop: '0.35rem', fontWeight: 600 }}>
+              Consultation & desk collections
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Main Workstation Subtabs */}
-      <div style={{ display: 'flex', gap: '0.5rem', borderBottom: '2px solid var(--border-color)', paddingBottom: '0.25rem', flexWrap: 'wrap' }}>
+      {/* Main Workstation Segmented Subtabs Bar */}
+      <div
+        style={{
+          display: 'flex',
+          gap: '0.375rem',
+          backgroundColor: '#f1f5f9',
+          padding: '0.375rem',
+          borderRadius: '12px',
+          border: '1px solid #e2e8f0',
+          overflowX: 'auto',
+        }}
+      >
         {[
           { id: 'queue', label: '1. 🎫 Live Token Queue & Calling Desk', count: queue.length },
-          { id: 'appointments', label: '2. 📅 Doctor Availability & Slot Booking' },
+          { id: 'appointments', label: '2. 📅 Doctor Availability & Slot Booking', count: `${doctorsRoster.length} Doctors` },
           { id: 'billing', label: '3. 💳 Counter Billing & Receipts', count: invoices.length },
           { id: 'search', label: '4. 👥 Patient Master Directory & Dossier', count: patients.length },
-          { id: 'daycare', label: '5. 🛏️ Daycare & Observation Beds' },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setActiveTab(tab.id as any)}
-            style={{
-              padding: '0.6rem 1.1rem',
-              borderRadius: '8px 8px 0 0',
-              fontWeight: 800,
-              fontSize: '0.8438rem',
-              border: 'none',
-              cursor: 'pointer',
-              backgroundColor: activeTab === tab.id ? '#0284c7' : '#f1f5f9',
-              color: activeTab === tab.id ? '#ffffff' : 'var(--text-muted)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            <span>{tab.label}</span>
-            {tab.count !== undefined && (
-              <span
-                style={{
-                  fontSize: '0.6875rem',
-                  backgroundColor: activeTab === tab.id ? '#ffffff' : '#e2e8f0',
-                  color: activeTab === tab.id ? '#0284c7' : 'var(--secondary)',
-                  padding: '0.1rem 0.45rem',
-                  borderRadius: '999px',
-                  fontWeight: 900,
-                }}
-              >
-                {tab.count}
-              </span>
-            )}
-          </button>
-        ))}
+          { id: 'daycare', label: '5. 🛏️ Hospital Bed Roster & Observation Care', count: `${bedStats.occupied}/${bedStats.total} Beds` },
+        ].map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id as any)}
+              style={{
+                padding: '0.625rem 1.15rem',
+                borderRadius: '9px',
+                fontWeight: 800,
+                fontSize: '0.8125rem',
+                border: 'none',
+                cursor: 'pointer',
+                backgroundColor: isActive ? '#ffffff' : 'transparent',
+                color: isActive ? '#0284c7' : '#64748b',
+                boxShadow: isActive ? '0 2px 8px rgba(0, 0, 0, 0.08)' : 'none',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                whiteSpace: 'nowrap',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <span>{tab.label}</span>
+              {tab.count !== undefined && (
+                <span
+                  style={{
+                    fontSize: '0.6875rem',
+                    backgroundColor: isActive ? '#e0f2fe' : '#e2e8f0',
+                    color: isActive ? '#0284c7' : '#475569',
+                    padding: '0.15rem 0.5rem',
+                    borderRadius: '999px',
+                    fontWeight: 900,
+                  }}
+                >
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* ========================================================================= */}
@@ -2049,97 +2384,645 @@ export const ReceptionDashboard: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 5: DAYCARE & OBSERVATION BEDS                                          */}
+      {/* TAB 5: DAYCARE & OBSERVATION BEDS (CONNECTED TO ADMIN CAMPUS)             */}
       {/* ========================================================================= */}
       {activeTab === 'daycare' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          {/* HEADER & TOP CONTROLS */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
             <div>
-              <h3 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 800, color: 'var(--secondary)' }}>
-                OPD Daycare Wards & Observation Beds
-              </h3>
-              <p style={{ margin: '0.2rem 0 0', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-                Department observation beds for short-stay IV therapies, asthma nebulization, and post-procedure recovery
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 900, color: 'var(--secondary)' }}>
+                  Hospital Bed Roster & Observation Care Command
+                </h3>
+                <span
+                  style={{
+                    fontSize: '0.6875rem',
+                    fontWeight: 800,
+                    padding: '0.15rem 0.5rem',
+                    borderRadius: '6px',
+                    backgroundColor: '#dcfce7',
+                    color: '#15803d',
+                    border: '1px solid #bbf7d0',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.25rem',
+                  }}
+                >
+                  <Sparkles size={11} /> ADMIN INFRASTRUCTURE SYNCED
+                </span>
+              </div>
+              <p style={{ margin: '0.25rem 0 0', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                Real-time visibility across all campus buildings, wards, rooms, and beds. Inspect active occupants, clinical diagnoses, vitals, and allocate beds.
               </p>
             </div>
 
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => setShowDaycareModal(true)}
-              style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontWeight: 800 }}
-            >
-              <BedDouble size={16} /> Allocate Daycare Bed
-            </button>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
-            {tariffMaster.wardTariffs.map((ward) => (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+              {/* Scope Switcher */}
               <div
-                key={ward.wardId}
-                className="card"
                 style={{
-                  padding: '1.25rem',
-                  borderRadius: '14px',
-                  border: '1.5px solid var(--border-color)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '0.75rem',
+                  display: 'inline-flex',
+                  backgroundColor: '#f1f5f9',
+                  padding: '0.25rem',
+                  borderRadius: '10px',
+                  border: '1.5px solid #e2e8f0',
+                  gap: '0.25rem',
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{ padding: '0.35rem', borderRadius: '6px', backgroundColor: '#dcfce7', color: '#15803d', display: 'flex' }}>
-                      <BedDouble size={18} />
-                    </span>
-                    <strong style={{ fontSize: '1rem', color: 'var(--secondary)' }}>{ward.wardName}</strong>
-                  </div>
-                  <span className="badge badge-success" style={{ fontSize: '0.6875rem' }}>
-                    {ward.totalBeds} Beds Configured
-                  </span>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', backgroundColor: 'var(--bg-subtle)', padding: '0.75rem', borderRadius: '8px', fontSize: '0.75rem' }}>
-                  <div>
-                    <span style={{ color: 'var(--text-muted)' }}>Daily Tariff:</span>
-                    <div style={{ fontWeight: 800, fontSize: '0.9375rem', color: '#15803d' }}>${ward.dailyRate}.00 / 24h</div>
-                  </div>
-                  <div>
-                    <span style={{ color: 'var(--text-muted)' }}>Daycare Hourly:</span>
-                    <div style={{ fontWeight: 800, fontSize: '0.9375rem', color: '#0284c7' }}>${ward.hourlyRate || 15}.00 / hr</div>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
-                  {Array.from({ length: Math.min(6, ward.totalBeds) }).map((_, bIdx) => (
-                    <span
-                      key={bIdx}
-                      style={{
-                        padding: '0.25rem 0.5rem',
-                        borderRadius: '6px',
-                        fontSize: '0.6875rem',
-                        fontWeight: 700,
-                        backgroundColor: bIdx === 1 ? '#fee2e2' : '#f0fdf4',
-                        color: bIdx === 1 ? '#991b1b' : '#15803d',
-                        border: `1px solid ${bIdx === 1 ? '#fecaca' : '#bbf7d0'}`,
-                      }}
-                    >
-                      Bed #{bIdx + 1}: {bIdx === 1 ? 'Occupied' : 'Vacant'}
-                    </span>
-                  ))}
-                </div>
-
                 <button
                   type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => setShowDaycareModal(true)}
-                  style={{ marginTop: '0.5rem', width: '100%', fontWeight: 700 }}
+                  onClick={() => setBedScope('daycare')}
+                  style={{
+                    border: 'none',
+                    padding: '0.5rem 0.95rem',
+                    borderRadius: '8px',
+                    fontSize: '0.8125rem',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    backgroundColor: bedScope === 'daycare' ? '#ffffff' : 'transparent',
+                    color: bedScope === 'daycare' ? '#0f172a' : '#64748b',
+                    boxShadow: bedScope === 'daycare' ? '0 2px 6px rgba(0,0,0,0.08)' : 'none',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    whiteSpace: 'nowrap',
+                    transition: 'all 0.15s ease',
+                  }}
                 >
-                  Reserve Observation Bed in {ward.wardName}
+                  🛏️ OPD Daycare & Obs (Ward A & B)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBedScope('all_hospital')}
+                  style={{
+                    border: 'none',
+                    padding: '0.5rem 0.95rem',
+                    borderRadius: '8px',
+                    fontSize: '0.8125rem',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    backgroundColor: bedScope === 'all_hospital' ? '#ffffff' : 'transparent',
+                    color: bedScope === 'all_hospital' ? '#0f172a' : '#64748b',
+                    boxShadow: bedScope === 'all_hospital' ? '0 2px 6px rgba(0,0,0,0.08)' : 'none',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    whiteSpace: 'nowrap',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  🏢 All Hospital Units ({flatBeds.length}+ Beds)
                 </button>
               </div>
-            ))}
+
+              {/* Print Bed Census */}
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => window.print()}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontWeight: 700, fontSize: '0.8125rem', padding: '0.5rem 0.95rem' }}
+              >
+                <Printer size={15} /> Print Census
+              </button>
+
+              {/* Allocate Bed Action */}
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  setPreselectedBedForAllocation(null);
+                  setShowDaycareModal(true);
+                }}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontWeight: 800, fontSize: '0.8125rem', padding: '0.5rem 1.15rem', boxShadow: '0 4px 12px rgba(2, 132, 199, 0.25)' }}
+              >
+                <BedDouble size={16} /> Allocate Bed
+              </button>
+            </div>
           </div>
+
+          {/* KPI METRICS BAR */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '0.875rem' }}>
+            <div className="card" style={{ padding: '1rem 1.15rem', borderRadius: '12px', border: '1.5px solid var(--border-color)', backgroundColor: '#ffffff', boxShadow: '0 2px 6px rgba(0,0,0,0.02)' }}>
+              <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>TOTAL BEDS</span>
+              <div style={{ fontSize: '1.65rem', fontWeight: 900, color: 'var(--secondary)', marginTop: '0.2rem', lineHeight: 1.1 }}>
+                {bedStats.total}
+              </div>
+              <span style={{ fontSize: '0.6875rem', color: '#64748b', marginTop: '0.25rem', display: 'block' }}>Across active units</span>
+            </div>
+
+            <div className="card" style={{ padding: '1rem 1.15rem', borderRadius: '12px', border: '1.5px solid #fecaca', backgroundColor: '#ffffff', boxShadow: '0 2px 6px rgba(0,0,0,0.02)' }}>
+              <span style={{ fontSize: '0.6875rem', color: '#991b1b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>OCCUPIED</span>
+              <div style={{ fontSize: '1.65rem', fontWeight: 900, color: '#dc2626', marginTop: '0.2rem', lineHeight: 1.1 }}>
+                {bedStats.occupied} <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#f87171' }}>({bedStats.occupancyRate}%)</span>
+              </div>
+              <span style={{ fontSize: '0.6875rem', color: '#dc2626', marginTop: '0.25rem', display: 'block' }}>Active under observation</span>
+            </div>
+
+            <div className="card" style={{ padding: '1rem 1.15rem', borderRadius: '12px', border: '1.5px solid #bbf7d0', backgroundColor: '#ffffff', boxShadow: '0 2px 6px rgba(0,0,0,0.02)' }}>
+              <span style={{ fontSize: '0.6875rem', color: '#15803d', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>VACANT & READY</span>
+              <div style={{ fontSize: '1.65rem', fontWeight: 900, color: '#16a34a', marginTop: '0.2rem', lineHeight: 1.1 }}>
+                {bedStats.available}
+              </div>
+              <span style={{ fontSize: '0.6875rem', color: '#16a34a', marginTop: '0.25rem', display: 'block' }}>Ready for intake</span>
+            </div>
+
+            <div className="card" style={{ padding: '1rem 1.15rem', borderRadius: '12px', border: '1.5px solid #fde68a', backgroundColor: '#ffffff', boxShadow: '0 2px 6px rgba(0,0,0,0.02)' }}>
+              <span style={{ fontSize: '0.6875rem', color: '#b45309', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>CLEANING</span>
+              <div style={{ fontSize: '1.65rem', fontWeight: 900, color: '#d97706', marginTop: '0.2rem', lineHeight: 1.1 }}>
+                {bedStats.cleaning}
+              </div>
+              <span style={{ fontSize: '0.6875rem', color: '#d97706', marginTop: '0.25rem', display: 'block' }}>Housekeeping turnover</span>
+            </div>
+
+            <div className="card" style={{ padding: '1rem 1.15rem', borderRadius: '12px', border: '1.5px solid #bfdbfe', backgroundColor: '#ffffff', boxShadow: '0 2px 6px rgba(0,0,0,0.02)' }}>
+              <span style={{ fontSize: '0.6875rem', color: '#1d4ed8', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>RESERVED BAYS</span>
+              <div style={{ fontSize: '1.65rem', fontWeight: 900, color: '#2563eb', marginTop: '0.2rem', lineHeight: 1.1 }}>
+                {bedStats.reserved}
+              </div>
+              <span style={{ fontSize: '0.6875rem', color: '#2563eb', marginTop: '0.25rem', display: 'block' }}>Emergency / Pre-op hold</span>
+            </div>
+          </div>
+
+          {/* FILTERS & LIVE SEARCH BAR */}
+          <div
+            className="card"
+            style={{
+              padding: '1rem 1.25rem',
+              borderRadius: '14px',
+              border: '1.5px solid var(--border-color)',
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '1rem',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: '#ffffff',
+            }}
+          >
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap', flex: 1 }}>
+              {/* Building Dropdown */}
+              {campusBuildings.length > 1 && (
+                <div style={{ minWidth: '180px' }}>
+                  <select
+                    className="form-control"
+                    value={selectedBuildingIdFilter}
+                    onChange={(e) => setSelectedBuildingIdFilter(e.target.value)}
+                    style={{ fontSize: '0.8125rem', fontWeight: 700 }}
+                  >
+                    <option value="all">🏢 All Campus Buildings</option>
+                    {campusBuildings.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Status Pills */}
+              <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                {[
+                  { id: 'ALL', label: `All (${bedStats.total})` },
+                  { id: 'AVAILABLE', label: `🟢 Vacant (${bedStats.available})` },
+                  { id: 'OCCUPIED', label: `🔴 Occupied (${bedStats.occupied})` },
+                  { id: 'CLEANING', label: `🧹 Cleaning (${bedStats.cleaning})` },
+                  { id: 'RESERVED', label: `🟡 Reserved (${bedStats.reserved})` },
+                ].map((st) => (
+                  <button
+                    key={st.id}
+                    type="button"
+                    onClick={() => setBedStatusFilter(st.id as any)}
+                    style={{
+                      border: bedStatusFilter === st.id ? '1.5px solid #0f172a' : '1px solid #cbd5e1',
+                      padding: '0.35rem 0.65rem',
+                      borderRadius: '8px',
+                      fontSize: '0.75rem',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      backgroundColor: bedStatusFilter === st.id ? '#0f172a' : '#ffffff',
+                      color: bedStatusFilter === st.id ? '#ffffff' : '#334155',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    {st.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Live Search */}
+            <div style={{ position: 'relative', minWidth: '280px', flex: '0 1 340px' }}>
+              <Search size={15} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+              <input
+                type="text"
+                className="form-control"
+                placeholder="Search patient, UHID, doctor, bed #..."
+                value={bedSearchQuery}
+                onChange={(e) => setBedSearchQuery(e.target.value)}
+                style={{ paddingLeft: '34px', fontSize: '0.8125rem', fontWeight: 600 }}
+              />
+              {bedSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setBedSearchQuery('')}
+                  style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'transparent', cursor: 'pointer', color: '#94a3b8' }}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* HIERARCHICAL WARDS & ROOMS DISPLAY */}
+          {filteredCampusWards.length === 0 ? (
+            <div
+              className="card"
+              style={{
+                padding: '3rem 2rem',
+                borderRadius: '14px',
+                textAlign: 'center',
+                backgroundColor: '#ffffff',
+                border: '1.5px dashed #cbd5e1',
+              }}
+            >
+              <BedDouble size={36} color="#94a3b8" style={{ margin: '0 auto 0.75rem' }} />
+              <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: 'var(--secondary)' }}>
+                No Beds Matching Current Filters
+              </h4>
+              <p style={{ margin: '0.25rem 0 1rem', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                Try adjusting your search query or switching your status filter to "All".
+              </p>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  setBedStatusFilter('ALL');
+                  setBedSearchQuery('');
+                  setSelectedBuildingIdFilter('all');
+                }}
+              >
+                Reset Bed Filters
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              {filteredCampusWards.map((wItem) => {
+                const ward = wItem.ward;
+                const roomKeys = Object.keys(wItem.roomsMap);
+                const wardBeds = Object.values(wItem.roomsMap).flatMap((r) => r.beds);
+                const wardOccupied = wardBeds.filter((b) => b.bed.status === 'OCCUPIED').length;
+                const wardDailyTariff = ward.beds?.[0]?.dailyTariff || 120;
+                const wardHourlyTariff = Math.round(wardDailyTariff / 8) || 20;
+
+                return (
+                  <div
+                    key={ward.id}
+                    className="card"
+                    style={{
+                      padding: '1.25rem 1.5rem',
+                      borderRadius: '16px',
+                      border: '1.5px solid var(--border-color)',
+                      backgroundColor: '#ffffff',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '1.25rem',
+                    }}
+                  >
+                    {/* WARD HEADER BANNER */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: '1rem',
+                        borderBottom: '1px solid #f1f5f9',
+                        paddingBottom: '1rem',
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <span
+                            style={{
+                              padding: '0.35rem 0.65rem',
+                              borderRadius: '8px',
+                              backgroundColor: '#eff6ff',
+                              color: '#1d4ed8',
+                              fontWeight: 800,
+                              fontSize: '0.8125rem',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.35rem',
+                            }}
+                          >
+                            <BedDouble size={15} /> {ward.name}
+                          </span>
+                          <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                            {wItem.floorName} • {wItem.buildingName}
+                          </span>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginTop: '0.4rem', flexWrap: 'wrap', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                          <span>
+                            👩‍⚕️ Lead Nurse: <strong style={{ color: 'var(--secondary)' }}>{ward.supervisorNurse || 'Nurse Priya Sharma'}</strong>
+                          </span>
+                          <span>•</span>
+                          <span>
+                            🩺 Rounding Doctor: <strong style={{ color: '#0284c7' }}>{ward.staffRoster?.roundingDoctors?.[0]?.name || 'Dr. Sarah Jenkins'}</strong>
+                          </span>
+                          <span>•</span>
+                          <span>
+                            Tariff: <strong style={{ color: '#15803d' }}>${wardDailyTariff}.00 / 24h</strong> (${wardHourlyTariff}/hr)
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Ward Occupancy Pill */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                        <span
+                          style={{
+                            padding: '0.35rem 0.75rem',
+                            borderRadius: '8px',
+                            fontWeight: 800,
+                            fontSize: '0.8125rem',
+                            backgroundColor: wardOccupied > 0 ? 'rgba(239, 68, 68, 0.08)' : 'rgba(16, 185, 129, 0.08)',
+                            color: wardOccupied > 0 ? '#dc2626' : '#15803d',
+                            border: `1px solid ${wardOccupied > 0 ? '#fca5a5' : '#86efac'}`,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                          }}
+                        >
+                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: wardOccupied > 0 ? '#dc2626' : '#16a34a' }} />
+                          {wardOccupied} / {wardBeds.length} Beds Occupied
+                        </span>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => {
+                            setPreselectedBedForAllocation(wardBeds.find((b) => b.bed.status === 'AVAILABLE') || null);
+                            setShowDaycareModal(true);
+                          }}
+                          style={{ fontSize: '0.75rem', fontWeight: 700, padding: '0.35rem 0.75rem' }}
+                        >
+                          + Quick Admit to {ward.name.split('(')[0].trim()}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* ROOMS & BEDS CONTAINER */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                      {roomKeys.map((roomKey) => {
+                        const roomGroup = wItem.roomsMap[roomKey];
+                        const beds = roomGroup.beds;
+
+                        return (
+                          <div
+                            key={roomKey}
+                            style={{
+                              backgroundColor: '#f8fafc',
+                              borderRadius: '12px',
+                              border: '1px solid #e2e8f0',
+                              padding: '1rem',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '0.85rem',
+                            }}
+                          >
+                            {/* ROOM SUB-HEADER */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#0284c7' }} />
+                                <strong style={{ fontSize: '0.875rem', color: 'var(--secondary)' }}>
+                                  {roomGroup.roomName}
+                                </strong>
+                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                  ({beds.length} {beds.length === 1 ? 'Bed' : 'Beds'})
+                                </span>
+                              </div>
+                              <span style={{ fontSize: '0.6875rem', fontWeight: 700, color: '#64748b' }}>
+                                {beds.filter((b) => b.bed.status === 'OCCUPIED').length} Active Occupant(s)
+                              </span>
+                            </div>
+
+                            {/* GRID OF BED CARDS */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '0.85rem' }}>
+                              {beds.map((fb) => {
+                                const b = fb.bed;
+                                const isOccupied = b.status === 'OCCUPIED';
+                                const isNeedsCleaning = b.cleanlinessStatus === 'NEEDS_CLEANING' || b.cleanlinessStatus === 'CLEANING_IN_PROGRESS';
+                                const isReserved = b.status === 'RESERVED';
+                                const pt = b.inpatientDetails;
+
+                                return (
+                                  <div
+                                    key={b.id}
+                                    style={{
+                                      padding: '1rem',
+                                      borderRadius: '12px',
+                                      border: isOccupied
+                                        ? '1.5px solid #fecaca'
+                                        : isNeedsCleaning
+                                        ? '1.5px solid #fde68a'
+                                        : isReserved
+                                        ? '1.5px solid #bfdbfe'
+                                        : '1.5px solid #bbf7d0',
+                                      backgroundColor: isOccupied
+                                        ? '#fff5f5'
+                                        : isNeedsCleaning
+                                        ? '#fffbeb'
+                                        : isReserved
+                                        ? '#eff6ff'
+                                        : '#f0fdf4',
+                                      display: 'flex',
+                                      flexDirection: 'column',
+                                      gap: '0.6rem',
+                                      boxShadow: '0 1px 4px rgba(0,0,0,0.02)',
+                                      transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+                                    }}
+                                  >
+                                    {/* BED CARD HEADER */}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                      <span style={{ fontWeight: 900, fontSize: '0.9375rem', color: 'var(--secondary)' }}>
+                                        {b.bedNumber}
+                                      </span>
+                                      <span
+                                        style={{
+                                          fontSize: '0.6875rem',
+                                          fontWeight: 800,
+                                          padding: '0.15rem 0.5rem',
+                                          borderRadius: '6px',
+                                          backgroundColor: isOccupied
+                                            ? '#fee2e2'
+                                            : isNeedsCleaning
+                                            ? '#fef3c7'
+                                            : isReserved
+                                            ? '#dbeafe'
+                                            : '#dcfce7',
+                                          color: isOccupied
+                                            ? '#991b1b'
+                                            : isNeedsCleaning
+                                            ? '#b45309'
+                                            : isReserved
+                                            ? '#1e40af'
+                                            : '#15803d',
+                                        }}
+                                      >
+                                        {isOccupied ? '🔴 OCCUPIED' : isNeedsCleaning ? '🧹 CLEANING' : isReserved ? '🟡 RESERVED' : '🟢 VACANT'}
+                                      </span>
+                                    </div>
+
+                                    {/* OCCUPIED CONTENT: WHO IS OCCUPIED */}
+                                    {isOccupied && pt ? (
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.8125rem' }}>
+                                        <div style={{ borderTop: '1px dashed #fca5a5', paddingTop: '0.4rem' }}>
+                                          <div style={{ fontWeight: 900, color: 'var(--secondary)', fontSize: '0.9375rem' }}>
+                                            {pt.patientName}
+                                          </div>
+                                          <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.6875rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
+                                            <span style={{ fontWeight: 700, color: '#1d4ed8' }}>{pt.uhid}</span>
+                                            <span>•</span>
+                                            <span>{pt.age}y / {pt.gender}</span>
+                                          </div>
+                                        </div>
+
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--secondary)' }}>
+                                          👨‍⚕️ <strong>{pt.primaryDoctor?.name || 'Dr. Sarah Jenkins'}</strong>
+                                        </div>
+
+                                        <div
+                                          style={{
+                                            fontSize: '0.6875rem',
+                                            fontWeight: 700,
+                                            color: '#991b1b',
+                                            backgroundColor: '#fee2e2',
+                                            padding: '0.25rem 0.45rem',
+                                            borderRadius: '6px',
+                                            whiteSpace: 'nowrap',
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                          }}
+                                          title={pt.diagnosis}
+                                        >
+                                          📋 {pt.diagnosis || 'Observation & Therapy'}
+                                        </div>
+
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
+                                          <span>⏱️ In Bed Since: {pt.admissionDate ? pt.admissionDate.split(' ')[1] || '09:30' : '09:30'}</span>
+                                          <strong style={{ color: '#15803d' }}>${Math.round(b.dailyTariff / 8) || 20}/hr</strong>
+                                        </div>
+
+                                        <button
+                                          type="button"
+                                          className="btn btn-secondary btn-sm"
+                                          onClick={() => {
+                                            setSelectedOccupiedBedForDossier(fb);
+                                            setShowOccupancyDossierModal(true);
+                                          }}
+                                          style={{
+                                            marginTop: '0.35rem',
+                                            fontWeight: 800,
+                                            fontSize: '0.75rem',
+                                            width: '100%',
+                                            backgroundColor: '#ffffff',
+                                            borderColor: '#fca5a5',
+                                            color: '#991b1b',
+                                          }}
+                                        >
+                                          Inspect Patient Dossier ➔
+                                        </button>
+                                      </div>
+                                    ) : isNeedsCleaning ? (
+                                      /* CLEANING STATUS CARD */
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.75rem', color: '#b45309' }}>
+                                        <p style={{ margin: '0.2rem 0 0', fontSize: '0.75rem' }}>
+                                          Patient discharged. Bed awaiting terminal sanitization & fresh linen.
+                                        </p>
+                                        <button
+                                          type="button"
+                                          className="btn btn-sm"
+                                          onClick={() => {
+                                            patientJourneyService.markCampusBedCleaned(b.id, 'Receptionist Clearance');
+                                            setFlatBeds(patientJourneyService.getFlatBedsList());
+                                            setCampusBuildings(patientJourneyService.getCampusBuildings());
+                                            showToast(`✓ ${b.bedNumber} marked sanitized & available!`);
+                                          }}
+                                          style={{
+                                            backgroundColor: '#d97706',
+                                            color: '#ffffff',
+                                            border: 'none',
+                                            borderRadius: '6px',
+                                            padding: '0.35rem',
+                                            fontWeight: 800,
+                                            cursor: 'pointer',
+                                            marginTop: 'auto',
+                                          }}
+                                        >
+                                          ✓ Mark Cleaned & Ready
+                                        </button>
+                                      </div>
+                                    ) : isReserved ? (
+                                      /* RESERVED STATUS CARD */
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.75rem', color: '#1e40af' }}>
+                                        <p style={{ margin: '0.2rem 0 0', fontSize: '0.75rem' }}>
+                                          {b.notes || 'Reserved for incoming post-op or emergency intake.'}
+                                        </p>
+                                        <button
+                                          type="button"
+                                          className="btn btn-secondary btn-sm"
+                                          onClick={() => {
+                                            setPreselectedBedForAllocation(fb);
+                                            setShowDaycareModal(true);
+                                          }}
+                                          style={{ fontWeight: 800, fontSize: '0.75rem', marginTop: 'auto' }}
+                                        >
+                                          Admit Reserved Patient
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      /* VACANT STATUS CARD */
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.75rem', color: '#15803d' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-muted)' }}>
+                                          <span>Tariff Rate:</span>
+                                          <strong>${b.dailyTariff}/24h (${Math.round(b.dailyTariff / 8)}/hr)</strong>
+                                        </div>
+                                        <div style={{ fontSize: '0.6875rem', color: '#16a34a' }}>
+                                          ✨ Sanitized & Ready for Intake
+                                        </div>
+                                        <button
+                                          type="button"
+                                          className="btn btn-primary btn-sm"
+                                          onClick={() => {
+                                            setPreselectedBedForAllocation(fb);
+                                            setShowDaycareModal(true);
+                                          }}
+                                          style={{
+                                            marginTop: 'auto',
+                                            fontWeight: 800,
+                                            fontSize: '0.75rem',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: '0.3rem',
+                                          }}
+                                        >
+                                          <Plus size={13} /> Allocate Patient
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -2302,14 +3185,45 @@ export const ReceptionDashboard: React.FC = () => {
       />
 
       {/* ========================================================================= */}
-      {/* MODAL 6: DAYCARE / OBSERVATION BED ALLOCATION                             */}
+      {/* MODAL 6: BED OCCUPANCY DOSSIER (Vitals, Doctor, Transfer, Discharge)      */}
+      {/* ========================================================================= */}
+      <BedOccupancyDossierModal
+        isOpen={showOccupancyDossierModal}
+        onClose={() => {
+          setShowOccupancyDossierModal(false);
+          setSelectedOccupiedBedForDossier(null);
+        }}
+        bedItem={selectedOccupiedBedForDossier}
+        onBedDischarged={(bedId) => {
+          setFlatBeds(patientJourneyService.getFlatBedsList());
+          setCampusBuildings(patientJourneyService.getCampusBuildings());
+          showToast(`✓ Bed successfully vacated and marked for Housekeeping!`);
+        }}
+        onBedTransferred={(src, tgt) => {
+          setFlatBeds(patientJourneyService.getFlatBedsList());
+          setCampusBuildings(patientJourneyService.getCampusBuildings());
+          showToast(`✓ Patient transferred successfully to new bed!`);
+        }}
+      />
+
+      {/* ========================================================================= */}
+      {/* MODAL 7: DAYCARE / OBSERVATION BED ALLOCATION                             */}
       {/* ========================================================================= */}
       <DaycareBedModal
         isOpen={showDaycareModal}
-        onClose={() => setShowDaycareModal(false)}
+        onClose={() => {
+          setShowDaycareModal(false);
+          setPreselectedBedForAllocation(null);
+        }}
         tariffMaster={tariffMaster}
         existingPatients={patients}
         activeTokens={queue}
+        preselectedBed={preselectedBedForAllocation}
+        onBedAllocated={(bedId) => {
+          setFlatBeds(patientJourneyService.getFlatBedsList());
+          setCampusBuildings(patientJourneyService.getCampusBuildings());
+          showToast(`✓ Patient allocated to observation bed successfully!`);
+        }}
       />
 
       {/* ========================================================================= */}

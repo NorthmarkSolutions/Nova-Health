@@ -5,6 +5,7 @@ export enum RoleType {
   RECEPTION_SUPERVISOR = 'RECEPTION_SUPERVISOR',
   RECEPTIONIST = 'RECEPTIONIST',
   DOCTOR = 'DOCTOR',
+  DOCTOR_ASSISTANT = 'DOCTOR_ASSISTANT',
   MEDICAL_SUPERINTENDENT = 'MEDICAL_SUPERINTENDENT',
   SURGEON = 'SURGEON',
   ANESTHETIST = 'ANESTHETIST',
@@ -367,6 +368,7 @@ export interface PrescriptionItem {
   durationDays: number;
   totalQuantity: number;
   instructions?: string;
+  reason?: string;
 }
 
 export interface Prescription {

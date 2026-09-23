@@ -1135,19 +1135,441 @@ export const defaultCampusTemplate: BuildingNode[] = [
   },
 ];
 
+export const wardOpdDaycareA: WardNode = {
+  id: 'wd-opd-a',
+  code: 'OPD-WD-A',
+  name: 'Ward A (OPD Daycare & Observation)',
+  wardType: 'General Ward',
+  supervisorNurse: 'Nurse Priya Sharma, BSN',
+  nursingStation: 'Station Daycare-A',
+  departmentName: 'OPD - Outpatient Department',
+  staffRoster: {
+    supervisorNurse: 'Nurse Priya Sharma, BSN',
+    onDutyNurses: [
+      { name: 'Nurse Priya Sharma', shift: 'Morning Shift (In-Charge)', grade: 'Lead RN' },
+      { name: 'Nurse Lisa Wong', shift: 'Morning Shift', grade: 'Staff Nurse' },
+    ],
+    compounders: [
+      { name: 'Dev Sharma', duty: 'IV Therapy, Nebulization & Cannulation', contact: 'Ext: 211' },
+    ],
+    cleaners: [
+      { name: 'Sunita Bai', shift: 'Daycare Sanitation', lastRound: '15 mins ago' },
+    ],
+    roundingDoctors: [
+      { name: 'Dr. Sarah Jenkins', department: 'General Medicine / Daycare In-Charge', roundTime: '09:00 AM' },
+      { name: 'Dr. Michael Chang', department: 'Cardiology Triage', roundTime: '10:30 AM' },
+    ],
+  },
+  beds: [
+    {
+      id: 'b-opda-01',
+      bedNumber: 'Bay A-01',
+      roomNumber: 'Room 01 - Short Stay IV Bays',
+      roomType: 'Daycare Unit',
+      bedType: 'Standard Ward Bed',
+      dailyTariff: 120,
+      status: 'OCCUPIED',
+      cleanlinessStatus: 'SANITIZED',
+      lastCleanedAt: 'Today, 08:30 AM',
+      assignedCleaner: 'Sunita Bai',
+      inpatientDetails: {
+        patientName: 'Priya Sharma',
+        uhid: 'UHID-2026-0881',
+        ipdAdmissionNo: 'OBS-2026-012',
+        admissionDate: '2026-09-22 09:30',
+        age: 34,
+        gender: 'FEMALE',
+        diagnosis: 'Acute Gastroenteritis • IV Hydration & Ondansetron',
+        acuity: 'OBSERVATION',
+        primaryDoctor: { id: 'doc-opd-1', name: 'Dr. Sarah Jenkins', specialty: 'General Medicine', phone: '+1 555-0144' },
+        consultingDoctors: [],
+        primaryNurse: { id: 'stf-nurse-1', name: 'Nurse Priya Sharma', shift: 'Morning' },
+        compounder: { id: 'c-1', name: 'Dev Sharma', duty: 'IV Fluid Maintenance & Serial BP' },
+        assignedCleaner: { id: 'cl-1', name: 'Sunita Bai', shift: 'Morning Shift' },
+        cleanlinessStatus: 'SANITIZED',
+        vitals: { bp: '118/76', pulse: '78 bpm', spo2: '99%', temp: '98.4 °F' },
+      },
+    },
+    {
+      id: 'b-opda-02',
+      bedNumber: 'Bay A-02',
+      roomNumber: 'Room 01 - Short Stay IV Bays',
+      roomType: 'Daycare Unit',
+      bedType: 'Standard Ward Bed',
+      dailyTariff: 120,
+      status: 'AVAILABLE',
+      cleanlinessStatus: 'SANITIZED',
+      lastCleanedAt: 'Today, 09:00 AM',
+      assignedCleaner: 'Sunita Bai',
+    },
+    {
+      id: 'b-opda-03',
+      bedNumber: 'Bay A-03',
+      roomNumber: 'Room 01 - Short Stay IV Bays',
+      roomType: 'Daycare Unit',
+      bedType: 'Standard Ward Bed',
+      dailyTariff: 120,
+      status: 'OCCUPIED',
+      cleanlinessStatus: 'SANITIZED',
+      lastCleanedAt: 'Today, 08:45 AM',
+      assignedCleaner: 'Sunita Bai',
+      inpatientDetails: {
+        patientName: 'Robert Fox',
+        uhid: 'UHID-2026-0892',
+        ipdAdmissionNo: 'OBS-2026-014',
+        admissionDate: '2026-09-22 10:15',
+        age: 45,
+        gender: 'MALE',
+        diagnosis: 'Post-OPD Endoscopy & Colonoscopy Recovery',
+        acuity: 'STABLE',
+        primaryDoctor: { id: 'doc-opd-2', name: 'Dr. Robert Vance', specialty: 'Gastroenterology', phone: '+1 555-0177' },
+        consultingDoctors: [],
+        primaryNurse: { id: 'stf-nurse-1', name: 'Nurse Priya Sharma', shift: 'Morning' },
+        cleanlinessStatus: 'SANITIZED',
+        vitals: { bp: '122/80', pulse: '72 bpm', spo2: '98%', temp: '98.6 °F' },
+      },
+    },
+    {
+      id: 'b-opda-04',
+      bedNumber: 'Bay A-04',
+      roomNumber: 'Room 01 - Short Stay IV Bays',
+      roomType: 'Daycare Unit',
+      bedType: 'Standard Ward Bed',
+      dailyTariff: 120,
+      status: 'AVAILABLE',
+      cleanlinessStatus: 'SANITIZED',
+      lastCleanedAt: 'Today, 09:15 AM',
+      assignedCleaner: 'Sunita Bai',
+    },
+    {
+      id: 'b-opda-05',
+      bedNumber: 'Bay A-05',
+      roomNumber: 'Room 01 - Short Stay IV Bays',
+      roomType: 'Daycare Unit',
+      bedType: 'Standard Ward Bed',
+      dailyTariff: 120,
+      status: 'AVAILABLE',
+      cleanlinessStatus: 'NEEDS_CLEANING',
+      lastCleanedAt: 'Today, 11:30 AM',
+      assignedCleaner: 'Housekeeping Turnaround',
+    },
+    {
+      id: 'b-opda-06',
+      bedNumber: 'Bay A-06',
+      roomNumber: 'Room 01 - Short Stay IV Bays',
+      roomType: 'Daycare Unit',
+      bedType: 'Standard Ward Bed',
+      dailyTariff: 120,
+      status: 'AVAILABLE',
+      cleanlinessStatus: 'SANITIZED',
+      lastCleanedAt: 'Today, 09:30 AM',
+      assignedCleaner: 'Sunita Bai',
+    },
+    {
+      id: 'b-opda-07',
+      bedNumber: 'Bay A-07',
+      roomNumber: 'Room 02 - Asthma & Nebulization Bay',
+      roomType: 'Daycare Unit',
+      bedType: 'Semi-Fowler',
+      dailyTariff: 120,
+      status: 'OCCUPIED',
+      cleanlinessStatus: 'SANITIZED',
+      lastCleanedAt: 'Today, 08:00 AM',
+      assignedCleaner: 'Sunita Bai',
+      inpatientDetails: {
+        patientName: 'Arthur King',
+        uhid: 'UHID-2026-0899',
+        ipdAdmissionNo: 'OBS-2026-018',
+        admissionDate: '2026-09-22 11:00',
+        age: 58,
+        gender: 'MALE',
+        diagnosis: 'Acute Bronchospasm • Salbutamol Nebulization & Low Flow O2',
+        acuity: 'OBSERVATION',
+        primaryDoctor: { id: 'doc-opd-3', name: 'Dr. Neil Patrick', specialty: 'Pulmonology', phone: '+1 555-0192' },
+        consultingDoctors: [],
+        primaryNurse: { id: 'stf-nurse-2', name: 'Nurse Emily Vance', shift: 'Morning' },
+        cleanlinessStatus: 'SANITIZED',
+        vitals: { bp: '134/86', pulse: '94 bpm', spo2: '95%', temp: '99.1 °F' },
+      },
+    },
+    {
+      id: 'b-opda-08',
+      bedNumber: 'Bay A-08',
+      roomNumber: 'Room 02 - Asthma & Nebulization Bay',
+      roomType: 'Daycare Unit',
+      bedType: 'Semi-Fowler',
+      dailyTariff: 120,
+      status: 'AVAILABLE',
+      cleanlinessStatus: 'SANITIZED',
+      lastCleanedAt: 'Today, 09:45 AM',
+      assignedCleaner: 'Sunita Bai',
+    },
+    {
+      id: 'b-opda-09',
+      bedNumber: 'Bay A-09',
+      roomNumber: 'Room 02 - Asthma & Nebulization Bay',
+      roomType: 'Daycare Unit',
+      bedType: 'Semi-Fowler',
+      dailyTariff: 120,
+      status: 'RESERVED',
+      cleanlinessStatus: 'SANITIZED',
+      notes: 'Reserved for incoming pediatric asthma nebulization',
+      assignedCleaner: 'Sunita Bai',
+    },
+    {
+      id: 'b-opda-10',
+      bedNumber: 'Bay A-10',
+      roomNumber: 'Room 02 - Asthma & Nebulization Bay',
+      roomType: 'Daycare Unit',
+      bedType: 'Semi-Fowler',
+      dailyTariff: 120,
+      status: 'AVAILABLE',
+      cleanlinessStatus: 'SANITIZED',
+      lastCleanedAt: 'Today, 08:30 AM',
+      assignedCleaner: 'Sunita Bai',
+    },
+    {
+      id: 'b-opda-11',
+      bedNumber: 'Bay A-11',
+      roomNumber: 'Room 02 - Asthma & Nebulization Bay',
+      roomType: 'Daycare Unit',
+      bedType: 'Semi-Fowler',
+      dailyTariff: 120,
+      status: 'AVAILABLE',
+      cleanlinessStatus: 'SANITIZED',
+      lastCleanedAt: 'Today, 08:30 AM',
+      assignedCleaner: 'Sunita Bai',
+    },
+    {
+      id: 'b-opda-12',
+      bedNumber: 'Bay A-12',
+      roomNumber: 'Room 02 - Asthma & Nebulization Bay',
+      roomType: 'Daycare Unit',
+      bedType: 'Semi-Fowler',
+      dailyTariff: 120,
+      status: 'AVAILABLE',
+      cleanlinessStatus: 'SANITIZED',
+      lastCleanedAt: 'Today, 08:30 AM',
+      assignedCleaner: 'Sunita Bai',
+    },
+    {
+      id: 'b-opda-13',
+      bedNumber: 'Bay A-13',
+      roomNumber: 'Room 03 - Procedure Recovery & Infusion',
+      roomType: 'Daycare Unit',
+      bedType: 'Standard Ward Bed',
+      dailyTariff: 120,
+      status: 'OCCUPIED',
+      cleanlinessStatus: 'SANITIZED',
+      lastCleanedAt: 'Today, 07:45 AM',
+      assignedCleaner: 'Sunita Bai',
+      inpatientDetails: {
+        patientName: 'Eleanor Vance',
+        uhid: 'UHID-2026-0914',
+        ipdAdmissionNo: 'OBS-2026-021',
+        admissionDate: '2026-09-22 08:45',
+        age: 29,
+        gender: 'FEMALE',
+        diagnosis: 'Severe Iron Deficiency Anemia • Iron Sucrose Infusion',
+        acuity: 'STABLE',
+        primaryDoctor: { id: 'doc-opd-4', name: 'Dr. Anita Roy', specialty: 'Hematology', phone: '+1 555-0155' },
+        consultingDoctors: [],
+        primaryNurse: { id: 'stf-nurse-1', name: 'Nurse Priya Sharma', shift: 'Morning' },
+        cleanlinessStatus: 'SANITIZED',
+        vitals: { bp: '110/70', pulse: '74 bpm', spo2: '100%', temp: '98.2 °F' },
+      },
+    },
+    ...Array.from({ length: 7 }).map((_, i) => ({
+      id: `b-opda-${14 + i}`,
+      bedNumber: `Bay A-${14 + i}`,
+      roomNumber: 'Room 03 - Procedure Recovery & Infusion',
+      roomType: 'Daycare Unit' as const,
+      bedType: 'Standard Ward Bed' as const,
+      dailyTariff: 120,
+      status: 'AVAILABLE' as const,
+      cleanlinessStatus: 'SANITIZED' as const,
+      lastCleanedAt: 'Today, 08:00 AM',
+      assignedCleaner: 'Sunita Bai',
+    })),
+  ],
+};
+
+export const wardOpdDaycareB: WardNode = {
+  id: 'wd-opd-b',
+  code: 'OPD-WD-B',
+  name: 'Ward B (Post-Consultation Observation)',
+  wardType: 'General Ward',
+  supervisorNurse: 'Nurse Kavita Verma',
+  nursingStation: 'Station 1-B (Observation)',
+  departmentName: 'OPD - Outpatient Department',
+  staffRoster: {
+    supervisorNurse: 'Nurse Kavita Verma',
+    onDutyNurses: [
+      { name: 'Nurse Kavita Verma', shift: 'Morning Shift', grade: 'Staff Nurse' },
+    ],
+    compounders: [
+      { name: 'Anil Verma', duty: 'Monitoring & Fluid Administration' },
+    ],
+    cleaners: [
+      { name: 'Ramesh Kumar', shift: 'General Sanitation', lastRound: '30 mins ago' },
+    ],
+    roundingDoctors: [
+      { name: 'Dr. Michael Chang', department: 'Cardiology / Internal Medicine', roundTime: '10:00 AM' },
+    ],
+  },
+  beds: [
+    {
+      id: 'b-opdb-01',
+      bedNumber: 'Bay B-01',
+      roomNumber: 'Room 101 - Observation Unit 1',
+      roomType: 'Daycare Unit',
+      bedType: 'Standard Ward Bed',
+      dailyTariff: 100,
+      status: 'OCCUPIED',
+      cleanlinessStatus: 'SANITIZED',
+      lastCleanedAt: 'Today, 08:15 AM',
+      assignedCleaner: 'Ramesh Kumar',
+      inpatientDetails: {
+        patientName: 'David Miller',
+        uhid: 'UHID-2026-0925',
+        ipdAdmissionNo: 'OBS-2026-025',
+        admissionDate: '2026-09-22 10:30',
+        age: 52,
+        gender: 'MALE',
+        diagnosis: 'Hypertensive Urgency • Oral Amlodipine & Serial BP Checks',
+        acuity: 'STABLE',
+        primaryDoctor: { id: 'doc-opd-5', name: 'Dr. Michael Chang', specialty: 'Cardiology' },
+        consultingDoctors: [],
+        primaryNurse: { id: 'stf-nurse-3', name: 'Nurse Kavita Verma', shift: 'Morning' },
+        cleanlinessStatus: 'SANITIZED',
+        vitals: { bp: '154/92', pulse: '80 bpm', spo2: '97%', temp: '98.6 °F' },
+      },
+    },
+    {
+      id: 'b-opdb-02',
+      bedNumber: 'Bay B-02',
+      roomNumber: 'Room 101 - Observation Unit 1',
+      roomType: 'Daycare Unit',
+      bedType: 'Standard Ward Bed',
+      dailyTariff: 100,
+      status: 'AVAILABLE',
+      cleanlinessStatus: 'SANITIZED',
+      lastCleanedAt: 'Today, 09:00 AM',
+    },
+    {
+      id: 'b-opdb-03',
+      bedNumber: 'Bay B-03',
+      roomNumber: 'Room 101 - Observation Unit 1',
+      roomType: 'Daycare Unit',
+      bedType: 'Standard Ward Bed',
+      dailyTariff: 100,
+      status: 'AVAILABLE',
+      cleanlinessStatus: 'NEEDS_CLEANING',
+      lastCleanedAt: 'Today, 11:00 AM',
+    },
+    {
+      id: 'b-opdb-04',
+      bedNumber: 'Bay B-04',
+      roomNumber: 'Room 101 - Observation Unit 1',
+      roomType: 'Daycare Unit',
+      bedType: 'Standard Ward Bed',
+      dailyTariff: 100,
+      status: 'AVAILABLE',
+      cleanlinessStatus: 'SANITIZED',
+      lastCleanedAt: 'Today, 08:30 AM',
+    },
+    {
+      id: 'b-opdb-05',
+      bedNumber: 'Bay B-05',
+      roomNumber: 'Room 101 - Observation Unit 1',
+      roomType: 'Daycare Unit',
+      bedType: 'Standard Ward Bed',
+      dailyTariff: 100,
+      status: 'AVAILABLE',
+      cleanlinessStatus: 'SANITIZED',
+      lastCleanedAt: 'Today, 08:30 AM',
+    },
+    {
+      id: 'b-opdb-06',
+      bedNumber: 'Bay B-06',
+      roomNumber: 'Room 102 - Observation Unit 2',
+      roomType: 'Daycare Unit',
+      bedType: 'Standard Ward Bed',
+      dailyTariff: 100,
+      status: 'OCCUPIED',
+      cleanlinessStatus: 'SANITIZED',
+      lastCleanedAt: 'Today, 09:10 AM',
+      inpatientDetails: {
+        patientName: 'Sophia Patel',
+        uhid: 'UHID-2026-0931',
+        ipdAdmissionNo: 'OBS-2026-029',
+        admissionDate: '2026-09-22 11:15',
+        age: 24,
+        gender: 'FEMALE',
+        diagnosis: 'Severe Migraine with Aura • IV Analgesia & Rest',
+        acuity: 'STABLE',
+        primaryDoctor: { id: 'doc-opd-1', name: 'Dr. Sarah Jenkins', specialty: 'General Medicine' },
+        consultingDoctors: [],
+        primaryNurse: { id: 'stf-nurse-3', name: 'Nurse Kavita Verma', shift: 'Morning' },
+        cleanlinessStatus: 'SANITIZED',
+        vitals: { bp: '116/74', pulse: '76 bpm', spo2: '99%', temp: '98.4 °F' },
+      },
+    },
+    ...Array.from({ length: 4 }).map((_, i) => ({
+      id: `b-opdb-${7 + i}`,
+      bedNumber: `Bay B-${7 + i}`,
+      roomNumber: 'Room 102 - Observation Unit 2',
+      roomType: 'Daycare Unit' as const,
+      bedType: 'Standard Ward Bed' as const,
+      dailyTariff: 100,
+      status: 'AVAILABLE' as const,
+      cleanlinessStatus: 'SANITIZED' as const,
+      lastCleanedAt: 'Today, 09:00 AM',
+    })),
+  ],
+};
+
 export const getCampusBuildings = (): BuildingNode[] => {
+  let buildings: BuildingNode[] = defaultCampusTemplate;
   try {
     const saved = localStorage.getItem('north_hospital_campus_buildings');
-    if (saved) return JSON.parse(saved);
+    if (saved) {
+      buildings = JSON.parse(saved);
+    }
   } catch (e) {
     console.error(e);
   }
-  return defaultCampusTemplate;
+
+  // Ensure default main building has Ward A (Daycare 20 Beds) & Ward B (Observation 10 Beds)
+  const mainBld = buildings.find((b) => b.id === 'bld-main-1') || buildings[0];
+  if (mainBld && mainBld.floors && mainBld.floors.length > 0) {
+    const groundFloor = mainBld.floors.find((f) => f.id === 'fl-main-0' || f.code === 'FL-0') || mainBld.floors[0];
+    if (groundFloor) {
+      if (!groundFloor.wards) groundFloor.wards = [];
+      const hasWardA = groundFloor.wards.some((w) => w.id === 'wd-opd-a' || w.name.includes('Ward A'));
+      if (!hasWardA) {
+        groundFloor.wards.unshift(wardOpdDaycareA);
+      }
+    }
+    const firstFloor = mainBld.floors.find((f) => f.id === 'fl-main-1' || f.code === 'FL-1') || mainBld.floors[1];
+    if (firstFloor) {
+      if (!firstFloor.wards) firstFloor.wards = [];
+      const hasWardB = firstFloor.wards.some((w) => w.id === 'wd-opd-b' || w.name.includes('Ward B'));
+      if (!hasWardB) {
+        firstFloor.wards.push(wardOpdDaycareB);
+      }
+    }
+  }
+
+  return buildings;
 };
 
 export const saveCampusBuildings = (buildings: BuildingNode[]) => {
   try {
     localStorage.setItem('north_hospital_campus_buildings', JSON.stringify(buildings));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('nh_campus_updated', { detail: buildings }));
+    }
   } catch (e) {
     console.error(e);
   }

@@ -12,7 +12,7 @@ export interface HospitalShift {
   isDefault?: boolean;
 }
 
-export type StaffRole = 'doctor' | 'nurse' | 'technician' | 'paramedic' | 'admin' | 'support';
+export type StaffRole = 'doctor' | 'nurse' | 'technician' | 'paramedic' | 'admin' | 'support' | 'assistant';
 export type StaffStatus = 'ACTIVE' | 'ON_LEAVE' | 'SUSPENDED' | 'RESIGNED';
 export type StaffOnboardingStage =
   | 'BASIC_CREATED'

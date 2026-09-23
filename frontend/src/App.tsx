@@ -10,6 +10,7 @@ import { LogoutPage } from './pages/auth/LogoutPage';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { ReceptionDashboard } from './pages/reception/ReceptionDashboard';
 import { DoctorDashboard } from './pages/doctor/DoctorDashboard';
+import { DoctorAssistantDashboard } from './pages/doctor/DoctorAssistantDashboard';
 import { NurseDashboard } from './pages/nurse/NurseDashboard';
 import { PharmacyDashboard } from './pages/pharmacy/PharmacyDashboard';
 import { LabDashboard } from './pages/lab/LabDashboard';
@@ -35,6 +36,7 @@ const RoleHomeRedirect: React.FC = () => {
     [RoleType.RECEPTION_SUPERVISOR]: '/reception',
     [RoleType.RECEPTIONIST]: '/reception',
     [RoleType.DOCTOR]: '/doctor',
+    [RoleType.DOCTOR_ASSISTANT]: '/assistant',
     [RoleType.MEDICAL_SUPERINTENDENT]: '/doctor',
     [RoleType.SURGEON]: '/ot',
     [RoleType.ANESTHETIST]: '/ot',
@@ -100,6 +102,11 @@ export function App() {
                       <Route path="/doctor" element={<DoctorDashboard />} />
                     </Route>
 
+                    {/* 3b. Doctor Assistant Chamber Ante-Room Station */}
+                    <Route element={<ProtectedRoute allowedRoles={[RoleType.DOCTOR_ASSISTANT, RoleType.DOCTOR, RoleType.SUPER_ADMIN, RoleType.HOSPITAL_ADMIN]} />}>
+                      <Route path="/assistant" element={<DoctorAssistantDashboard />} />
+                    </Route>
+
                     {/* 4. Nurse Triage Desk */}
                     <Route element={<ProtectedRoute allowedRoles={[RoleType.NURSE, RoleType.SUPER_ADMIN, RoleType.HOSPITAL_ADMIN]} />}>
                       <Route path="/nurse" element={<NurseDashboard />} />
@@ -130,10 +137,29 @@ export function App() {
                       <Route path="/billing" element={<BillingDashboard />} />
                     </Route>
 
-                    {/* 8. Patient Companion Portal */}
+                    {/* 10. Patient Companion Portal */}
                     <Route element={<ProtectedRoute allowedRoles={[RoleType.PATIENT, RoleType.SUPER_ADMIN, RoleType.HOSPITAL_ADMIN]} />}>
                       <Route path="/patient" element={<PatientDashboard />} />
                     </Route>
+
+                    {/* Unauthorized Access Notice */}
+                    <Route
+                      path="/unauthorized"
+                      element={
+                        <div style={{ padding: '3rem', textAlign: 'center' }}>
+                          <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--secondary)', marginBottom: '0.5rem' }}>
+                            Access Restricted
+                          </h2>
+                          <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
+                            Your active role does not have permission to access this departmental workspace.
+                          </p>
+                          <RoleHomeRedirect />
+                        </div>
+                      }
+                    />
+
+                    {/* Catch-all fallback */}
+                    <Route path="*" element={<RoleHomeRedirect />} />
                   </Routes>
                 </AppLayout>
               }

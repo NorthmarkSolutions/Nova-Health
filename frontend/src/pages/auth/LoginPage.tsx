@@ -82,6 +82,15 @@ export const LoginPage: React.FC = () => {
       description: 'Consultation, SOAP, e-prescriptions & test orders',
     },
     {
+      name: 'Doctor Assistant Desk',
+      badge: 'Chamber 204',
+      email: 'assistant@northhospital.com',
+      role: RoleType.DOCTOR_ASSISTANT,
+      path: '/assistant',
+      icon: <Activity size={18} />,
+      description: 'Chamber intake, pre-consult vitals & queue calling desk',
+    },
+    {
       name: '3. Diagnostic Laboratory',
       badge: 'Lab',
       email: 'lab@northhospital.com',
@@ -122,9 +131,9 @@ export const LoginPage: React.FC = () => {
       badge: 'Triage',
       email: 'nurse@northhospital.com',
       role: RoleType.NURSE,
-      path: '/nurse',
+      path: '/nurse?tab=triage-queue',
       icon: <Activity size={18} />,
-      description: 'Vitals triage and inpatient nursing care',
+      description: 'Pre-consult triage, vitals, clinical orders & obs beds',
     },
     {
       name: 'Pharmacy Counter',
@@ -204,6 +213,7 @@ export const LoginPage: React.FC = () => {
           [RoleType.RECEPTION_SUPERVISOR]: '/reception',
           [RoleType.RECEPTIONIST]: '/reception',
           [RoleType.DOCTOR]: '/doctor',
+          [RoleType.DOCTOR_ASSISTANT]: '/assistant',
           [RoleType.SURGEON]: '/ot',
           [RoleType.ANESTHETIST]: '/ot',
           [RoleType.OT_MANAGER]: '/ot',
@@ -240,6 +250,7 @@ export const LoginPage: React.FC = () => {
         [RoleType.DEPARTMENT_ADMIN]: '/department/opd',
         [RoleType.RECEPTIONIST]: '/reception',
         [RoleType.DOCTOR]: '/doctor',
+        [RoleType.DOCTOR_ASSISTANT]: '/assistant',
         [RoleType.SURGEON]: '/ot',
         [RoleType.WARD_MANAGER]: '/ipd',
         [RoleType.LAB_TECH]: '/lab',
@@ -439,6 +450,7 @@ export const LoginPage: React.FC = () => {
                 <option value={RoleType.HOSPITAL_ADMIN}>Hospital Admin</option>
                 <option value={RoleType.RECEPTIONIST}>1. Reception Desk</option>
                 <option value={RoleType.DOCTOR}>2. Doctor OPD Station</option>
+                <option value={RoleType.DOCTOR_ASSISTANT}>Doctor Assistant (Chamber 204)</option>
                 <option value={RoleType.LAB_TECH}>3. Diagnostic Laboratory</option>
                 <option value={RoleType.SURGEON}>4. Operation Theatre (Surgeon)</option>
                 <option value={RoleType.WARD_MANAGER}>5. Inpatient Care (IPD)</option>

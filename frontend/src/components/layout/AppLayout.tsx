@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { RoleType } from '../../types';
 import {
@@ -17,6 +17,15 @@ import {
   Scissors,
   BedDouble,
   Building2,
+  Calendar,
+  Users,
+  Clock,
+  BarChart2,
+  ClipboardList,
+  UserCheck,
+  CheckCircle2,
+  ClipboardCheck,
+  HeartPulse,
 } from 'lucide-react';
 
 interface NavItem {
@@ -58,6 +67,13 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
       badge: 'OPD',
       icon: <Stethoscope size={20} />,
       allowedRoles: [RoleType.SUPER_ADMIN, RoleType.HOSPITAL_ADMIN, RoleType.DOCTOR, RoleType.MEDICAL_SUPERINTENDENT],
+    },
+    {
+      label: 'Doctor Assistant Desk',
+      path: '/assistant',
+      badge: 'Ante-Room',
+      icon: <UserCheck size={20} />,
+      allowedRoles: [RoleType.SUPER_ADMIN, RoleType.HOSPITAL_ADMIN, RoleType.DOCTOR_ASSISTANT],
     },
     {
       label: '3. Lab & Diagnostics',
@@ -108,7 +124,197 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
   ];
 
   const isAdmin = role === RoleType.SUPER_ADMIN || role === RoleType.HOSPITAL_ADMIN;
-  const visibleNavItems = isAdmin ? navItems : navItems.filter((item) => item.allowedRoles.includes(role));
+  const isReception = role === RoleType.RECEPTIONIST || role === RoleType.RECEPTION_SUPERVISOR;
+  const isDoctor = role === RoleType.DOCTOR || role === RoleType.MEDICAL_SUPERINTENDENT;
+  const isAssistant = role === RoleType.DOCTOR_ASSISTANT;
+  const isNurse = role === RoleType.NURSE;
+
+  const receptionNavItems: NavItem[] = [
+    {
+      label: '1. Live Token Queue',
+      path: '/reception?tab=queue',
+      badge: 'Desk',
+      icon: <UserPlus size={20} />,
+      allowedRoles: [RoleType.RECEPTIONIST, RoleType.RECEPTION_SUPERVISOR],
+    },
+    {
+      label: '2. Doctor Schedules',
+      path: '/reception?tab=appointments',
+      badge: 'OPD',
+      icon: <Stethoscope size={20} />,
+      allowedRoles: [RoleType.RECEPTIONIST, RoleType.RECEPTION_SUPERVISOR],
+    },
+    {
+      label: '3. Counter Billing & Cash',
+      path: '/reception?tab=billing',
+      badge: 'Cash',
+      icon: <Receipt size={20} />,
+      allowedRoles: [RoleType.RECEPTIONIST, RoleType.RECEPTION_SUPERVISOR],
+    },
+    {
+      label: '4. Patient Master UHID',
+      path: '/reception?tab=search',
+      badge: 'Directory',
+      icon: <UserCircle size={20} />,
+      allowedRoles: [RoleType.RECEPTIONIST, RoleType.RECEPTION_SUPERVISOR],
+    },
+    {
+      label: '5. Observation & Beds',
+      path: '/reception?tab=daycare',
+      badge: 'Beds',
+      icon: <BedDouble size={20} />,
+      allowedRoles: [RoleType.RECEPTIONIST, RoleType.RECEPTION_SUPERVISOR],
+    },
+  ];
+
+  const doctorNavItems: NavItem[] = [
+    {
+      label: '1. Dashboard',
+      path: '/doctor?tab=dashboard',
+      badge: 'Home',
+      icon: <LayoutDashboard size={20} />,
+      allowedRoles: [RoleType.DOCTOR, RoleType.MEDICAL_SUPERINTENDENT],
+    },
+    {
+      label: '2. Queue & Appointments',
+      path: '/doctor?tab=queue',
+      badge: 'Queue',
+      icon: <Users size={20} />,
+      allowedRoles: [RoleType.DOCTOR, RoleType.MEDICAL_SUPERINTENDENT],
+    },
+    {
+      label: '3. Patient Consultation & Rx',
+      path: '/doctor?tab=consultation',
+      badge: 'Active',
+      icon: <Stethoscope size={20} />,
+      allowedRoles: [RoleType.DOCTOR, RoleType.MEDICAL_SUPERINTENDENT],
+    },
+    {
+      label: '4. My Schedule',
+      path: '/doctor?tab=schedule',
+      badge: 'Roster',
+      icon: <Clock size={20} />,
+      allowedRoles: [RoleType.DOCTOR, RoleType.MEDICAL_SUPERINTENDENT],
+    },
+    {
+      label: '5. Reports & Analytics',
+      path: '/doctor?tab=reports',
+      badge: 'Stats',
+      icon: <BarChart2 size={20} />,
+      allowedRoles: [RoleType.DOCTOR, RoleType.MEDICAL_SUPERINTENDENT],
+    },
+    {
+      label: '6. Inpatient Rounds',
+      path: '/doctor?tab=inpatient',
+      badge: 'Wards',
+      icon: <BedDouble size={20} />,
+      allowedRoles: [RoleType.DOCTOR, RoleType.MEDICAL_SUPERINTENDENT],
+    },
+  ];
+
+  const assistantNavItems: NavItem[] = [
+    {
+      label: 'Dashboard',
+      path: '/assistant?tab=dashboard',
+      badge: 'Overview',
+      icon: <LayoutDashboard size={20} />,
+      allowedRoles: [RoleType.DOCTOR_ASSISTANT],
+    },
+    {
+      label: '1. Queue & Preparation',
+      path: '/assistant?tab=queue',
+      badge: 'Chamber',
+      icon: <Users size={20} />,
+      allowedRoles: [RoleType.DOCTOR_ASSISTANT],
+    },
+    {
+      label: '2. Investigations & Reports',
+      path: '/assistant?tab=investigations',
+      badge: 'Labs',
+      icon: <FlaskConical size={20} />,
+      allowedRoles: [RoleType.DOCTOR_ASSISTANT],
+    },
+    {
+      label: '3. Consultation Handoff',
+      path: '/assistant?tab=handoff',
+      badge: 'Dispatch',
+      icon: <CheckCircle2 size={20} />,
+      allowedRoles: [RoleType.DOCTOR_ASSISTANT],
+    },
+  ];
+
+  const nurseNavItems: NavItem[] = [
+    {
+      label: '1. Triage Queue',
+      path: '/nurse?tab=triage-queue',
+      badge: 'Triage',
+      icon: <Users size={20} />,
+      allowedRoles: [RoleType.NURSE],
+    },
+    {
+      label: '2. Vitals & Assessment',
+      path: '/nurse?tab=vitals',
+      badge: 'Vitals',
+      icon: <Activity size={20} />,
+      allowedRoles: [RoleType.NURSE],
+    },
+    {
+      label: '3. Clinical Tasks',
+      path: '/nurse?tab=tasks',
+      badge: 'Orders',
+      icon: <ClipboardCheck size={20} />,
+      allowedRoles: [RoleType.NURSE],
+    },
+    {
+      label: '4. Observation Beds',
+      path: '/nurse?tab=observation',
+      badge: 'Beds',
+      icon: <HeartPulse size={20} />,
+      allowedRoles: [RoleType.NURSE],
+    },
+    {
+      label: '5. Shift & Handover',
+      path: '/nurse?tab=handover',
+      badge: 'Shift',
+      icon: <Clock size={20} />,
+      allowedRoles: [RoleType.NURSE],
+    },
+  ];
+
+  const visibleNavItems = isAdmin
+    ? navItems
+    : isReception
+    ? receptionNavItems
+    : isDoctor
+    ? doctorNavItems
+    : isAssistant
+    ? assistantNavItems
+    : isNurse
+    ? nurseNavItems
+    : navItems.filter((item) => item.allowedRoles.includes(role));
+
+  const location = useLocation();
+
+  const isItemActive = (itemPath: string) => {
+    if (itemPath.includes('?')) {
+      const currentFull = location.pathname + location.search;
+      if (currentFull === itemPath) return true;
+      if (location.pathname === '/reception' && (!location.search || location.search === '') && itemPath === '/reception?tab=queue') {
+        return true;
+      }
+      if (location.pathname === '/doctor' && (!location.search || location.search === '') && itemPath === '/doctor?tab=dashboard') {
+        return true;
+      }
+      if (location.pathname === '/assistant' && (!location.search || location.search === '') && itemPath === '/assistant?tab=queue') {
+        return true;
+      }
+      if (location.pathname === '/nurse' && (!location.search || location.search === '') && itemPath === '/nurse?tab=triage-queue') {
+        return true;
+      }
+      return false;
+    }
+    return location.pathname === itemPath;
+  };
 
   const getDepartmentTitle = (r: RoleType): string => {
     switch (r) {
@@ -121,6 +327,8 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
       case RoleType.DOCTOR:
       case RoleType.MEDICAL_SUPERINTENDENT:
         return 'Doctor OPD Station';
+      case RoleType.DOCTOR_ASSISTANT:
+        return 'Doctor Assistant Station';
       case RoleType.LAB_TECH:
       case RoleType.PATHOLOGIST:
         return 'Diagnostic Laboratory';
@@ -131,7 +339,7 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
       case RoleType.WARD_MANAGER:
         return 'Inpatient Care (IPD)';
       case RoleType.NURSE:
-        return 'Nurse Station';
+        return 'OPD Nurse Station & Triage';
       case RoleType.PHARMACIST:
         return 'Pharmacy Counter';
       case RoleType.CASHIER:
@@ -156,6 +364,7 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
       [RoleType.RECEPTION_SUPERVISOR]: '/reception',
       [RoleType.RECEPTIONIST]: '/reception',
       [RoleType.DOCTOR]: '/doctor',
+      [RoleType.DOCTOR_ASSISTANT]: '/assistant',
       [RoleType.MEDICAL_SUPERINTENDENT]: '/doctor',
       [RoleType.SURGEON]: '/ot',
       [RoleType.ANESTHETIST]: '/ot',
@@ -248,6 +457,7 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
               <option value={RoleType.DEPARTMENT_ADMIN}>Department Admin (OPD)</option>
               <option value={RoleType.RECEPTIONIST}>Receptionist</option>
               <option value={RoleType.DOCTOR}>Doctor (OPD)</option>
+              <option value={RoleType.DOCTOR_ASSISTANT}>Doctor Assistant (Chamber 204)</option>
               <option value={RoleType.SURGEON}>Surgeon (OT)</option>
               <option value={RoleType.WARD_MANAGER}>Ward Manager (IPD)</option>
               <option value={RoleType.NURSE}>Nurse Station</option>
@@ -280,46 +490,178 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
 
         {/* Navigation Links: Filtered strictly for the logged-in department role */}
         <nav style={{ flex: 1, padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.375rem', overflowY: 'auto' }}>
-          {visibleNavItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              style={({ isActive }) => ({
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '0.75rem 1rem',
-                borderRadius: '8px',
-                fontSize: '0.875rem',
-                fontWeight: 600,
-                textDecoration: 'none',
-                color: isActive ? '#ffffff' : 'var(--text-light)',
-                backgroundColor: isActive ? 'var(--primary)' : 'transparent',
-                transition: 'var(--transition)',
-              })}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                {item.icon}
-                <span>{item.label}</span>
-              </div>
-              {item.badge && (
-                <span
-                  style={{
-                    fontSize: '0.625rem',
-                    padding: '0.15rem 0.4rem',
-                    borderRadius: '4px',
-                    fontWeight: 800,
-                    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                    color: '#ffffff',
-                    letterSpacing: '0.05em',
-                  }}
-                >
-                  {item.badge}
-                </span>
-              )}
-            </NavLink>
-          ))}
+          {visibleNavItems.map((item) => {
+            const active = isItemActive(item.path);
+            return (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '0.75rem 1rem',
+                  borderRadius: '8px',
+                  fontSize: '0.875rem',
+                  fontWeight: 600,
+                  textDecoration: 'none',
+                  color: active ? '#ffffff' : 'var(--text-light)',
+                  backgroundColor: active ? 'var(--primary)' : 'transparent',
+                  boxShadow: active ? '0 2px 8px rgba(2, 132, 199, 0.4)' : 'none',
+                  transition: 'var(--transition)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  {item.icon}
+                  <span>{item.label}</span>
+                </div>
+                {item.badge && (
+                  <span
+                    style={{
+                      fontSize: '0.625rem',
+                      padding: '0.15rem 0.45rem',
+                      borderRadius: '4px',
+                      fontWeight: 800,
+                      backgroundColor: active ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.08)',
+                      color: active ? '#ffffff' : 'var(--text-light)',
+                      letterSpacing: '0.05em',
+                    }}
+                  >
+                    {item.badge}
+                  </span>
+                )}
+              </NavLink>
+            );
+          })}
         </nav>
+
+        {/* Live Desk Telemetry Widget for Receptionist */}
+        {isReception && (
+          <div
+            style={{
+              margin: '0.5rem 1rem 1rem 1rem',
+              padding: '0.875rem 1rem',
+              backgroundColor: 'rgba(2, 132, 199, 0.12)',
+              border: '1px solid rgba(2, 132, 199, 0.28)',
+              borderRadius: '12px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+              <span style={{ fontSize: '0.6875rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--primary-light)', letterSpacing: '0.05em' }}>
+                Active Station
+              </span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.6875rem', color: '#4ade80', fontWeight: 700 }}>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#4ade80', boxShadow: '0 0 6px #4ade80' }} />
+                Online
+              </span>
+            </div>
+            <div style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#ffffff' }}>
+              Desk #01 • Morning Shift
+            </div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-light)', marginTop: '0.15rem' }}>
+              OPD Ground Floor • Bay 01
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.6rem', paddingTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-light)' }}>Cash Float:</span>
+              <span style={{ fontSize: '0.8125rem', fontWeight: 800, color: '#38bdf8' }}>$985.00</span>
+            </div>
+          </div>
+        )}
+
+        {/* Live Clinical Telemetry Widget for Doctor */}
+        {isDoctor && (
+          <div
+            style={{
+              margin: '0.5rem 1rem 1rem 1rem',
+              padding: '1rem',
+              backgroundColor: 'rgba(2, 132, 199, 0.12)',
+              border: '1px solid rgba(2, 132, 199, 0.28)',
+              borderRadius: '12px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.45rem' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--primary-light)', letterSpacing: '0.05em' }}>
+                Clinical Chamber
+              </span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', color: '#4ade80', fontWeight: 700 }}>
+                <span style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#4ade80', boxShadow: '0 0 6px #4ade80' }} />
+                In Session
+              </span>
+            </div>
+            <div style={{ fontSize: '0.875rem', fontWeight: 700, color: '#ffffff' }}>
+              Chamber 204 • OPD Block B
+            </div>
+            <div style={{ fontSize: '0.8125rem', color: 'var(--text-light)', marginTop: '0.2rem' }}>
+              Cardiology / Internal Medicine
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.65rem', paddingTop: '0.55rem', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+              <span style={{ fontSize: '0.8125rem', color: 'var(--text-light)' }}>On-Duty Lead:</span>
+              <span style={{ fontSize: '0.875rem', fontWeight: 800, color: '#38bdf8' }}>Dr. Sarah Jenkins</span>
+            </div>
+          </div>
+        )}
+
+        {/* Live Chamber Telemetry Widget for Doctor Assistant */}
+        {isAssistant && (
+          <div
+            style={{
+              margin: '0.5rem 1rem 1rem 1rem',
+              padding: '0.875rem 1rem',
+              backgroundColor: 'rgba(2, 132, 199, 0.12)',
+              border: '1px solid rgba(2, 132, 199, 0.28)',
+              borderRadius: '12px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+              <span style={{ fontSize: '0.6875rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--primary-light)', letterSpacing: '0.05em' }}>
+                Assigned Chamber
+              </span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.6875rem', color: '#4ade80', fontWeight: 700 }}>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#4ade80' }} />
+                Active Shift
+              </span>
+            </div>
+            <div style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#ffffff' }}>
+              Chamber 204 • Ante-Room
+            </div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-light)', marginTop: '0.15rem' }}>
+              Lead: Dr. Sarah Jenkins
+            </div>
+          </div>
+        )}
+
+        {/* Live Triage Station Telemetry Widget for Nurse */}
+        {isNurse && (
+          <div
+            style={{
+              margin: '0.5rem 1rem 1rem 1rem',
+              padding: '1rem',
+              backgroundColor: 'rgba(5, 150, 105, 0.14)',
+              border: '1px solid rgba(5, 150, 105, 0.3)',
+              borderRadius: '12px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.45rem' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', color: '#6ee7b7', letterSpacing: '0.05em' }}>
+                Triage Station
+              </span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', color: '#4ade80', fontWeight: 700 }}>
+                <span style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#4ade80', boxShadow: '0 0 6px #4ade80' }} />
+                Active Desk
+              </span>
+            </div>
+            <div style={{ fontSize: '0.875rem', fontWeight: 700, color: '#ffffff' }}>
+              Station 01 • OPD Ground Floor
+            </div>
+            <div style={{ fontSize: '0.8125rem', color: 'var(--text-light)', marginTop: '0.2rem' }}>
+              Morning Roster (07:00 – 15:00)
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.65rem', paddingTop: '0.55rem', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+              <span style={{ fontSize: '0.8125rem', color: 'var(--text-light)' }}>Lead RN:</span>
+              <span style={{ fontSize: '0.875rem', fontWeight: 800, color: '#6ee7b7' }}>Nurse Clara Adams</span>
+            </div>
+          </div>
+        )}
 
         {/* User Profile & Clear Logout Button */}
         <div
@@ -338,7 +680,7 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
                 {user?.firstName} {user?.lastName}
               </div>
               <div style={{ fontSize: '0.75rem', color: 'var(--primary-light)', fontWeight: 600 }}>
-                {role.replace('_', ' ')}
+                {(role || 'HOSPITAL_ADMIN').replace('_', ' ')}
               </div>
             </div>
           </div>
