@@ -24,6 +24,7 @@ import {
   BedDouble,
   Users,
   Award,
+  ShieldCheck,
 } from 'lucide-react';
 import { DepartmentProfileView, DepartmentProfileData } from './DepartmentProfileView';
 import { RegisterDepartmentWizardModal } from './RegisterDepartmentWizardModal';
@@ -110,6 +111,7 @@ export const DepartmentsSection: React.FC = () => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeViewDept, setActiveViewDept] = useState<DepartmentProfileData | null>(null);
+  const [activeViewTab, setActiveViewTab] = useState<string>('basic');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isStarterPacksOpen, setIsStarterPacksOpen] = useState(false);
   const [isCampusMatrixOpen, setIsCampusMatrixOpen] = useState(false);
@@ -899,7 +901,11 @@ export const DepartmentsSection: React.FC = () => {
       <DepartmentProfileView
         department={activeViewDept}
         allDepartments={departments}
-        onBack={() => setActiveViewDept(null)}
+        initialTab={activeViewTab}
+        onBack={() => {
+          setActiveViewDept(null);
+          setActiveViewTab('basic');
+        }}
         onSave={handleUpdateDept}
         onDelete={handleDelete}
       />
@@ -1103,7 +1109,10 @@ export const DepartmentsSection: React.FC = () => {
                 <tr
                   key={dept.id}
                   style={{ cursor: 'pointer' }}
-                  onClick={() => setActiveViewDept(dept)}
+                  onClick={() => {
+                    setActiveViewTab('basic');
+                    setActiveViewDept(dept);
+                  }}
                   title="Click to open Department Profile"
                 >
                   <td>
@@ -1204,10 +1213,35 @@ export const DepartmentsSection: React.FC = () => {
                         <Users size={13} /> View Staff ({liveStaff.total})
                       </button>
                       <button
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{
+                          padding: '0.375rem 0.625rem',
+                          fontSize: '0.75rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.375rem',
+                          color: '#047857',
+                          borderColor: '#a7f3d0',
+                          backgroundColor: '#ecfdf5',
+                          fontWeight: 600,
+                        }}
+                        onClick={() => {
+                          setActiveViewTab('permissions');
+                          setActiveViewDept(dept);
+                        }}
+                        title="Assign & Manage Department Permissions, Capabilities & Staff Clearances"
+                      >
+                        <ShieldCheck size={13} /> Permissions
+                      </button>
+                      <button
                         className="btn btn-secondary"
                         style={{ padding: '0.375rem 0.625rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.375rem' }}
-                        onClick={() => setActiveViewDept(dept)}
-                        title="Open Department Profile & 9 Operational Modules"
+                        onClick={() => {
+                          setActiveViewTab('basic');
+                          setActiveViewDept(dept);
+                        }}
+                        title="Open Department Profile & Operational Modules"
                       >
                         <Settings size={13} /> ⚙ Profile
                       </button>

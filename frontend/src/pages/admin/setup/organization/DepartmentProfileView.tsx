@@ -38,6 +38,12 @@ import {
   Zap,
   Info,
   LayoutGrid,
+  Pill,
+  Award,
+  RotateCcw,
+  Sliders,
+  UserCheck,
+  FileCheck,
 } from 'lucide-react';
 import {
   BuildingNode,
@@ -52,8 +58,10 @@ import {
 import {
   HospitalShift,
   StaffMember,
+  StaffRole,
   getHospitalShifts,
   getHospitalStaff,
+  getDepartmentPersonnelStats,
 } from './hospitalStaffStore';
 
 export interface DepartmentProfileData {
@@ -131,13 +139,10 @@ export interface DepartmentProfileData {
     status: 'Approved' | 'In Review' | 'Draft';
   }>;
 
-  // 8. Role & Permissions
-  permissions?: {
-    doctor: { viewPatients: boolean; clinicalNotes: boolean; prescribe: boolean; orderDiagnostics: boolean };
-    nurse: { vitalsEntry: boolean; medicationAdmin: boolean; wardHandover: boolean };
-    receptionist: { checkIn: boolean; queueToken: boolean; opdBooking: boolean };
-    billingStaff: { chargeSlip: boolean; discountAuth: boolean };
-  };
+  // 8. Department Operational Capabilities & Permissions
+  capabilities?: DepartmentCapabilities;
+  permissions?: DepartmentRolePermissions;
+  staffOverrides?: StaffPermissionOverride[];
 
   // 9. Enterprise Capacity & Patient Flow
   dailyConsultationCapacity?: number;
@@ -177,6 +182,286 @@ export interface DepartmentProfileData {
   auditLogs?: DepartmentAuditLogEntry[];
 }
 
+export interface DepartmentCapabilities {
+  canConsult: boolean;             // Outpatient & Ambulatory Doctor Consultations
+  canPrescribe: boolean;           // E-Prescriptions & Controlled Drug Rx
+  canOrderDiagnostics: boolean;   // Diagnostic Lab & Radiology Orders
+  canAdmitPatients: boolean;       // Inpatient IPD, Daycare & ICU Bed Admissions
+  canPerformProcedures: boolean;   // Minor/Major OT & Bedside Procedures
+  canCollectPayments: boolean;     // POS Cash, Card, UPI, Insurance Copay Billing
+  canEmergencyBypass: boolean;     // Fast-Track Emergency Triage Bypass
+  canTeleconsult: boolean;         // Telemedicine & Remote Video Consultations
+  canDischarge: boolean;           // Discharge Summary Approval & Bed Clearance
+}
+
+export interface DepartmentRolePermissions {
+  doctor: {
+    viewPatients: boolean;
+    clinicalNotes: boolean;
+    prescribe: boolean;
+    orderDiagnostics: boolean;
+    admitDischarge?: boolean;
+  };
+  doctorAssistant?: {
+    preConsultationScreening: boolean;
+    draftPrescription: boolean;
+    viewReports: boolean;
+  };
+  nurse: {
+    vitalsEntry: boolean;
+    medicationAdmin: boolean;
+    wardHandover: boolean;
+    nursingNotes?: boolean;
+  };
+  receptionist: {
+    checkIn: boolean;
+    queueToken: boolean;
+    opdBooking: boolean;
+    patientRegistration?: boolean;
+  };
+  billingStaff: {
+    chargeSlip: boolean;
+    discountAuth: boolean;
+    generateBills?: boolean;
+    collectPayments?: boolean;
+    refundProcessing?: boolean;
+  };
+  technician?: {
+    sampleCollection: boolean;
+    enterResults: boolean;
+    reportRelease: boolean;
+  };
+  pharmacist?: {
+    dispenseMedication: boolean;
+    substituteGeneric: boolean;
+    inventoryAdjustment: boolean;
+  };
+}
+
+export type StaffDepartmentClearanceLevel =
+  | 'HOD'
+  | 'SENIOR_SPECIALIST'
+  | 'ATTENDING'
+  | 'TRAINEE'
+  | 'RESTRICTED';
+
+export interface StaffPermissionOverride {
+  staffId: string;
+  staffName: string;
+  employeeCode: string;
+  role: string;
+  clearanceLevel: StaffDepartmentClearanceLevel;
+  canApproveDischarges?: boolean;
+  canOverrideDiscounts?: boolean;
+  canSignNarcotics?: boolean;
+  customNotes?: string;
+  assignedAt: string;
+}
+
+export type DepartmentArchetypePreset = 'OPD' | 'IPD' | 'ER' | 'LAB' | 'PHARMACY' | 'BILLING';
+
+export const DEFAULT_DEPARTMENT_CAPABILITIES: DepartmentCapabilities = {
+  canConsult: true,
+  canPrescribe: true,
+  canOrderDiagnostics: true,
+  canAdmitPatients: false,
+  canPerformProcedures: true,
+  canCollectPayments: true,
+  canEmergencyBypass: false,
+  canTeleconsult: true,
+  canDischarge: false,
+};
+
+export const DEFAULT_DEPARTMENT_PERMISSIONS: DepartmentRolePermissions = {
+  doctor: {
+    viewPatients: true,
+    clinicalNotes: true,
+    prescribe: true,
+    orderDiagnostics: true,
+    admitDischarge: true,
+  },
+  doctorAssistant: {
+    preConsultationScreening: true,
+    draftPrescription: true,
+    viewReports: true,
+  },
+  nurse: {
+    vitalsEntry: true,
+    medicationAdmin: true,
+    wardHandover: true,
+    nursingNotes: true,
+  },
+  receptionist: {
+    checkIn: true,
+    queueToken: true,
+    opdBooking: true,
+    patientRegistration: true,
+  },
+  billingStaff: {
+    chargeSlip: true,
+    discountAuth: false,
+    generateBills: true,
+    collectPayments: true,
+    refundProcessing: false,
+  },
+  technician: {
+    sampleCollection: true,
+    enterResults: true,
+    reportRelease: false,
+  },
+  pharmacist: {
+    dispenseMedication: true,
+    substituteGeneric: true,
+    inventoryAdjustment: true,
+  },
+};
+
+export function getDepartmentArchetypePreset(preset: DepartmentArchetypePreset): {
+  capabilities: DepartmentCapabilities;
+  permissions: DepartmentRolePermissions;
+} {
+  switch (preset) {
+    case 'OPD':
+      return {
+        capabilities: {
+          canConsult: true,
+          canPrescribe: true,
+          canOrderDiagnostics: true,
+          canAdmitPatients: false,
+          canPerformProcedures: true,
+          canCollectPayments: true,
+          canEmergencyBypass: false,
+          canTeleconsult: true,
+          canDischarge: false,
+        },
+        permissions: {
+          doctor: { viewPatients: true, clinicalNotes: true, prescribe: true, orderDiagnostics: true, admitDischarge: false },
+          doctorAssistant: { preConsultationScreening: true, draftPrescription: true, viewReports: true },
+          nurse: { vitalsEntry: true, medicationAdmin: true, wardHandover: false, nursingNotes: true },
+          receptionist: { checkIn: true, queueToken: true, opdBooking: true, patientRegistration: true },
+          billingStaff: { chargeSlip: true, discountAuth: false, generateBills: true, collectPayments: true, refundProcessing: false },
+          technician: { sampleCollection: true, enterResults: true, reportRelease: false },
+          pharmacist: { dispenseMedication: true, substituteGeneric: true, inventoryAdjustment: false },
+        },
+      };
+    case 'IPD':
+      return {
+        capabilities: {
+          canConsult: true,
+          canPrescribe: true,
+          canOrderDiagnostics: true,
+          canAdmitPatients: true,
+          canPerformProcedures: true,
+          canCollectPayments: true,
+          canEmergencyBypass: false,
+          canTeleconsult: false,
+          canDischarge: true,
+        },
+        permissions: {
+          doctor: { viewPatients: true, clinicalNotes: true, prescribe: true, orderDiagnostics: true, admitDischarge: true },
+          doctorAssistant: { preConsultationScreening: false, draftPrescription: true, viewReports: true },
+          nurse: { vitalsEntry: true, medicationAdmin: true, wardHandover: true, nursingNotes: true },
+          receptionist: { checkIn: true, queueToken: false, opdBooking: false, patientRegistration: true },
+          billingStaff: { chargeSlip: true, discountAuth: true, generateBills: true, collectPayments: true, refundProcessing: false },
+          technician: { sampleCollection: true, enterResults: true, reportRelease: false },
+          pharmacist: { dispenseMedication: true, substituteGeneric: true, inventoryAdjustment: true },
+        },
+      };
+    case 'ER':
+      return {
+        capabilities: {
+          canConsult: true,
+          canPrescribe: true,
+          canOrderDiagnostics: true,
+          canAdmitPatients: true,
+          canPerformProcedures: true,
+          canCollectPayments: true,
+          canEmergencyBypass: true,
+          canTeleconsult: false,
+          canDischarge: true,
+        },
+        permissions: {
+          doctor: { viewPatients: true, clinicalNotes: true, prescribe: true, orderDiagnostics: true, admitDischarge: true },
+          doctorAssistant: { preConsultationScreening: true, draftPrescription: true, viewReports: true },
+          nurse: { vitalsEntry: true, medicationAdmin: true, wardHandover: true, nursingNotes: true },
+          receptionist: { checkIn: true, queueToken: true, opdBooking: false, patientRegistration: true },
+          billingStaff: { chargeSlip: true, discountAuth: true, generateBills: true, collectPayments: true, refundProcessing: true },
+          technician: { sampleCollection: true, enterResults: true, reportRelease: true },
+          pharmacist: { dispenseMedication: true, substituteGeneric: true, inventoryAdjustment: true },
+        },
+      };
+    case 'LAB':
+      return {
+        capabilities: {
+          canConsult: false,
+          canPrescribe: false,
+          canOrderDiagnostics: true,
+          canAdmitPatients: false,
+          canPerformProcedures: false,
+          canCollectPayments: true,
+          canEmergencyBypass: false,
+          canTeleconsult: false,
+          canDischarge: false,
+        },
+        permissions: {
+          doctor: { viewPatients: true, clinicalNotes: false, prescribe: false, orderDiagnostics: true, admitDischarge: false },
+          doctorAssistant: { preConsultationScreening: false, draftPrescription: false, viewReports: true },
+          nurse: { vitalsEntry: false, medicationAdmin: false, wardHandover: false, nursingNotes: false },
+          receptionist: { checkIn: true, queueToken: true, opdBooking: false, patientRegistration: true },
+          billingStaff: { chargeSlip: true, discountAuth: false, generateBills: true, collectPayments: true, refundProcessing: false },
+          technician: { sampleCollection: true, enterResults: true, reportRelease: true },
+          pharmacist: { dispenseMedication: false, substituteGeneric: false, inventoryAdjustment: false },
+        },
+      };
+    case 'PHARMACY':
+      return {
+        capabilities: {
+          canConsult: false,
+          canPrescribe: false,
+          canOrderDiagnostics: false,
+          canAdmitPatients: false,
+          canPerformProcedures: false,
+          canCollectPayments: true,
+          canEmergencyBypass: false,
+          canTeleconsult: false,
+          canDischarge: false,
+        },
+        permissions: {
+          doctor: { viewPatients: false, clinicalNotes: false, prescribe: false, orderDiagnostics: false, admitDischarge: false },
+          doctorAssistant: { preConsultationScreening: false, draftPrescription: false, viewReports: false },
+          nurse: { vitalsEntry: false, medicationAdmin: false, wardHandover: false, nursingNotes: false },
+          receptionist: { checkIn: false, queueToken: true, opdBooking: false, patientRegistration: false },
+          billingStaff: { chargeSlip: true, discountAuth: false, generateBills: true, collectPayments: true, refundProcessing: true },
+          technician: { sampleCollection: false, enterResults: false, reportRelease: false },
+          pharmacist: { dispenseMedication: true, substituteGeneric: true, inventoryAdjustment: true },
+        },
+      };
+    case 'BILLING':
+      return {
+        capabilities: {
+          canConsult: false,
+          canPrescribe: false,
+          canOrderDiagnostics: false,
+          canAdmitPatients: false,
+          canPerformProcedures: false,
+          canCollectPayments: true,
+          canEmergencyBypass: false,
+          canTeleconsult: false,
+          canDischarge: false,
+        },
+        permissions: {
+          doctor: { viewPatients: false, clinicalNotes: false, prescribe: false, orderDiagnostics: false, admitDischarge: false },
+          doctorAssistant: { preConsultationScreening: false, draftPrescription: false, viewReports: false },
+          nurse: { vitalsEntry: false, medicationAdmin: false, wardHandover: false, nursingNotes: false },
+          receptionist: { checkIn: true, queueToken: true, opdBooking: true, patientRegistration: true },
+          billingStaff: { chargeSlip: true, discountAuth: true, generateBills: true, collectPayments: true, refundProcessing: true },
+          technician: { sampleCollection: false, enterResults: false, reportRelease: false },
+          pharmacist: { dispenseMedication: false, substituteGeneric: false, inventoryAdjustment: false },
+        },
+      };
+  }
+}
+
 export interface DepartmentAuditLogEntry {
   id: string;
   timestamp: string;
@@ -189,6 +474,7 @@ export interface DepartmentAuditLogEntry {
 interface Props {
   department: DepartmentProfileData;
   allDepartments: DepartmentProfileData[];
+  initialTab?: string;
   onBack: () => void;
   onSave: (updated: DepartmentProfileData) => void;
   onDelete?: (id: string) => void;
@@ -197,23 +483,18 @@ interface Props {
 export const DepartmentProfileView: React.FC<Props> = ({
   department,
   allDepartments,
+  initialTab,
   onBack,
   onSave,
   onDelete,
 }) => {
-  const [activeTab, setActiveTab] = useState<
-    | 'basic'
-    | 'operational'
-    | 'financial'
-    | 'clinical'
-    | 'staff'
-    | 'infrastructure'
-    | 'documents'
-    | 'permissions'
-    | 'lifecycle'
-    | 'capacity_kpis'
-    | 'audit_logs'
-  >('basic');
+  const [activeTab, setActiveTab] = useState<string>(initialTab || 'basic');
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   const navigate = useNavigate();
 
@@ -270,13 +551,20 @@ export const DepartmentProfileView: React.FC<Props> = ({
       { id: '3', title: 'Department Infection Control & Sterilization Guide', type: 'Clinical Guidelines', version: 'v3.0', updatedAt: '2026-09-01', status: 'In Review' },
     ],
 
-    // Permissions
-    permissions: department.permissions || {
-      doctor: { viewPatients: true, clinicalNotes: true, prescribe: true, orderDiagnostics: true },
-      nurse: { vitalsEntry: true, medicationAdmin: true, wardHandover: true },
-      receptionist: { checkIn: true, queueToken: true, opdBooking: true },
-      billingStaff: { chargeSlip: true, discountAuth: false },
+    // Permissions & Capabilities
+    permissions: department.permissions || DEFAULT_DEPARTMENT_PERMISSIONS,
+    capabilities: department.capabilities || {
+      canConsult: department.consultationEnabled !== undefined ? department.consultationEnabled : department.category === 'clinical',
+      canPrescribe: department.prescriptionEnabled !== undefined ? department.prescriptionEnabled : department.category === 'clinical',
+      canOrderDiagnostics: department.labRequestsEnabled !== undefined ? department.labRequestsEnabled : ['clinical', 'diagnostic'].includes(department.category),
+      canAdmitPatients: department.admissionEnabled !== undefined ? department.admissionEnabled : ['DEPT-IPD', 'DEPT-ICU', 'DEPT-ER'].includes(department.code),
+      canPerformProcedures: department.procedureEnabled !== undefined ? department.procedureEnabled : ['DEPT-OT', 'DEPT-ER', 'DEPT-DIAL'].includes(department.code),
+      canCollectPayments: department.billingEnabled !== undefined ? department.billingEnabled : true,
+      canEmergencyBypass: department.emergencyEnabled !== undefined ? department.emergencyEnabled : ['DEPT-ER', 'DEPT-ICU'].includes(department.code),
+      canTeleconsult: department.allowTeleconsultation !== undefined ? department.allowTeleconsultation : true,
+      canDischarge: ['DEPT-IPD', 'DEPT-ICU', 'DEPT-ER'].includes(department.code),
     },
+    staffOverrides: department.staffOverrides || [],
 
     // Capacity & Flow
     dailyConsultationCapacity: department.dailyConsultationCapacity !== undefined ? department.dailyConsultationCapacity : 120,
@@ -393,6 +681,107 @@ export const DepartmentProfileView: React.FC<Props> = ({
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  const departmentPersonnel = useMemo(() => {
+    return getDepartmentPersonnelStats(profile.id, profile.name);
+  }, [profile.id, profile.name]);
+
+  const handleToggleCapability = (capKey: keyof DepartmentCapabilities) => {
+    const currentCaps = profile.capabilities || DEFAULT_DEPARTMENT_CAPABILITIES;
+    const updated = {
+      ...currentCaps,
+      [capKey]: !currentCaps[capKey],
+    };
+    setProfile((prev) => ({
+      ...prev,
+      capabilities: updated,
+    }));
+  };
+
+  const handleToggleRolePerm = (cadre: keyof DepartmentRolePermissions, action: string) => {
+    const currentPerms = profile.permissions || DEFAULT_DEPARTMENT_PERMISSIONS;
+    const cadrePerms = (currentPerms[cadre] as any) || {};
+    const updated = {
+      ...currentPerms,
+      [cadre]: {
+        ...cadrePerms,
+        [action]: !cadrePerms[action],
+      },
+    };
+    setProfile((prev) => ({
+      ...prev,
+      permissions: updated as DepartmentRolePermissions,
+    }));
+  };
+
+  const handleApplyPreset = (preset: DepartmentArchetypePreset) => {
+    const p = getDepartmentArchetypePreset(preset);
+    setProfile((prev) => ({
+      ...prev,
+      capabilities: p.capabilities,
+      permissions: p.permissions,
+    }));
+    showToast(`✓ Applied "${preset}" archetype permissions preset to ${profile.name}`);
+  };
+
+  const handleUpdateStaffOverride = (
+    staff: StaffMember,
+    clearanceLevel: StaffDepartmentClearanceLevel,
+    privilegeUpdate?: { canApproveDischarges?: boolean; canOverrideDiscounts?: boolean; canSignNarcotics?: boolean },
+    customNotes?: string
+  ) => {
+    const existing = [...(profile.staffOverrides || [])];
+    const idx = existing.findIndex((o) => o.staffId === staff.id);
+    const updatedEntry: StaffPermissionOverride = {
+      staffId: staff.id,
+      staffName: staff.fullName,
+      employeeCode: staff.employeeCode,
+      role: staff.role,
+      clearanceLevel,
+      canApproveDischarges: privilegeUpdate?.canApproveDischarges ?? (idx >= 0 ? existing[idx].canApproveDischarges : false),
+      canOverrideDiscounts: privilegeUpdate?.canOverrideDiscounts ?? (idx >= 0 ? existing[idx].canOverrideDiscounts : false),
+      canSignNarcotics: privilegeUpdate?.canSignNarcotics ?? (idx >= 0 ? existing[idx].canSignNarcotics : false),
+      customNotes: customNotes !== undefined ? customNotes : (idx >= 0 ? existing[idx].customNotes : ''),
+      assignedAt: idx >= 0 ? existing[idx].assignedAt : new Date().toISOString(),
+    };
+
+    if (idx >= 0) {
+      existing[idx] = updatedEntry;
+    } else {
+      existing.push(updatedEntry);
+    }
+
+    setProfile((prev) => ({
+      ...prev,
+      staffOverrides: existing,
+    }));
+  };
+
+  const handleSavePermissions = () => {
+    const caps = profile.capabilities || DEFAULT_DEPARTMENT_CAPABILITIES;
+    const activeCaps = Object.entries(caps).filter(([, v]) => Boolean(v)).map(([k]) => k);
+    const overridesCount = profile.staffOverrides?.length || 0;
+
+    const auditEntry: DepartmentAuditLogEntry = {
+      id: `aud-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      action: 'DEPARTMENT_PERMISSIONS_UPDATED',
+      performedBy: profile.head || 'Hospital Administrator',
+      details: `Department permissions & access policies assigned for ${profile.name} (${profile.code}). Active capabilities: ${activeCaps.length}/9 [${activeCaps.join(', ')}]. Personnel overrides: ${overridesCount} staff configured.`,
+      severity: 'INFO',
+    };
+
+    const updatedProfile: DepartmentProfileData = {
+      ...profile,
+      capabilities: caps,
+      permissions: profile.permissions || DEFAULT_DEPARTMENT_PERMISSIONS,
+      auditLogs: [auditEntry, ...(profile.auditLogs || [])].slice(0, 100),
+    };
+
+    setProfile(updatedProfile);
+    onSave(updatedProfile);
+    showToast(`✓ Department permissions & access controls for "${profile.name}" successfully saved!`);
   };
 
   const handleSaveAll = () => {
@@ -958,28 +1347,39 @@ export const DepartmentProfileView: React.FC<Props> = ({
           <Clock size={15} /> 6. Operational Rules
         </button>
         <button
+          className={`subtab-pill ${activeTab === 'permissions' ? 'active' : ''}`}
+          onClick={() => setActiveTab('permissions')}
+          style={{
+            fontWeight: 600,
+            color: activeTab === 'permissions' ? '#047857' : undefined,
+            borderColor: activeTab === 'permissions' ? '#10b981' : undefined,
+          }}
+        >
+          <ShieldCheck size={15} /> 7. Permissions & Access Control
+        </button>
+        <button
           className={`subtab-pill ${activeTab === 'documents' ? 'active' : ''}`}
           onClick={() => setActiveTab('documents')}
         >
-          <FileText size={15} /> 7. Documents & SOPs
+          <FileText size={15} /> 8. Documents & SOPs
         </button>
         <button
           className={`subtab-pill ${activeTab === 'lifecycle' ? 'active' : ''}`}
           onClick={() => setActiveTab('lifecycle')}
         >
-          <GitMerge size={15} /> 8. Status & Merge
+          <GitMerge size={15} /> 9. Status & Merge
         </button>
         <button
           className={`subtab-pill ${activeTab === 'capacity_kpis' ? 'active' : ''}`}
           onClick={() => setActiveTab('capacity_kpis')}
         >
-          <Activity size={15} /> 9. Capacity & KPIs
+          <Activity size={15} /> 10. Capacity & KPIs
         </button>
         <button
           className={`subtab-pill ${activeTab === 'audit_logs' ? 'active' : ''}`}
           onClick={() => setActiveTab('audit_logs')}
         >
-          <Shield size={15} /> 10. Audit Trail ({profile.auditLogs?.length || 1})
+          <Shield size={15} /> 11. Audit Trail ({profile.auditLogs?.length || 1})
         </button>
       </div>
 
@@ -2670,277 +3070,794 @@ export const DepartmentProfileView: React.FC<Props> = ({
           </div>
         )}
 
-        {/* ================= 8. ROLE & PERMISSIONS ================= */}
+        {/* ================= 7. DEPARTMENT PERMISSIONS & ACCESS CONTROL CENTER ================= */}
         {activeTab === 'permissions' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            <div>
-              <h3 style={{ fontSize: '1.125rem', fontWeight: 700, margin: '0 0 0.25rem 0' }}>
-                Department Level Role & Action Access Matrix
-              </h3>
-              <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: 0 }}>
-                Control which actions Doctors, Nurses, Receptionists, and Billing Clerks can perform specifically inside this department.
-              </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+            {/* Header Command Bar */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '1rem',
+                backgroundColor: 'rgba(5, 150, 105, 0.04)',
+                border: '1px solid rgba(5, 150, 105, 0.25)',
+                borderRadius: '12px',
+                padding: '1.25rem 1.5rem',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div
+                  style={{
+                    width: '46px',
+                    height: '46px',
+                    borderRadius: '10px',
+                    backgroundColor: '#059669',
+                    color: '#ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 4px 12px rgba(5, 150, 105, 0.25)',
+                    flexShrink: 0,
+                  }}
+                >
+                  <ShieldCheck size={24} />
+                </div>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+                    <h3 style={{ fontSize: '1.125rem', fontWeight: 700, margin: 0, color: 'var(--text-main)' }}>
+                      Department Permissions & Access Governance
+                    </h3>
+                    <span className="badge badge-success">
+                      {Object.values(profile.capabilities || DEFAULT_DEPARTMENT_CAPABILITIES).filter(Boolean).length}/9 Capabilities Active
+                    </span>
+                    <span className="badge badge-secondary">
+                      {departmentPersonnel.total} Staff Governed
+                    </span>
+                  </div>
+                  <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: '0.25rem 0 0 0' }}>
+                    Authorize what clinical, acute, and billing operations are permitted within <strong>{profile.name}</strong> ({profile.code}), configure cadre roles, and set personnel clearance tiers.
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => handleApplyPreset(profile.category === 'diagnostic' ? 'LAB' : profile.category === 'revenue' ? 'BILLING' : 'OPD')}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.8125rem' }}
+                >
+                  <RotateCcw size={14} /> Reset to Defaults
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleSavePermissions}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    fontSize: '0.8125rem',
+                    background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                    border: 'none',
+                    fontWeight: 600,
+                    boxShadow: '0 2px 8px rgba(5, 150, 105, 0.25)',
+                  }}
+                >
+                  <Save size={15} /> Save Department Permissions
+                </button>
+              </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.25rem' }}>
-              {/* Doctor Permissions */}
-              <div
-                style={{
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '10px',
-                  padding: '1.25rem',
-                  backgroundColor: 'var(--bg-subtle, #f9fafb)',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-                  <Stethoscope size={18} color="var(--primary)" />
-                  <h4 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 700 }}>Doctor Permissions</h4>
+            {/* Quick 1-Click Archetype Presets */}
+            <div
+              style={{
+                backgroundColor: 'var(--card-bg, #ffffff)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '12px',
+                padding: '1.25rem 1.5rem',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Zap size={16} color="#f59e0b" />
+                  <span style={{ fontSize: '0.875rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    1-Click Department Permission Archetype Presets
+                  </span>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', fontSize: '0.8125rem' }}>
-                    <input
-                      type="checkbox"
-                      checked={profile.permissions?.doctor.viewPatients ?? true}
-                      onChange={(e) =>
-                        setProfile({
-                          ...profile,
-                          permissions: {
-                            ...profile.permissions!,
-                            doctor: { ...profile.permissions!.doctor, viewPatients: e.target.checked },
-                          },
-                        })
-                      }
-                    />
-                    View Department Patient Queue & History
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', fontSize: '0.8125rem' }}>
-                    <input
-                      type="checkbox"
-                      checked={profile.permissions?.doctor.clinicalNotes ?? true}
-                      onChange={(e) =>
-                        setProfile({
-                          ...profile,
-                          permissions: {
-                            ...profile.permissions!,
-                            doctor: { ...profile.permissions!.doctor, clinicalNotes: e.target.checked },
-                          },
-                        })
-                      }
-                    />
-                    Write & Sign SOAP Clinical Consultation Notes
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', fontSize: '0.8125rem' }}>
-                    <input
-                      type="checkbox"
-                      checked={profile.permissions?.doctor.prescribe ?? true}
-                      onChange={(e) =>
-                        setProfile({
-                          ...profile,
-                          permissions: {
-                            ...profile.permissions!,
-                            doctor: { ...profile.permissions!.doctor, prescribe: e.target.checked },
-                          },
-                        })
-                      }
-                    />
-                    Issue Digital Prescriptions with Barcode
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', fontSize: '0.8125rem' }}>
-                    <input
-                      type="checkbox"
-                      checked={profile.permissions?.doctor.orderDiagnostics ?? true}
-                      onChange={(e) =>
-                        setProfile({
-                          ...profile,
-                          permissions: {
-                            ...profile.permissions!,
-                            doctor: { ...profile.permissions!.doctor, orderDiagnostics: e.target.checked },
-                          },
-                        })
-                      }
-                    />
-                    Requisition Lab Tests & Radiology Scans
-                  </label>
-                </div>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  Clicking an archetype auto-configures capabilities and cadre permissions
+                </span>
               </div>
 
-              {/* Nurse Permissions */}
-              <div
-                style={{
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '10px',
-                  padding: '1.25rem',
-                  backgroundColor: 'var(--bg-subtle, #f9fafb)',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-                  <Activity size={18} color="#10b981" />
-                  <h4 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 700 }}>Nursing Staff Permissions</h4>
+              <div style={{ display: 'flex', gap: '0.625rem', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => handleApplyPreset('OPD')}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8125rem', padding: '0.5rem 0.875rem' }}
+                >
+                  <Stethoscope size={14} color="#0284c7" /> OPD Ambulatory Clinic
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => handleApplyPreset('IPD')}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8125rem', padding: '0.5rem 0.875rem' }}
+                >
+                  <BedDouble size={14} color="#6366f1" /> Inpatient Ward / ICU (IPD)
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => handleApplyPreset('ER')}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8125rem', padding: '0.5rem 0.875rem' }}
+                >
+                  <AlertTriangle size={14} color="#ef4444" /> Emergency & Trauma (ER)
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => handleApplyPreset('LAB')}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8125rem', padding: '0.5rem 0.875rem' }}
+                >
+                  <FlaskConical size={14} color="#8b5cf6" /> Diagnostic Pathology / Lab
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => handleApplyPreset('PHARMACY')}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8125rem', padding: '0.5rem 0.875rem' }}
+                >
+                  <Pill size={14} color="#10b981" /> Pharmacy & Dispensary
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => handleApplyPreset('BILLING')}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8125rem', padding: '0.5rem 0.875rem' }}
+                >
+                  <Coins size={14} color="#f59e0b" /> Cashier & Billing Desk
+                </button>
+              </div>
+            </div>
+
+            {/* SECTION 1: MASTER DEPARTMENT OPERATIONAL CAPABILITIES */}
+            <div>
+              <div style={{ marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Sliders size={18} color="var(--primary)" />
+                  <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>
+                    1. Department Operational Capabilities (Master Switches)
+                  </h4>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', fontSize: '0.8125rem' }}>
-                    <input
-                      type="checkbox"
-                      checked={profile.permissions?.nurse.vitalsEntry ?? true}
-                      onChange={(e) =>
-                        setProfile({
-                          ...profile,
-                          permissions: {
-                            ...profile.permissions!,
-                            nurse: { ...profile.permissions!.nurse, vitalsEntry: e.target.checked },
-                          },
-                        })
-                      }
-                    />
-                    Record Patient Vitals (BP, SpO2, Pulse, Temp)
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', fontSize: '0.8125rem' }}>
-                    <input
-                      type="checkbox"
-                      checked={profile.permissions?.nurse.medicationAdmin ?? true}
-                      onChange={(e) =>
-                        setProfile({
-                          ...profile,
-                          permissions: {
-                            ...profile.permissions!,
-                            nurse: { ...profile.permissions!.nurse, medicationAdmin: e.target.checked },
-                          },
-                        })
-                      }
-                    />
-                    Medication Administration Record (MAR Charting)
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', fontSize: '0.8125rem' }}>
-                    <input
-                      type="checkbox"
-                      checked={profile.permissions?.nurse.wardHandover ?? true}
-                      onChange={(e) =>
-                        setProfile({
-                          ...profile,
-                          permissions: {
-                            ...profile.permissions!,
-                            nurse: { ...profile.permissions!.nurse, wardHandover: e.target.checked },
-                          },
-                        })
-                      }
-                    />
-                    Shift Handover & Bed Status Updates
-                  </label>
-                </div>
+                <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                  Authorizes what workflows can legally take place within this department. If a capability is disabled here, individual staff roles cannot perform it.
+                </p>
               </div>
 
-              {/* Reception & Front Desk */}
-              <div
-                style={{
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '10px',
-                  padding: '1.25rem',
-                  backgroundColor: 'var(--bg-subtle, #f9fafb)',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-                  <Users size={18} color="#0ea5e9" />
-                  <h4 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 700 }}>Reception & Front Desk</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
+                {[
+                  {
+                    key: 'canConsult' as keyof DepartmentCapabilities,
+                    title: 'Outpatient Consultations',
+                    desc: 'Authorizes doctors to conduct consults, call queue tokens, and schedule visits.',
+                    icon: <Stethoscope size={18} color="#0284c7" />,
+                  },
+                  {
+                    key: 'canPrescribe' as keyof DepartmentCapabilities,
+                    title: 'E-Prescription Issuance',
+                    desc: 'Authorizes issuing digital prescriptions, medication orders, and refill approvals.',
+                    icon: <Pill size={18} color="#10b981" />,
+                  },
+                  {
+                    key: 'canOrderDiagnostics' as keyof DepartmentCapabilities,
+                    title: 'Diagnostic Lab & Imaging Orders',
+                    desc: 'Enables ordering blood tests, microbiology, histology, X-rays, and MRI scans.',
+                    icon: <FlaskConical size={18} color="#8b5cf6" />,
+                  },
+                  {
+                    key: 'canAdmitPatients' as keyof DepartmentCapabilities,
+                    title: 'Inpatient Bed Admissions',
+                    desc: 'Authorizes admitting patients directly into wards, ICU, or daycare beds.',
+                    icon: <BedDouble size={18} color="#6366f1" />,
+                  },
+                  {
+                    key: 'canPerformProcedures' as keyof DepartmentCapabilities,
+                    title: 'Clinical Procedures & OT',
+                    desc: 'Authorizes minor OT bookings, bedside suturing, and surgical interventions.',
+                    icon: <Activity size={18} color="#f59e0b" />,
+                  },
+                  {
+                    key: 'canCollectPayments' as keyof DepartmentCapabilities,
+                    title: 'Point of Sale (POS) Billing',
+                    desc: 'Enables cashiering, collecting cash/card/UPI, and printing official receipts.',
+                    icon: <Coins size={18} color="#10b981" />,
+                  },
+                  {
+                    key: 'canEmergencyBypass' as keyof DepartmentCapabilities,
+                    title: 'Emergency Triage Fast-Track Bypass',
+                    desc: 'Permits unverified critical trauma patients to bypass registration to doctor queue.',
+                    icon: <AlertTriangle size={18} color="#ef4444" />,
+                  },
+                  {
+                    key: 'canTeleconsult' as keyof DepartmentCapabilities,
+                    title: 'Telemedicine & Video Care',
+                    desc: 'Allows remote audio/video consultations and virtual follow-ups.',
+                    icon: <Zap size={18} color="#0ea5e9" />,
+                  },
+                  {
+                    key: 'canDischarge' as keyof DepartmentCapabilities,
+                    title: 'Discharge Signoff & Bed Release',
+                    desc: 'Authorizes finalizing discharge summaries, medication reconciliations, and releasing beds.',
+                    icon: <CheckCircle2 size={18} color="#059669" />,
+                  },
+                ].map((cap) => {
+                  const isEnabled = (profile.capabilities || DEFAULT_DEPARTMENT_CAPABILITIES)[cap.key];
+                  return (
+                    <div
+                      key={cap.key}
+                      onClick={() => handleToggleCapability(cap.key)}
+                      style={{
+                        backgroundColor: isEnabled ? 'rgba(5, 150, 105, 0.03)' : 'var(--card-bg, #ffffff)',
+                        border: isEnabled ? '1px solid #10b981' : '1px solid var(--border-color)',
+                        borderRadius: '10px',
+                        padding: '1rem',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease-in-out',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            {cap.icon}
+                            <h5 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700 }}>{cap.title}</h5>
+                          </div>
+                          <span
+                            className={`badge ${isEnabled ? 'badge-success' : 'badge-secondary'}`}
+                            style={{ fontSize: '0.6875rem', padding: '0.125rem 0.375rem' }}
+                          >
+                            {isEnabled ? 'ENABLED' : 'DISABLED'}
+                          </span>
+                        </div>
+                        <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                          {cap.desc}
+                        </p>
+                      </div>
+
+                      <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                        <div
+                          style={{
+                            width: '38px',
+                            height: '20px',
+                            backgroundColor: isEnabled ? '#10b981' : '#cbd5e1',
+                            borderRadius: '20px',
+                            position: 'relative',
+                            transition: 'background-color 0.2s',
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: '16px',
+                              height: '16px',
+                              backgroundColor: '#ffffff',
+                              borderRadius: '50%',
+                              position: 'absolute',
+                              top: '2px',
+                              left: isEnabled ? '20px' : '2px',
+                              transition: 'left 0.2s',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* SECTION 2: GRANULAR ROLE ACTION PERMISSIONS BY CADRE */}
+            <div>
+              <div style={{ marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Users size={18} color="var(--primary)" />
+                  <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>
+                    2. Granular Role Action Permissions by Cadre
+                  </h4>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', fontSize: '0.8125rem' }}>
-                    <input
-                      type="checkbox"
-                      checked={profile.permissions?.receptionist.checkIn ?? true}
-                      onChange={(e) =>
-                        setProfile({
-                          ...profile,
-                          permissions: {
-                            ...profile.permissions!,
-                            receptionist: { ...profile.permissions!.receptionist, checkIn: e.target.checked },
-                          },
-                        })
-                      }
-                    />
-                    Patient Check-In & UHID Verification
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', fontSize: '0.8125rem' }}>
-                    <input
-                      type="checkbox"
-                      checked={profile.permissions?.receptionist.queueToken ?? true}
-                      onChange={(e) =>
-                        setProfile({
-                          ...profile,
-                          permissions: {
-                            ...profile.permissions!,
-                            receptionist: { ...profile.permissions!.receptionist, queueToken: e.target.checked },
-                          },
-                        })
-                      }
-                    />
-                    Queue Token Slip Printing
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', fontSize: '0.8125rem' }}>
-                    <input
-                      type="checkbox"
-                      checked={profile.permissions?.receptionist.opdBooking ?? true}
-                      onChange={(e) =>
-                        setProfile({
-                          ...profile,
-                          permissions: {
-                            ...profile.permissions!,
-                            receptionist: { ...profile.permissions!.receptionist, opdBooking: e.target.checked },
-                          },
-                        })
-                      }
-                    />
-                    Doctor Slot Booking & Rescheduling
-                  </label>
-                </div>
+                <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                  Configure what individual actions each cadre is authorized to execute when working in <strong>{profile.name}</strong>.
+                </p>
               </div>
 
-              {/* Billing Desk */}
-              <div
-                style={{
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '10px',
-                  padding: '1.25rem',
-                  backgroundColor: 'var(--bg-subtle, #f9fafb)',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-                  <Coins size={18} color="#eab308" />
-                  <h4 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 700 }}>Billing & Financial Staff</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.25rem' }}>
+                {/* 1. Doctors & Specialists */}
+                <div
+                  style={{
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '10px',
+                    padding: '1.25rem',
+                    backgroundColor: 'var(--bg-subtle, #f9fafb)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <Stethoscope size={18} color="#0284c7" />
+                      <h5 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 700 }}>Doctors & Specialists</h5>
+                    </div>
+                    <span className="badge badge-info" style={{ fontSize: '0.6875rem' }}>
+                      Clinical Cadre
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {[
+                      { key: 'viewPatients', label: 'View department patient queue & full medical history' },
+                      { key: 'clinicalNotes', label: 'Write & sign SOAP clinical consultation notes' },
+                      { key: 'prescribe', label: 'Issue digital prescriptions with barcode verification' },
+                      { key: 'orderDiagnostics', label: 'Order lab tests, radiology imaging & pathology' },
+                      { key: 'admitDischarge', label: 'Authorize inpatient admission & sign final discharge' },
+                    ].map((item) => (
+                      <label key={item.key} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', fontSize: '0.8125rem', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={Boolean((profile.permissions?.doctor as any)?.[item.key] ?? true)}
+                          onChange={() => handleToggleRolePerm('doctor', item.key)}
+                        />
+                        <span>{item.label}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', fontSize: '0.8125rem' }}>
-                    <input
-                      type="checkbox"
-                      checked={profile.permissions?.billingStaff.chargeSlip ?? true}
-                      onChange={(e) =>
-                        setProfile({
-                          ...profile,
-                          permissions: {
-                            ...profile.permissions!,
-                            billingStaff: { ...profile.permissions!.billingStaff, chargeSlip: e.target.checked },
-                          },
-                        })
-                      }
-                    />
-                    Generate Inpatient & OPD Charge Slips
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', fontSize: '0.8125rem' }}>
-                    <input
-                      type="checkbox"
-                      checked={profile.permissions?.billingStaff.discountAuth ?? false}
-                      onChange={(e) =>
-                        setProfile({
-                          ...profile,
-                          permissions: {
-                            ...profile.permissions!,
-                            billingStaff: { ...profile.permissions!.billingStaff, discountAuth: e.target.checked },
-                          },
-                        })
-                      }
-                    />
-                    Authorize Special Concession / Discretionary Discount
-                  </label>
+
+                {/* 2. Doctor Assistants & Clinical Fellows */}
+                <div
+                  style={{
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '10px',
+                    padding: '1.25rem',
+                    backgroundColor: 'var(--bg-subtle, #f9fafb)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <UserCheck size={18} color="#0369a1" />
+                      <h5 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 700 }}>Doctor Assistants & Fellows</h5>
+                    </div>
+                    <span className="badge badge-secondary" style={{ fontSize: '0.6875rem' }}>
+                      Clinical Support
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {[
+                      { key: 'preConsultationScreening', label: 'Record chief complaints & triage vitals' },
+                      { key: 'draftPrescription', label: 'Prepare draft prescriptions for doctor countersign' },
+                      { key: 'viewReports', label: 'View diagnostic reports & investigation results' },
+                    ].map((item) => (
+                      <label key={item.key} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', fontSize: '0.8125rem', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={Boolean((profile.permissions?.doctorAssistant as any)?.[item.key] ?? true)}
+                          onChange={() => handleToggleRolePerm('doctorAssistant', item.key)}
+                        />
+                        <span>{item.label}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
+
+                {/* 3. Nursing Staff */}
+                <div
+                  style={{
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '10px',
+                    padding: '1.25rem',
+                    backgroundColor: 'var(--bg-subtle, #f9fafb)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <Activity size={18} color="#10b981" />
+                      <h5 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 700 }}>Nursing Staff</h5>
+                    </div>
+                    <span className="badge badge-success" style={{ fontSize: '0.6875rem' }}>
+                      Patient Care
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {[
+                      { key: 'vitalsEntry', label: 'Record patient vitals (BP, SpO2, Pulse, Temp, Pain)' },
+                      { key: 'medicationAdmin', label: 'Medication Administration Record (MAR Charting)' },
+                      { key: 'wardHandover', label: 'Shift handover & departmental bed status updates' },
+                      { key: 'nursingNotes', label: 'Record nursing progress notes & care observations' },
+                    ].map((item) => (
+                      <label key={item.key} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', fontSize: '0.8125rem', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={Boolean((profile.permissions?.nurse as any)?.[item.key] ?? true)}
+                          onChange={() => handleToggleRolePerm('nurse', item.key)}
+                        />
+                        <span>{item.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 4. Reception & Front Desk */}
+                <div
+                  style={{
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '10px',
+                    padding: '1.25rem',
+                    backgroundColor: 'var(--bg-subtle, #f9fafb)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <Users size={18} color="#0ea5e9" />
+                      <h5 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 700 }}>Reception & Front Desk</h5>
+                    </div>
+                    <span className="badge badge-info" style={{ fontSize: '0.6875rem' }}>
+                      Patient Access
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {[
+                      { key: 'patientRegistration', label: 'Register new patients & issue UHID identifiers' },
+                      { key: 'checkIn', label: 'Patient check-in & arrival desk verification' },
+                      { key: 'queueToken', label: 'Generate & print OPD consultation queue token slips' },
+                      { key: 'opdBooking', label: 'Doctor slot appointment booking & rescheduling' },
+                    ].map((item) => (
+                      <label key={item.key} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', fontSize: '0.8125rem', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={Boolean((profile.permissions?.receptionist as any)?.[item.key] ?? true)}
+                          onChange={() => handleToggleRolePerm('receptionist', item.key)}
+                        />
+                        <span>{item.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 5. Billing & Financial Staff */}
+                <div
+                  style={{
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '10px',
+                    padding: '1.25rem',
+                    backgroundColor: 'var(--bg-subtle, #f9fafb)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <Coins size={18} color="#eab308" />
+                      <h5 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 700 }}>Billing & Financial Staff</h5>
+                    </div>
+                    <span className="badge badge-warning" style={{ fontSize: '0.6875rem' }}>
+                      Financial Ledger
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {[
+                      { key: 'chargeSlip', label: 'Generate inpatient & OPD charge slips and invoices' },
+                      { key: 'collectPayments', label: 'Collect Cash, Card, UPI payments & print receipts' },
+                      { key: 'discountAuth', label: 'Authorize special concessions & discretionary discounts' },
+                      { key: 'refundProcessing', label: 'Process approved refund requests' },
+                    ].map((item) => (
+                      <label key={item.key} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', fontSize: '0.8125rem', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={Boolean((profile.permissions?.billingStaff as any)?.[item.key] ?? false)}
+                          onChange={() => handleToggleRolePerm('billingStaff', item.key)}
+                        />
+                        <span>{item.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 6. Laboratory Technicians */}
+                <div
+                  style={{
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '10px',
+                    padding: '1.25rem',
+                    backgroundColor: 'var(--bg-subtle, #f9fafb)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <FlaskConical size={18} color="#8b5cf6" />
+                      <h5 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 700 }}>Laboratory Technicians</h5>
+                    </div>
+                    <span className="badge badge-secondary" style={{ fontSize: '0.6875rem' }}>
+                      Diagnostic Cadre
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {[
+                      { key: 'sampleCollection', label: 'Phlebotomy, specimen accessioning & barcode scanning' },
+                      { key: 'enterResults', label: 'Input investigation values & analyze parameters' },
+                      { key: 'reportRelease', label: 'Authorize, sign, and release official diagnostic reports' },
+                    ].map((item) => (
+                      <label key={item.key} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', fontSize: '0.8125rem', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={Boolean((profile.permissions?.technician as any)?.[item.key] ?? true)}
+                          onChange={() => handleToggleRolePerm('technician', item.key)}
+                        />
+                        <span>{item.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 7. Dispensary Pharmacists */}
+                <div
+                  style={{
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '10px',
+                    padding: '1.25rem',
+                    backgroundColor: 'var(--bg-subtle, #f9fafb)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <Pill size={18} color="#10b981" />
+                      <h5 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 700 }}>Dispensary Pharmacists</h5>
+                    </div>
+                    <span className="badge badge-success" style={{ fontSize: '0.6875rem' }}>
+                      Pharmacy Cadre
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {[
+                      { key: 'dispenseMedication', label: 'Dispense medications against digital e-prescriptions' },
+                      { key: 'substituteGeneric', label: 'Generic molecule substitution & safety verification' },
+                      { key: 'inventoryAdjustment', label: 'Dispensary batch stock adjustment & returns' },
+                    ].map((item) => (
+                      <label key={item.key} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', fontSize: '0.8125rem', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={Boolean((profile.permissions?.pharmacist as any)?.[item.key] ?? true)}
+                          onChange={() => handleToggleRolePerm('pharmacist', item.key)}
+                        />
+                        <span>{item.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION 3: ASSIGNED PERSONNEL CLEARANCE OVERRIDES */}
+            <div>
+              <div style={{ marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Award size={18} color="#d97706" />
+                  <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>
+                    3. Personnel Department Clearance Overrides ({departmentPersonnel.total} Assigned Staff)
+                  </h4>
+                </div>
+                <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                  Assign individual clearance tiers and signing privileges to specific staff members stationed in <strong>{profile.name}</strong>.
+                </p>
+              </div>
+
+              {departmentPersonnel.assignedStaff.length > 0 ? (
+                <div
+                  style={{
+                    backgroundColor: 'var(--card-bg, #ffffff)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '10px',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8125rem' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: 'var(--bg-subtle, #f9fafb)', borderBottom: '1px solid var(--border-color)', textAlign: 'left' }}>
+                        <th style={{ padding: '0.75rem 1rem' }}>Staff Member</th>
+                        <th style={{ padding: '0.75rem 1rem' }}>Role Cadre</th>
+                        <th style={{ padding: '0.75rem 1rem' }}>Department Clearance Level</th>
+                        <th style={{ padding: '0.75rem 1rem' }}>Special Privileges</th>
+                        <th style={{ padding: '0.75rem 1rem' }}>Authorization Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {departmentPersonnel.assignedStaff.map((staff) => {
+                        const override = (profile.staffOverrides || []).find((o) => o.staffId === staff.id);
+                        const clearance: StaffDepartmentClearanceLevel =
+                          override?.clearanceLevel ||
+                          (staff.isDepartmentHead || profile.head === staff.fullName
+                            ? 'HOD'
+                            : staff.role === 'doctor'
+                            ? 'SENIOR_SPECIALIST'
+                            : 'ATTENDING');
+
+                        return (
+                          <tr key={staff.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                            <td style={{ padding: '0.75rem 1rem' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+                                <div
+                                  style={{
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '50%',
+                                    backgroundColor: staff.role === 'doctor' ? '#e0f2fe' : staff.role === 'nurse' ? '#dcfce7' : '#f3f4f6',
+                                    color: staff.role === 'doctor' ? '#0369a1' : staff.role === 'nurse' ? '#15803d' : '#374151',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontWeight: 700,
+                                    fontSize: '0.75rem',
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  {staff.fullName.charAt(0)}
+                                </div>
+                                <div>
+                                  <div style={{ fontWeight: 600 }}>{staff.fullName}</div>
+                                  <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
+                                    {staff.employeeCode}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td style={{ padding: '0.75rem 1rem' }}>
+                              <span
+                                className={`badge ${
+                                  staff.role === 'doctor'
+                                    ? 'badge-info'
+                                    : staff.role === 'nurse'
+                                    ? 'badge-success'
+                                    : staff.role === 'technician'
+                                    ? 'badge-warning'
+                                    : 'badge-secondary'
+                                }`}
+                              >
+                                {staff.role.toUpperCase()}
+                              </span>
+                            </td>
+                            <td style={{ padding: '0.75rem 1rem' }}>
+                              <select
+                                className="form-control"
+                                style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', width: '170px' }}
+                                value={clearance}
+                                onChange={(e) =>
+                                  handleUpdateStaffOverride(staff, e.target.value as StaffDepartmentClearanceLevel)
+                                }
+                              >
+                                <option value="HOD">HOD (Department Head)</option>
+                                <option value="SENIOR_SPECIALIST">Senior Specialist</option>
+                                <option value="ATTENDING">Attending Practitioner</option>
+                                <option value="TRAINEE">Trainee / Supervised</option>
+                                <option value="RESTRICTED">Restricted Access</option>
+                              </select>
+                            </td>
+                            <td style={{ padding: '0.75rem 1rem' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.75rem', cursor: 'pointer' }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={override?.canApproveDischarges ?? (staff.role === 'doctor')}
+                                    onChange={(e) =>
+                                      handleUpdateStaffOverride(staff, clearance, { canApproveDischarges: e.target.checked })
+                                    }
+                                  />
+                                  <span>Discharge Signoff</span>
+                                </label>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.75rem', cursor: 'pointer' }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={override?.canOverrideDiscounts ?? (staff.isDepartmentHead || clearance === 'HOD')}
+                                    onChange={(e) =>
+                                      handleUpdateStaffOverride(staff, clearance, { canOverrideDiscounts: e.target.checked })
+                                    }
+                                  />
+                                  <span>Discount Auth</span>
+                                </label>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.75rem', cursor: 'pointer' }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={override?.canSignNarcotics ?? (staff.role === 'doctor')}
+                                    onChange={(e) =>
+                                      handleUpdateStaffOverride(staff, clearance, { canSignNarcotics: e.target.checked })
+                                    }
+                                  />
+                                  <span>Narcotics Rx</span>
+                                </label>
+                              </div>
+                            </td>
+                            <td style={{ padding: '0.75rem 1rem' }}>
+                              <input
+                                type="text"
+                                className="form-control"
+                                placeholder="e.g. Authorized for Chemotherapy protocol"
+                                value={override?.customNotes || ''}
+                                onChange={(e) =>
+                                  handleUpdateStaffOverride(staff, clearance, undefined, e.target.value)
+                                }
+                                style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', width: '220px' }}
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    backgroundColor: 'var(--bg-subtle, #f9fafb)',
+                    border: '1px dashed var(--border-color)',
+                    borderRadius: '10px',
+                    padding: '2rem',
+                    textAlign: 'center',
+                  }}
+                >
+                  <Users size={32} color="var(--text-muted)" style={{ margin: '0 auto 0.75rem auto' }} />
+                  <h5 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 600 }}>No Personnel Currently Assigned</h5>
+                  <p style={{ margin: '0.375rem 0 1rem 0', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                    Station staff to <strong>{profile.name}</strong> to configure individual clearance levels and clinical signing privileges.
+                  </p>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setActiveTab('staff')}
+                    style={{ fontSize: '0.8125rem' }}
+                  >
+                    View Staff Deployment (Tab 3)
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Bottom Action Bar */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                paddingTop: '1.25rem',
+                borderTop: '1px solid var(--border-color)',
+                marginTop: '1rem',
+              }}
+            >
+              <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                Audit Record will be logged as <code style={{ backgroundColor: 'rgba(0,0,0,0.05)', padding: '0.125rem 0.375rem', borderRadius: '4px' }}>DEPARTMENT_PERMISSIONS_UPDATED</code>
+              </div>
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={onBack}
+                  style={{ fontSize: '0.8125rem' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleSavePermissions}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    fontSize: '0.8125rem',
+                    background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                    border: 'none',
+                    fontWeight: 600,
+                  }}
+                >
+                  <Save size={15} /> Save Department Permissions & Access Controls
+                </button>
               </div>
             </div>
           </div>

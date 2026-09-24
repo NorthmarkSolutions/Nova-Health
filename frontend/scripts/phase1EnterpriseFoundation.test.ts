@@ -40,6 +40,12 @@ import {
 import {
   DepartmentProfileData,
   DepartmentAuditLogEntry,
+  DepartmentCapabilities,
+  DepartmentRolePermissions,
+  StaffPermissionOverride,
+  DEFAULT_DEPARTMENT_CAPABILITIES,
+  DEFAULT_DEPARTMENT_PERMISSIONS,
+  getDepartmentArchetypePreset,
 } from '../src/pages/admin/setup/organization/DepartmentProfileView';
 
 import { defaultCardiologyDept } from '../src/pages/admin/setup/organization/DepartmentsSection';
@@ -226,6 +232,100 @@ const updatedDept: DepartmentProfileData = {
 
 assert(updatedDept.dailyConsultationCapacity === 180, 'Department capacity successfully updated');
 assert(updatedDept.auditLogs?.[0].action === 'CAPACITY_QUOTA_ADJUSTED', 'Audit log records capacity adjustment');
+
+// -------------------------------------------------------------
+// TEST SUITE 6: DEPARTMENT PERMISSION & CAPABILITY GOVERNANCE
+// -------------------------------------------------------------
+console.log('\n--- 6. Department Permission & Operational Capability Governance ---');
+
+// 1. Defaults verification
+assert(DEFAULT_DEPARTMENT_CAPABILITIES.canConsult === true, 'Default capabilities allow consultation');
+assert(DEFAULT_DEPARTMENT_CAPABILITIES.canPrescribe === true, 'Default capabilities allow e-prescriptions');
+assert(DEFAULT_DEPARTMENT_CAPABILITIES.canAdmitPatients === false, 'Default ambulatory capabilities disallow inpatient admission');
+
+// 2. Archetype Presets verification
+const opdPreset = getDepartmentArchetypePreset('OPD');
+assert(opdPreset.capabilities.canConsult === true, 'OPD preset enables consultation');
+assert(opdPreset.capabilities.canTeleconsult === true, 'OPD preset enables teleconsultation');
+assert(opdPreset.capabilities.canAdmitPatients === false, 'OPD preset restricts inpatient bed admission');
+assert(opdPreset.permissions.doctor.prescribe === true, 'OPD doctor can prescribe');
+assert(opdPreset.permissions.doctor.admitDischarge === false, 'OPD doctor restricted from inpatient admission/discharge');
+
+const ipdPreset = getDepartmentArchetypePreset('IPD');
+assert(ipdPreset.capabilities.canAdmitPatients === true, 'IPD preset enables inpatient admissions');
+assert(ipdPreset.capabilities.canDischarge === true, 'IPD preset enables bed discharge clearance');
+assert(ipdPreset.permissions.nurse.wardHandover === true, 'IPD nurse has ward handover enabled');
+
+const erPreset = getDepartmentArchetypePreset('ER');
+assert(erPreset.capabilities.canEmergencyBypass === true, 'ER preset enables emergency triage fast-track bypass');
+assert(erPreset.capabilities.canPerformProcedures === true, 'ER preset enables urgent procedures');
+assert(erPreset.permissions.billingStaff.refundProcessing === true, 'ER billing clerk can process verified refunds');
+
+const labPreset = getDepartmentArchetypePreset('LAB');
+assert(labPreset.capabilities.canConsult === false, 'LAB preset restricts doctor consultations');
+assert(labPreset.capabilities.canOrderDiagnostics === true, 'LAB preset allows diagnostic orders');
+assert(labPreset.permissions.technician.reportRelease === true, 'LAB tech authorized for diagnostic report release');
+
+const pharmacyPreset = getDepartmentArchetypePreset('PHARMACY');
+assert(pharmacyPreset.capabilities.canPrescribe === false, 'Pharmacy preset disallows e-prescribing');
+assert(pharmacyPreset.permissions.pharmacist.dispenseMedication === true, 'Pharmacy allows medication dispensing');
+assert(pharmacyPreset.permissions.pharmacist.substituteGeneric === true, 'Pharmacy allows generic substitution');
+
+const billingPreset = getDepartmentArchetypePreset('BILLING');
+assert(billingPreset.capabilities.canCollectPayments === true, 'Billing desk allows POS payment collection');
+assert(billingPreset.permissions.billingStaff.discountAuth === true, 'Billing desk allows authorized discount concessions');
+
+// 3. Personnel Clearance Overrides
+const staffOverride: StaffPermissionOverride = {
+  staffId: 'stf-cardio-101',
+  staffName: 'Dr. Arthur Vance',
+  employeeCode: 'DOC-CARDIO-101',
+  role: 'doctor',
+  clearanceLevel: 'HOD',
+  canApproveDischarges: true,
+  canOverrideDiscounts: true,
+  canSignNarcotics: true,
+  customNotes: 'Senior department signing authority and invasive cath lab clearance.',
+  assignedAt: new Date().toISOString(),
+};
+
+assert(staffOverride.clearanceLevel === 'HOD', 'Staff clearance tier set to HOD');
+assert(staffOverride.canSignNarcotics === true, 'Staff granted narcotics signing privileges');
+assert(staffOverride.canOverrideDiscounts === true, 'Staff granted concession override authority');
+
+// 4. Department Permissions Assignment & Audit Log
+const permissionAuditLog: DepartmentAuditLogEntry = {
+  id: `aud-${Date.now()}`,
+  timestamp: new Date().toISOString(),
+  action: 'DEPARTMENT_PERMISSIONS_UPDATED',
+  performedBy: 'Hospital Super Administrator',
+  details: 'Permissions and operational boundaries assigned. Active capabilities: 7/9. Personnel overrides: 1 configured.',
+  severity: 'INFO',
+};
+
+const cardioWithPermissions: DepartmentProfileData = {
+  ...defaultCardiologyDept,
+  capabilities: {
+    ...DEFAULT_DEPARTMENT_CAPABILITIES,
+    canAdmitPatients: true,
+    canPerformProcedures: true,
+    canDischarge: true,
+  },
+  permissions: {
+    ...DEFAULT_DEPARTMENT_PERMISSIONS,
+    doctor: {
+      ...DEFAULT_DEPARTMENT_PERMISSIONS.doctor,
+      admitDischarge: true,
+    },
+  },
+  staffOverrides: [staffOverride],
+  auditLogs: [permissionAuditLog, ...(defaultCardiologyDept.auditLogs || [])],
+};
+
+assert(cardioWithPermissions.capabilities?.canAdmitPatients === true, 'Cardiology inpatient admission capability active');
+assert(cardioWithPermissions.permissions?.doctor.admitDischarge === true, 'Cardiology doctor admission/discharge permission active');
+assert(cardioWithPermissions.staffOverrides?.length === 1, 'Cardiology staff clearance override assigned');
+assert(cardioWithPermissions.auditLogs?.[0].action === 'DEPARTMENT_PERMISSIONS_UPDATED', 'Audit trail records DEPARTMENT_PERMISSIONS_UPDATED');
 
 // -------------------------------------------------------------
 // FINAL REPORT
