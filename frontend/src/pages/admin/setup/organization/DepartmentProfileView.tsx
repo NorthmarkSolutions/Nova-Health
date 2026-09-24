@@ -701,12 +701,16 @@ export const DepartmentProfileView: React.FC<Props> = ({
 
   const handleToggleRolePerm = (cadre: keyof DepartmentRolePermissions, action: string) => {
     const currentPerms = profile.permissions || DEFAULT_DEPARTMENT_PERMISSIONS;
-    const cadrePerms = (currentPerms[cadre] as any) || {};
+    const cadrePerms = (currentPerms[cadre] as any) || (DEFAULT_DEPARTMENT_PERMISSIONS[cadre] as any) || {};
+    const defaultVal = cadre === 'billingStaff' ? false : true;
+    const currentVal = cadrePerms[action] !== undefined
+      ? Boolean(cadrePerms[action])
+      : Boolean((DEFAULT_DEPARTMENT_PERMISSIONS[cadre] as any)?.[action] ?? defaultVal);
     const updated = {
       ...currentPerms,
       [cadre]: {
         ...cadrePerms,
-        [action]: !cadrePerms[action],
+        [action]: !currentVal,
       },
     };
     setProfile((prev) => ({
@@ -3377,262 +3381,228 @@ export const DepartmentProfileView: React.FC<Props> = ({
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.25rem' }}>
-                {/* 1. Doctors & Specialists */}
-                <div
-                  style={{
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '10px',
-                    padding: '1.25rem',
-                    backgroundColor: 'var(--bg-subtle, #f9fafb)',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <Stethoscope size={18} color="#0284c7" />
-                      <h5 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 700 }}>Doctors & Specialists</h5>
-                    </div>
-                    <span className="badge badge-info" style={{ fontSize: '0.6875rem' }}>
-                      Clinical Cadre
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    {[
+                {([
+                  {
+                    key: 'doctor' as keyof DepartmentRolePermissions,
+                    title: 'Doctors & Specialists',
+                    badge: 'Clinical Cadre',
+                    badgeClass: 'badge-info',
+                    icon: <Stethoscope size={18} color="#0284c7" />,
+                    defaultVal: true,
+                    actions: [
                       { key: 'viewPatients', label: 'View department patient queue & full medical history' },
                       { key: 'clinicalNotes', label: 'Write & sign SOAP clinical consultation notes' },
                       { key: 'prescribe', label: 'Issue digital prescriptions with barcode verification' },
                       { key: 'orderDiagnostics', label: 'Order lab tests, radiology imaging & pathology' },
                       { key: 'admitDischarge', label: 'Authorize inpatient admission & sign final discharge' },
-                    ].map((item) => (
-                      <label key={item.key} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', fontSize: '0.8125rem', cursor: 'pointer' }}>
-                        <input
-                          type="checkbox"
-                          checked={Boolean((profile.permissions?.doctor as any)?.[item.key] ?? true)}
-                          onChange={() => handleToggleRolePerm('doctor', item.key)}
-                        />
-                        <span>{item.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                {/* 2. Doctor Assistants & Clinical Fellows */}
-                <div
-                  style={{
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '10px',
-                    padding: '1.25rem',
-                    backgroundColor: 'var(--bg-subtle, #f9fafb)',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <UserCheck size={18} color="#0369a1" />
-                      <h5 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 700 }}>Doctor Assistants & Fellows</h5>
-                    </div>
-                    <span className="badge badge-secondary" style={{ fontSize: '0.6875rem' }}>
-                      Clinical Support
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    {[
+                    ],
+                  },
+                  {
+                    key: 'doctorAssistant' as keyof DepartmentRolePermissions,
+                    title: 'Doctor Assistants & Fellows',
+                    badge: 'Clinical Support',
+                    badgeClass: 'badge-secondary',
+                    icon: <UserCheck size={18} color="#0369a1" />,
+                    defaultVal: true,
+                    actions: [
                       { key: 'preConsultationScreening', label: 'Record chief complaints & triage vitals' },
                       { key: 'draftPrescription', label: 'Prepare draft prescriptions for doctor countersign' },
                       { key: 'viewReports', label: 'View diagnostic reports & investigation results' },
-                    ].map((item) => (
-                      <label key={item.key} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', fontSize: '0.8125rem', cursor: 'pointer' }}>
-                        <input
-                          type="checkbox"
-                          checked={Boolean((profile.permissions?.doctorAssistant as any)?.[item.key] ?? true)}
-                          onChange={() => handleToggleRolePerm('doctorAssistant', item.key)}
-                        />
-                        <span>{item.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                {/* 3. Nursing Staff */}
-                <div
-                  style={{
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '10px',
-                    padding: '1.25rem',
-                    backgroundColor: 'var(--bg-subtle, #f9fafb)',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <Activity size={18} color="#10b981" />
-                      <h5 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 700 }}>Nursing Staff</h5>
-                    </div>
-                    <span className="badge badge-success" style={{ fontSize: '0.6875rem' }}>
-                      Patient Care
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    {[
+                    ],
+                  },
+                  {
+                    key: 'nurse' as keyof DepartmentRolePermissions,
+                    title: 'Nursing Staff',
+                    badge: 'Patient Care',
+                    badgeClass: 'badge-success',
+                    icon: <Activity size={18} color="#10b981" />,
+                    defaultVal: true,
+                    actions: [
                       { key: 'vitalsEntry', label: 'Record patient vitals (BP, SpO2, Pulse, Temp, Pain)' },
                       { key: 'medicationAdmin', label: 'Medication Administration Record (MAR Charting)' },
                       { key: 'wardHandover', label: 'Shift handover & departmental bed status updates' },
                       { key: 'nursingNotes', label: 'Record nursing progress notes & care observations' },
-                    ].map((item) => (
-                      <label key={item.key} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', fontSize: '0.8125rem', cursor: 'pointer' }}>
-                        <input
-                          type="checkbox"
-                          checked={Boolean((profile.permissions?.nurse as any)?.[item.key] ?? true)}
-                          onChange={() => handleToggleRolePerm('nurse', item.key)}
-                        />
-                        <span>{item.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                {/* 4. Reception & Front Desk */}
-                <div
-                  style={{
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '10px',
-                    padding: '1.25rem',
-                    backgroundColor: 'var(--bg-subtle, #f9fafb)',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <Users size={18} color="#0ea5e9" />
-                      <h5 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 700 }}>Reception & Front Desk</h5>
-                    </div>
-                    <span className="badge badge-info" style={{ fontSize: '0.6875rem' }}>
-                      Patient Access
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    {[
+                    ],
+                  },
+                  {
+                    key: 'receptionist' as keyof DepartmentRolePermissions,
+                    title: 'Reception & Front Desk',
+                    badge: 'Patient Access',
+                    badgeClass: 'badge-info',
+                    icon: <Users size={18} color="#0ea5e9" />,
+                    defaultVal: true,
+                    actions: [
                       { key: 'patientRegistration', label: 'Register new patients & issue UHID identifiers' },
                       { key: 'checkIn', label: 'Patient check-in & arrival desk verification' },
                       { key: 'queueToken', label: 'Generate & print OPD consultation queue token slips' },
                       { key: 'opdBooking', label: 'Doctor slot appointment booking & rescheduling' },
-                    ].map((item) => (
-                      <label key={item.key} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', fontSize: '0.8125rem', cursor: 'pointer' }}>
-                        <input
-                          type="checkbox"
-                          checked={Boolean((profile.permissions?.receptionist as any)?.[item.key] ?? true)}
-                          onChange={() => handleToggleRolePerm('receptionist', item.key)}
-                        />
-                        <span>{item.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                {/* 5. Billing & Financial Staff */}
-                <div
-                  style={{
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '10px',
-                    padding: '1.25rem',
-                    backgroundColor: 'var(--bg-subtle, #f9fafb)',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <Coins size={18} color="#eab308" />
-                      <h5 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 700 }}>Billing & Financial Staff</h5>
-                    </div>
-                    <span className="badge badge-warning" style={{ fontSize: '0.6875rem' }}>
-                      Financial Ledger
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    {[
+                    ],
+                  },
+                  {
+                    key: 'billingStaff' as keyof DepartmentRolePermissions,
+                    title: 'Billing & Financial Staff',
+                    badge: 'Financial Ledger',
+                    badgeClass: 'badge-warning',
+                    icon: <Coins size={18} color="#eab308" />,
+                    defaultVal: false,
+                    actions: [
                       { key: 'chargeSlip', label: 'Generate inpatient & OPD charge slips and invoices' },
                       { key: 'collectPayments', label: 'Collect Cash, Card, UPI payments & print receipts' },
                       { key: 'discountAuth', label: 'Authorize special concessions & discretionary discounts' },
                       { key: 'refundProcessing', label: 'Process approved refund requests' },
-                    ].map((item) => (
-                      <label key={item.key} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', fontSize: '0.8125rem', cursor: 'pointer' }}>
-                        <input
-                          type="checkbox"
-                          checked={Boolean((profile.permissions?.billingStaff as any)?.[item.key] ?? false)}
-                          onChange={() => handleToggleRolePerm('billingStaff', item.key)}
-                        />
-                        <span>{item.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                {/* 6. Laboratory Technicians */}
-                <div
-                  style={{
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '10px',
-                    padding: '1.25rem',
-                    backgroundColor: 'var(--bg-subtle, #f9fafb)',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <FlaskConical size={18} color="#8b5cf6" />
-                      <h5 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 700 }}>Laboratory Technicians</h5>
-                    </div>
-                    <span className="badge badge-secondary" style={{ fontSize: '0.6875rem' }}>
-                      Diagnostic Cadre
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    {[
+                    ],
+                  },
+                  {
+                    key: 'technician' as keyof DepartmentRolePermissions,
+                    title: 'Laboratory Technicians',
+                    badge: 'Diagnostic Cadre',
+                    badgeClass: 'badge-secondary',
+                    icon: <FlaskConical size={18} color="#8b5cf6" />,
+                    defaultVal: true,
+                    actions: [
                       { key: 'sampleCollection', label: 'Phlebotomy, specimen accessioning & barcode scanning' },
                       { key: 'enterResults', label: 'Input investigation values & analyze parameters' },
                       { key: 'reportRelease', label: 'Authorize, sign, and release official diagnostic reports' },
-                    ].map((item) => (
-                      <label key={item.key} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', fontSize: '0.8125rem', cursor: 'pointer' }}>
-                        <input
-                          type="checkbox"
-                          checked={Boolean((profile.permissions?.technician as any)?.[item.key] ?? true)}
-                          onChange={() => handleToggleRolePerm('technician', item.key)}
-                        />
-                        <span>{item.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                {/* 7. Dispensary Pharmacists */}
-                <div
-                  style={{
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '10px',
-                    padding: '1.25rem',
-                    backgroundColor: 'var(--bg-subtle, #f9fafb)',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <Pill size={18} color="#10b981" />
-                      <h5 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 700 }}>Dispensary Pharmacists</h5>
-                    </div>
-                    <span className="badge badge-success" style={{ fontSize: '0.6875rem' }}>
-                      Pharmacy Cadre
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    {[
+                    ],
+                  },
+                  {
+                    key: 'pharmacist' as keyof DepartmentRolePermissions,
+                    title: 'Dispensary Pharmacists',
+                    badge: 'Pharmacy Cadre',
+                    badgeClass: 'badge-success',
+                    icon: <Pill size={18} color="#10b981" />,
+                    defaultVal: true,
+                    actions: [
                       { key: 'dispenseMedication', label: 'Dispense medications against digital e-prescriptions' },
                       { key: 'substituteGeneric', label: 'Generic molecule substitution & safety verification' },
                       { key: 'inventoryAdjustment', label: 'Dispensary batch stock adjustment & returns' },
-                    ].map((item) => (
-                      <label key={item.key} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', fontSize: '0.8125rem', cursor: 'pointer' }}>
-                        <input
-                          type="checkbox"
-                          checked={Boolean((profile.permissions?.pharmacist as any)?.[item.key] ?? true)}
-                          onChange={() => handleToggleRolePerm('pharmacist', item.key)}
-                        />
-                        <span>{item.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
+                    ],
+                  },
+                ]).map((cadre) => {
+                  const cadrePerms = (profile.permissions?.[cadre.key] as any) || (DEFAULT_DEPARTMENT_PERMISSIONS[cadre.key] as any) || {};
+                  const activeCount = cadre.actions.filter((item) => {
+                    const val = cadrePerms[item.key];
+                    return Boolean(val !== undefined ? val : cadre.defaultVal);
+                  }).length;
+
+                  return (
+                    <div
+                      key={cadre.key}
+                      style={{
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '10px',
+                        padding: '1.25rem',
+                        backgroundColor: 'var(--bg-subtle, #f9fafb)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            {cadre.icon}
+                            <h5 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 700 }}>{cadre.title}</h5>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                            <span
+                              style={{
+                                fontSize: '0.6875rem',
+                                fontWeight: 700,
+                                padding: '0.125rem 0.375rem',
+                                borderRadius: '4px',
+                                backgroundColor: activeCount === cadre.actions.length ? 'rgba(16, 185, 129, 0.12)' : 'rgba(100, 116, 139, 0.1)',
+                                color: activeCount === cadre.actions.length ? '#059669' : 'var(--text-muted)',
+                              }}
+                            >
+                              {activeCount}/{cadre.actions.length} ON
+                            </span>
+                            <span className={`badge ${cadre.badgeClass}`} style={{ fontSize: '0.6875rem' }}>
+                              {cadre.badge}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          {cadre.actions.map((item) => {
+                            const isPermEnabled = Boolean(
+                              cadrePerms[item.key] !== undefined
+                                ? cadrePerms[item.key]
+                                : cadre.defaultVal
+                            );
+
+                            return (
+                              <div
+                                key={item.key}
+                                onClick={() => handleToggleRolePerm(cadre.key, item.key)}
+                                role="button"
+                                tabIndex={0}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    handleToggleRolePerm(cadre.key, item.key);
+                                  }
+                                }}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  padding: '0.5rem 0.625rem',
+                                  borderRadius: '8px',
+                                  backgroundColor: isPermEnabled ? 'rgba(16, 185, 129, 0.05)' : 'var(--card-bg, #ffffff)',
+                                  border: isPermEnabled ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid var(--border-color)',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.15s ease-in-out',
+                                  gap: '0.75rem',
+                                  userSelect: 'none',
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    fontSize: '0.8125rem',
+                                    fontWeight: isPermEnabled ? 500 : 400,
+                                    color: isPermEnabled ? 'var(--text-main, #0f172a)' : 'var(--text-muted, #64748b)',
+                                    lineHeight: 1.35,
+                                    flex: 1,
+                                  }}
+                                >
+                                  {item.label}
+                                </span>
+
+                                {/* Modern animated toggle on/off button matching Section 1 */}
+                                <div
+                                  style={{
+                                    width: '36px',
+                                    height: '19px',
+                                    backgroundColor: isPermEnabled ? '#10b981' : '#cbd5e1',
+                                    borderRadius: '20px',
+                                    position: 'relative',
+                                    transition: 'background-color 0.2s',
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      width: '15px',
+                                      height: '15px',
+                                      backgroundColor: '#ffffff',
+                                      borderRadius: '50%',
+                                      position: 'absolute',
+                                      top: '2px',
+                                      left: isPermEnabled ? '19px' : '2px',
+                                      transition: 'left 0.2s',
+                                      boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
