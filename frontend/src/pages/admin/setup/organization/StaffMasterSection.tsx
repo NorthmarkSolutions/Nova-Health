@@ -35,6 +35,7 @@ import {
   CheckCircle,
   Shield,
   ChevronDown,
+  Eye,
 } from 'lucide-react';
 import {
   StaffMember,
@@ -50,10 +51,12 @@ import {
   getHospitalShifts,
   DEFAULT_HOSPITAL_STAFF,
   calculateStaffProfileCompletion,
+  generateEmployeeCode,
 } from './hospitalStaffStore';
 import { getCampusBuildings, BuildingNode } from './CampusInfrastructureSection';
-import { downloadStaffImportTemplate } from './staffTemplateGenerator';
+import { downloadStaffImportTemplate, exportAllStaffToCsv } from './staffTemplateGenerator';
 import { BulkStaffImportModal } from './BulkStaffImportModal';
+import { StaffProfileDrawer } from './StaffProfileDrawer';
 
 interface DepartmentOption {
   id: string;
@@ -79,6 +82,9 @@ export const StaffMasterSection: React.FC = () => {
 
   // Bulk Import Modal state
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
+
+  // 360° Staff Profile Drawer state
+  const [selectedStaffForDrawer, setSelectedStaffForDrawer] = useState<StaffMember | null>(null);
 
   // Add / Edit Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -828,6 +834,17 @@ export const StaffMasterSection: React.FC = () => {
             <UploadCloud size={14} /> Bulk Import Staff
           </button>
 
+          {/* Export Staff CSV */}
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => exportAllStaffToCsv(staffList)}
+            title="Download full hospital staff directory with bank details, emergency contacts & hierarchy (.csv)"
+            style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}
+          >
+            <Download size={14} /> Export Staff (CSV)
+          </button>
+
           {/* Restore Defaults */}
           <button
             type="button"
@@ -1308,6 +1325,15 @@ export const StaffMasterSection: React.FC = () => {
                         <button
                           type="button"
                           className="action-btn"
+                          title="View 360° Staff Profile (Banking, Emergency, Hierarchy, Docs)"
+                          onClick={() => setSelectedStaffForDrawer(member)}
+                          style={{ color: '#0284c7' }}
+                        >
+                          <Eye size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          className="action-btn"
                           title="Edit Staff Member"
                           onClick={() => handleOpenEditModal(member)}
                         >
@@ -1343,6 +1369,19 @@ export const StaffMasterSection: React.FC = () => {
         availableShifts={shifts}
         onImportSuccess={(importedCount) => {
           setStaffList(getHospitalStaff());
+        }}
+      />
+
+      {/* 360° Staff Profile Drawer */}
+      <StaffProfileDrawer
+        staff={selectedStaffForDrawer}
+        isOpen={Boolean(selectedStaffForDrawer)}
+        onClose={() => setSelectedStaffForDrawer(null)}
+        availableDepartments={departments}
+        availableShifts={shifts}
+        onSaveSuccess={(updated) => {
+          setStaffList(getHospitalStaff());
+          setSelectedStaffForDrawer(updated);
         }}
       />
 

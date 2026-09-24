@@ -39,6 +39,30 @@ export interface StaffDocuments {
   verified?: boolean;
 }
 
+export interface StaffBankDetails {
+  bankName: string;
+  accountNumber: string;
+  ifscOrSwift: string;
+  branchName?: string;
+  salaryPaymentMode: 'DIRECT_DEPOSIT' | 'BANK_TRANSFER' | 'CHEQUE';
+  panOrTaxId?: string;
+}
+
+export type EmploymentStatus =
+  | 'FULL_TIME'
+  | 'PART_TIME'
+  | 'VISITING'
+  | 'PROBATION'
+  | 'ON_NOTICE'
+  | 'INACTIVE';
+
+export type ContractType =
+  | 'PERMANENT'
+  | 'PROBATION'
+  | 'VISITING_CONSULTANT'
+  | 'RESIDENT'
+  | 'LOCUM';
+
 export interface StaffMember {
   id: string;
   employeeCode: string;
@@ -105,6 +129,15 @@ export interface StaffMember {
 
   // Documents
   documents?: StaffDocuments;
+
+  // Enterprise HR, Payroll & Reporting
+  bankDetails?: StaffBankDetails;
+  employmentStatus?: EmploymentStatus;
+  contractType?: ContractType;
+  probationPeriodMonths?: number;
+  reportingManagerId?: string;
+  reportingManagerName?: string;
+  notes?: string;
 
   // Onboarding Lifecycle & Completion
   profileCompletion?: number; // 35 to 100
@@ -811,4 +844,57 @@ export function getDepartmentPersonnelStats(
     assignedStaff: assigned,
     hodName: hod?.fullName,
   };
+}
+
+// ----------------- AUTOMATIC EMPLOYEE CODE GENERATOR -----------------
+export function generateEmployeeCode(role: StaffRole, deptCode?: string): string {
+  const rolePrefixMap: Record<StaffRole, string> = {
+    doctor: 'DOC',
+    nurse: 'NUR',
+    technician: 'TEC',
+    paramedic: 'PAR',
+    admin: 'ADM',
+    support: 'SUP',
+    assistant: 'AST',
+  };
+
+  const prefix = rolePrefixMap[role] || 'EMP';
+
+  // Normalize department tag (e.g. 'DEPT-CARDIO' -> 'CARDIO', 'Outpatient Department (OPD)' -> 'OPD')
+  let deptTag = 'GEN';
+  if (deptCode) {
+    const cleaned = deptCode.replace(/^DEPT-/, '').trim().toUpperCase();
+    if (cleaned.length > 0) {
+      // Pick first 6 alphanumeric chars or acronym
+      deptTag = cleaned.replace(/[^A-Z0-9]/g, '').slice(0, 6) || 'GEN';
+    }
+  }
+
+  const allStaff = getHospitalStaff();
+  const pattern = new RegExp(`^${prefix}-${deptTag}-(\\d+)$`);
+  let maxSeq = 100; // Start from 101
+
+  allStaff.forEach((s) => {
+    const code = (s.employeeCode || '').trim().toUpperCase();
+    const match = code.match(pattern);
+    if (match && match[1]) {
+      const num = parseInt(match[1], 10);
+      if (!isNaN(num) && num > maxSeq) {
+        maxSeq = num;
+      }
+    }
+  });
+
+  return `${prefix}-${deptTag}-${maxSeq + 1}`;
+}
+
+export function getStaffReportingManagers(): StaffMember[] {
+  const allStaff = getHospitalStaff();
+  return allStaff.filter(
+    (s) =>
+      s.role === 'admin' ||
+      s.role === 'doctor' ||
+      s.isDepartmentHead ||
+      /head|chief|director|senior|lead|supervisor|manager|hod/i.test(s.designation || '')
+  );
 }

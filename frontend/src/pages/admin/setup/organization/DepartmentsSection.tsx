@@ -68,6 +68,39 @@ export const defaultCardiologyDept: DepartmentProfileData = {
   prescriptionEnabled: true,
   isOpen24Hours: true,
   emergencyEnabled: true,
+  dailyConsultationCapacity: 150,
+  concurrentDoctorSlots: 6,
+  emergencyBufferCapacity: 25,
+  maxWaitingQueueLength: 50,
+  avgConsultationMinutes: 14,
+  patientFootfallDaily: 118,
+  bedOccupancyRate: 85,
+  patientSatisfactionScore: 4.9,
+  prescriptionsIssuedToday: 82,
+  opdStartTime: '08:00',
+  opdEndTime: '18:00',
+  breakStartTime: '13:00',
+  breakEndTime: '14:00',
+  shiftHandoverMinutes: 30,
+  allowTeleconsultation: true,
+  autoTokenGeneration: true,
+  requireVitalsBeforeConsultation: true,
+  requirePrePaymentForConsultation: false,
+  allowEmergencyWalkInBypass: true,
+  enableSmsTokenAlerts: true,
+  hodStaffId: 'stf-1',
+  hodStaffName: 'Dr. Arthur Vance',
+  deptAdminStaffName: 'Cardiology Operations Lead',
+  auditLogs: [
+    {
+      id: 'aud-cardio-1',
+      timestamp: '2026-09-01T08:00:00.000Z',
+      action: 'DEPARTMENT_COMMISSIONED',
+      performedBy: 'Hospital Super Administrator',
+      details: 'Cardiology & Cardiovascular Sciences commissioned with 12 inpatient beds and 150 daily consultation quota.',
+      severity: 'INFO',
+    },
+  ],
 };
 
 export const DepartmentsSection: React.FC = () => {
@@ -1125,6 +1158,11 @@ export const DepartmentsSection: React.FC = () => {
                         </span>
                         {(dept.bedsCount || 0) > 0 && (
                           <span className="badge badge-info">{dept.bedsCount} Beds</span>
+                        )}
+                        {(dept.dailyConsultationCapacity || 0) > 0 && (
+                          <span className="badge badge-primary" style={{ fontSize: '0.6875rem' }}>
+                            Quota: {dept.dailyConsultationCapacity}/day
+                          </span>
                         )}
                       </div>
                       <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>

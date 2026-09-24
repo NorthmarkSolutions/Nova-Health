@@ -43,6 +43,11 @@ import {
   getDepartmentStaffByCadre,
   findDemoStaffByCredential,
 } from './authCatalog';
+import {
+  requestPasswordReset,
+  completePasswordReset,
+  validatePasswordStrength,
+} from '../../services/authResetService';
 
 export const LoginPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -118,6 +123,49 @@ export const LoginPage: React.FC = () => {
   const [autofillNotice, setAutofillNotice] = useState<string | null>(
     'Default: Dr. Sarah Jenkins (Attending Physician)'
   );
+
+  // Password Reset Modal State
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [resetStep, setResetStep] = useState<'request' | 'complete'>('request');
+  const [resetIdentifier, setResetIdentifier] = useState('');
+  const [resetToken, setResetToken] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [resetStatus, setResetStatus] = useState<{ isError: boolean; message: string } | null>(null);
+
+  const handleRequestReset = (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetStatus(null);
+    const res = requestPasswordReset(resetIdentifier);
+    if (res.success) {
+      setResetToken(res.resetToken || '');
+      setResetStep('complete');
+      setResetStatus({ isError: false, message: res.message });
+    } else {
+      setResetStatus({ isError: true, message: res.message });
+    }
+  };
+
+  const handleCompleteReset = (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetStatus(null);
+    const val = validatePasswordStrength(newPassword);
+    if (!val.isValid) {
+      setResetStatus({ isError: true, message: val.errors.join(' ') });
+      return;
+    }
+    const res = completePasswordReset(resetToken, newPassword);
+    if (res.success) {
+      setResetStatus({ isError: false, message: res.message });
+      setPassword(newPassword);
+      setTimeout(() => {
+        setIsResetModalOpen(false);
+        setResetStep('request');
+        setResetStatus(null);
+      }, 2000);
+    } else {
+      setResetStatus({ isError: true, message: res.message });
+    }
+  };
 
   // Filtered department list based on category & search (Left Panel)
   const filteredDepartments = useMemo(() => {
@@ -949,8 +997,16 @@ export const LoginPage: React.FC = () => {
                 <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#e2e8f0', margin: 0 }}>
                   Password
                 </label>
-                <span style={{ fontSize: '0.6875rem', color: '#38bdf8', cursor: 'pointer' }}>
-                  Forgot?
+                <span
+                  onClick={() => {
+                    setResetIdentifier(employeeIdOrEmail);
+                    setIsResetModalOpen(true);
+                    setResetStep('request');
+                    setResetStatus(null);
+                  }}
+                  style={{ fontSize: '0.6875rem', color: '#38bdf8', cursor: 'pointer', textDecoration: 'underline' }}
+                >
+                  Forgot / Reset?
                 </span>
               </div>
               <div style={{ position: 'relative' }}>
@@ -1067,6 +1123,186 @@ export const LoginPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Password Reset Modal */}
+      {isResetModalOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            backdropFilter: 'blur(5px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+          }}
+          onClick={() => setIsResetModalOpen(false)}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '460px',
+              backgroundColor: '#0f172a',
+              border: '1px solid #334155',
+              borderRadius: '16px',
+              padding: '1.75rem',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <div style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: '#0284c7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
+                  <KeyRound size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#fff' }}>
+                    Reset Staff Credentials
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '0.75rem', color: '#94a3b8' }}>
+                    Self-Service Credential Recovery
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsResetModalOpen(false)}
+                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {resetStatus && (
+              <div
+                style={{
+                  padding: '0.65rem 0.85rem',
+                  borderRadius: '8px',
+                  backgroundColor: resetStatus.isError ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+                  border: `1px solid ${resetStatus.isError ? '#ef4444' : '#10b981'}`,
+                  color: resetStatus.isError ? '#f87171' : '#34d399',
+                  fontSize: '0.7813rem',
+                  marginBottom: '1rem',
+                }}
+              >
+                {resetStatus.message}
+              </div>
+            )}
+
+            {resetStep === 'request' ? (
+              <form onSubmit={handleRequestReset} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#e2e8f0', display: 'block', marginBottom: '0.35rem' }}>
+                    Employee Code or Registered Email
+                  </label>
+                  <input
+                    type="text"
+                    value={resetIdentifier}
+                    onChange={(e) => setResetIdentifier(e.target.value)}
+                    placeholder="e.g. DOC-101 or dr.jenkins@northhospital.com"
+                    required
+                    style={{
+                      width: '100%',
+                      padding: '0.65rem 0.75rem',
+                      borderRadius: '8px',
+                      backgroundColor: '#1e293b',
+                      border: '1px solid #334155',
+                      color: '#fff',
+                      fontSize: '0.85rem',
+                    }}
+                  />
+                  <p style={{ fontSize: '0.7rem', color: '#64748b', margin: '0.35rem 0 0' }}>
+                    Enter your staff identity to verify authorization and generate an instant recovery token.
+                  </p>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.5rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => setIsResetModalOpen(false)}
+                    style={{ padding: '0.55rem 1rem', borderRadius: '6px', background: 'transparent', border: '1px solid #475569', color: '#cbd5e1', fontSize: '0.8rem', cursor: 'pointer' }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    style={{ padding: '0.55rem 1.25rem', borderRadius: '6px', background: '#0284c7', border: 'none', color: '#fff', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    Request Reset Token
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleCompleteReset} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#e2e8f0', display: 'block', marginBottom: '0.35rem' }}>
+                    Authorization Reset Token
+                  </label>
+                  <input
+                    type="text"
+                    value={resetToken}
+                    onChange={(e) => setResetToken(e.target.value)}
+                    required
+                    style={{
+                      width: '100%',
+                      padding: '0.65rem 0.75rem',
+                      borderRadius: '8px',
+                      backgroundColor: '#1e293b',
+                      border: '1px solid #334155',
+                      color: '#38bdf8',
+                      fontFamily: 'monospace',
+                      fontWeight: 700,
+                      fontSize: '0.85rem',
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#e2e8f0', display: 'block', marginBottom: '0.35rem' }}>
+                    New Password
+                  </label>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Min 8 chars, 1 uppercase, 1 symbol"
+                    required
+                    style={{
+                      width: '100%',
+                      padding: '0.65rem 0.75rem',
+                      borderRadius: '8px',
+                      backgroundColor: '#1e293b',
+                      border: '1px solid #334155',
+                      color: '#fff',
+                      fontSize: '0.85rem',
+                    }}
+                  />
+                  <p style={{ fontSize: '0.7rem', color: '#64748b', margin: '0.35rem 0 0' }}>
+                    Must contain at least 8 characters, an uppercase letter, a number, and a special symbol.
+                  </p>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => setResetStep('request')}
+                    style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '0.75rem', cursor: 'pointer' }}
+                  >
+                    ← Back to Identifier
+                  </button>
+                  <button
+                    type="submit"
+                    style={{ padding: '0.55rem 1.25rem', borderRadius: '6px', background: '#0284c7', border: 'none', color: '#fff', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    Confirm & Update Password
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

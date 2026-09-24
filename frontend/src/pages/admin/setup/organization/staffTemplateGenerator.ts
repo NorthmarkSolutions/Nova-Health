@@ -209,3 +209,64 @@ export function parseCSV(text: string): string[][] {
   }
   return p;
 }
+
+/**
+ * Exports complete staff roster with all 360° fields (Personal, Emergency, Employment, Bank, Documents)
+ */
+export function exportAllStaffToCsv(staffList: import('./hospitalStaffStore').StaffMember[]): void {
+  const headers = [
+    'Employee Code',
+    'Full Name',
+    'Role',
+    'Designation',
+    'Department',
+    'All Assigned Departments',
+    'Primary Shift',
+    'Shift Hours',
+    'Phone',
+    'Email',
+    'Status',
+    'Employment Status',
+    'Contract Type',
+    'Joining Date',
+    'Reporting Manager',
+    'Emergency Contact Name',
+    'Emergency Contact Relation',
+    'Emergency Contact Phone',
+    'Bank Name',
+    'Account Number',
+    'IFSC or SWIFT',
+    'Salary Payment Mode',
+    'Tax PAN ID',
+  ];
+
+  const rows = staffList.map((s) => [
+    escapeCsvField(s.employeeCode),
+    escapeCsvField(s.fullName),
+    escapeCsvField(s.role),
+    escapeCsvField(s.designation),
+    escapeCsvField(s.departmentName || ''),
+    escapeCsvField((s.departmentNames || []).join('; ')),
+    escapeCsvField(s.shiftName || ''),
+    escapeCsvField(s.shiftHours || ''),
+    escapeCsvField(s.phone),
+    escapeCsvField(s.email),
+    escapeCsvField(s.status),
+    escapeCsvField(s.employmentStatus || 'FULL_TIME'),
+    escapeCsvField(s.contractType || 'PERMANENT'),
+    escapeCsvField(s.joiningDate || ''),
+    escapeCsvField(s.reportingManagerName || ''),
+    escapeCsvField(s.emergencyContactName || ''),
+    escapeCsvField(s.emergencyContactRelation || ''),
+    escapeCsvField(s.emergencyContactPhone || s.emergencyContact || ''),
+    escapeCsvField(s.bankDetails?.bankName || ''),
+    escapeCsvField(s.bankDetails?.accountNumber || ''),
+    escapeCsvField(s.bankDetails?.ifscOrSwift || ''),
+    escapeCsvField(s.bankDetails?.salaryPaymentMode || 'DIRECT_DEPOSIT'),
+    escapeCsvField(s.bankDetails?.panOrTaxId || ''),
+  ]);
+
+  const csvLines = [headers.map(escapeCsvField).join(','), ...rows.map((r) => r.join(','))];
+  const filename = `NorthHospital_Staff_Directory_${new Date().toISOString().slice(0, 10)}.csv`;
+  triggerFileDownload(filename, csvLines.join('\r\n'));
+}
