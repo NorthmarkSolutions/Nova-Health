@@ -442,6 +442,42 @@ export const DEFAULT_HOSPITAL_STAFF: StaffMember[] = [
     gender: 'Male',
     joiningDate: '2018-10-01',
   },
+  {
+    id: 'stf-cardio-101',
+    employeeCode: 'DOC-CARDIO-101',
+    fullName: 'Dr. Arthur Vance',
+    role: 'doctor',
+    designation: 'Head of Cardiology & Senior Interventional Cardiologist',
+    specialization: 'Interventional Cardiology & Catheterization',
+    qualification: 'MD, DM (Cardiology), FACC',
+    experienceYears: 16,
+    registrationNumber: 'MCI-CARD-99214',
+    departmentIds: ['dept-cardiology'],
+    departmentNames: ['Cardiology & Cardiovascular Sciences'],
+    departmentId: 'dept-cardiology',
+    departmentName: 'Cardiology & Cardiovascular Sciences',
+    isDepartmentHead: true,
+    hodDepartmentId: 'dept-cardiology',
+    hodDepartmentName: 'Cardiology & Cardiovascular Sciences',
+    buildingId: 'bld-cardio-pavilion',
+    buildingName: 'Cardiovascular Sciences & Surgery Pavilion',
+    shiftIds: ['shift-morn'],
+    shiftNames: ['Morning Shift (OPD & General Wards)'],
+    shiftHoursList: ['08:00 - 16:00'],
+    shiftId: 'shift-morn',
+    shiftName: 'Morning Shift (OPD & General Wards)',
+    shiftHours: '08:00 - 16:00',
+    email: 'arthur.vance@northhospital.com',
+    phone: '+1 (555) 782-3490',
+    status: 'ACTIVE',
+    gender: 'Male',
+    dob: '1978-04-12',
+    bloodGroup: 'A+',
+    consultationFee: 120,
+    consultationDurationMinutes: 20,
+    dailyPatientCapacity: 35,
+    joiningDate: '2026-09-24',
+  },
 ];
 
 // Helper: Calculate duration between HH:MM and HH:MM
@@ -629,7 +665,9 @@ export function getHospitalStaff(): StaffMember[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.map((m: any) => {
+        const hasCardio = parsed.some((s: any) => s.id === 'stf-cardio-101' || s.employeeCode === 'DOC-CARDIO-101');
+        const listToMap = hasCardio ? parsed : [...DEFAULT_HOSPITAL_STAFF.filter((s) => s.id === 'stf-cardio-101'), ...parsed];
+        return listToMap.map((m: any) => {
           const comp = calculateStaffProfileCompletion(m);
           return {
             ...m,

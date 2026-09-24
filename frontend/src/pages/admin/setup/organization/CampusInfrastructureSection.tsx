@@ -1529,8 +1529,114 @@ export const wardOpdDaycareB: WardNode = {
   ],
 };
 
+export const buildingCardioPavilion: BuildingNode = {
+  id: 'bld-cardio-pavilion',
+  code: 'BLD-CARDIO',
+  name: 'Cardiovascular Sciences & Surgery Pavilion',
+  buildingType: 'Main Clinical Hospital Tower',
+  totalFloorsCount: 3,
+  basementCount: 1,
+  buildingAdmin: 'Eng. Marcus Brody (Biomedical & Facilities)',
+  intercomExt: 'Ext: 4401',
+  operatingHours: '24/7 Tertiary Cardiac Emergency & CCU',
+  fireNocStatus: 'APPROVED',
+  fireZone: 'Zone Cardio-WetRiser',
+  powerBackupKva: 750,
+  hasCentralOxygen: true,
+  stretcherLifts: 4,
+  utilities: 'Dual Substation DG, Dedicated Cryogenic O2, Central Vacuum & Telemetry',
+  floors: [
+    {
+      id: 'fl-card-0',
+      floorNumber: 'Ground Floor (Level 0)',
+      code: 'FL-0',
+      wing: 'Emergency Cardiac Care Wing',
+      accessZone: '24/7 Cardiac Emergency Access',
+      rooms: [
+        {
+          id: 'rm-card-101',
+          roomNumber: 'CH-101',
+          roomType: 'Doctor Chamber',
+          capacity: 4,
+          departmentName: 'Cardiology & Cardiovascular Sciences',
+          status: 'AVAILABLE',
+          attendingStaff: {
+            doctorName: 'Dr. Arthur Vance',
+            nurseOrCompounder: 'Nurse Clara Adams',
+            statusNote: 'Cardiology Clinic Active',
+          },
+        },
+      ],
+      wards: [
+        {
+          id: 'wd-card-triage',
+          code: 'WD-CARD-TR',
+          name: 'Rapid Chest Pain Evaluation Bay',
+          wardType: 'ICU Ward',
+          supervisorNurse: 'Nurse Clara Adams',
+          nursingStation: 'Station 1-C (Cardio Emergency)',
+          departmentName: 'Cardiology & Cardiovascular Sciences',
+          beds: [
+            {
+              id: 'bed-card-1',
+              bedNumber: 'Bay C-1',
+              roomNumber: 'Chamber 101',
+              roomType: 'Triage Unit',
+              bedType: 'Motorized ICU Ventilator',
+              dailyTariff: 180,
+              status: 'AVAILABLE',
+              cleanlinessStatus: 'SANITIZED',
+            },
+            {
+              id: 'bed-card-2',
+              bedNumber: 'Bay C-2',
+              roomNumber: 'Chamber 101',
+              roomType: 'Triage Unit',
+              bedType: 'Motorized ICU Ventilator',
+              dailyTariff: 180,
+              status: 'AVAILABLE',
+              cleanlinessStatus: 'SANITIZED',
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'fl-card-1',
+      floorNumber: 'First Floor (Level 1)',
+      code: 'FL-1',
+      wing: 'Inpatient Telemetry & Coronary Care',
+      accessZone: 'Inpatient Monitored Area',
+      rooms: [],
+      wards: [
+        {
+          id: 'wd-card-telemetry',
+          code: 'WD-CARD-TEL',
+          name: 'Cardiac Step-Down Telemetry Ward',
+          wardType: 'General Ward',
+          supervisorNurse: 'Nurse Elena Rostova',
+          nursingStation: 'Station 2-A (Telemetry)',
+          departmentName: 'Cardiology & Cardiovascular Sciences',
+          beds: [
+            {
+              id: 'bed-card-tel-1',
+              bedNumber: 'Telemetry Bed 1',
+              roomNumber: 'Ward A',
+              roomType: 'Cardiac Telemetry Unit',
+              bedType: 'Motorized ICU Ventilator',
+              dailyTariff: 220,
+              status: 'AVAILABLE',
+              cleanlinessStatus: 'SANITIZED',
+            },
+          ],
+        },
+      ],
+    },
+  ],
+};
+
 export const getCampusBuildings = (): BuildingNode[] => {
-  let buildings: BuildingNode[] = defaultCampusTemplate;
+  let buildings: BuildingNode[] = [...defaultCampusTemplate, buildingCardioPavilion];
   try {
     const saved = localStorage.getItem('north_hospital_campus_buildings');
     if (saved) {
@@ -1559,6 +1665,12 @@ export const getCampusBuildings = (): BuildingNode[] => {
         firstFloor.wards.push(wardOpdDaycareB);
       }
     }
+  }
+
+  // Ensure Cardiovascular Sciences & Surgery Pavilion is always present
+  const hasCardio = buildings.some((b) => b.id === 'bld-cardio-pavilion' || b.code === 'BLD-CARDIO');
+  if (!hasCardio) {
+    buildings.push(buildingCardioPavilion);
   }
 
   return buildings;

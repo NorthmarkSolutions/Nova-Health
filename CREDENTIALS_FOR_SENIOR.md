@@ -1,39 +1,84 @@
 # 🏥 North Hospital Enterprise HMS — Senior Demo & Evaluation Handout
 
 ### 🌐 Access URLs
-- **Web Application URL (Netlify):** `https://<your-netlify-site-name>.netlify.app` *(or local: `http://localhost:5173`)*
-- **API Backend (PythonAnywhere):** `https://<your-username>.pythonanywhere.com/api/v1` *(or local: `http://localhost:8000/api/v1`)*
-- **Django Administration Console:** `https://<your-username>.pythonanywhere.com/admin`
-- **One-Click Demo Login Page:** `https://<your-netlify-site-name>.netlify.app/login`
+- **Web Application URL:** `http://localhost:5173` *(or your deployed production domain)*
+- **Scalable 3-Level Login Portal:** `http://localhost:5173/login`
+- **Django Administration Console:** `http://localhost:8000/admin`
+- **Cardiology Department Engine:** `http://localhost:5173/department/dept-cardiology`
 
 ---
 
 ## 🔑 Universal Master Credentials
-- **Password for ALL Accounts:** `Password123!`
+- **Master Demo Password for ALL Accounts:** `Password123!`
 
 ---
 
-## 📋 Department Roles & Accounts Matrix
+## 🏛️ Scalable 4-Tier Hierarchical Authentication Architecture
 
-| Department / Station | Role Code | Login Email | Quick Login | What to Test |
+The login interface is structured into four enterprise tiers to eliminate UI clutter and scale effortlessly across 100+ staff accounts per hospital:
+
+### Level 1: Hospital Facility (Multi-Tenant SaaS Ready)
+- **Primary Campus:** North Central Memorial Hospital (`HOSP-NC-01`)
+- **Cardiovascular Specialty Pavilion:** North Heart & Vascular Pavilion (`HOSP-NC-02`)
+- **Ambulatory & Day Surgery Care:** Northmark Ambulatory Plaza (`HOSP-NC-03`)
+
+### Level 2: Department Station Selection
+Select from 12 distinct clinical and administrative units with lean, fixed-height cards:
+- **Hospital Admin & Executive** (`ADMIN`)
+- **Outpatient Department (OPD)** (`OPD`)
+- **Front Desk & Reception** (`RECEPTION`)
+- **Inpatient Department (IPD)** (`IPD`)
+- **Emergency & Trauma (ER)** (`EMERGENCY`)
+- **Operation Theatre (OT Suite)** (`OT`)
+- **Intensive Care Unit (ICU / CCU)** (`ICU`)
+- **Billing & Financial Accounts** (`BILLING`)
+- **Diagnostic Laboratory** (`LAB`)
+- **Pharmacy & Dispensing Counter** (`PHARMACY`)
+- **Radiology & Imaging Sciences** (`RADIOLOGY`)
+- **Cardiology & Cardiovascular Sciences** (`DEPT-CARDIO`)
+
+### Level 3: Staff Role Classification (Cadres)
+Decouples staff from department cards by grouping personnel into distinct operational cadres:
+- **🩺 Doctors / Consultants**
+- **👩‍⚕️ Staff Nurses**
+- **📋 Doctor Clinical Assistants**
+- **🛎️ Front Desk / Receptionists**
+- **🔬 Diagnostic Technicians & Pharmacists**
+- **🏢 Administration & Finance**
+
+### Level 4: Staff Authentication & 1-Click Fast Auth
+Staff can authenticate using their official **Employee ID** or **Email**, or use the 1-Click fast login button under their selected cadre:
+
+| Department | Role / Station | Employee ID | Login Email | Quick Route |
 | :--- | :--- | :--- | :--- | :--- |
-| **👑 Hospital Administration** | `HOSPITAL_ADMIN` | `admin@northhospital.com` | `/admin` | Hospital profile, executive KPIs, bed status, tariff setup |
-| **🏢 Department Admin (OPD)** | `DEPARTMENT_ADMIN` | `opd.admin@northhospital.com` | `/department/opd` | Independent department workspace: doctors, chambers, staff roster & settings |
-| **1. Reception Desk** | `RECEPTIONIST` | `reception@northhospital.com` | `/reception` | Patient registration, UHID generation, OPD token issuing |
-| **2. Outpatient Clinic (OPD)** | `DOCTOR` | `doctor@northhospital.com` | `/doctor` | Queue review, SOAP notes, ICD-10 diagnosis, e-Prescriptions |
-| **3. Diagnostic Pathology** | `LAB_TECH` | `lab@northhospital.com` | `/lab` | 5-stage sample tracking (Collected → Processed → Verified) |
-| **4. Operation Theatre (OT)** | `SURGEON` | `surgeon@northhospital.com` | `/ot` | Surgical board, WHO surgical safety checklist, recovery |
-| **5. Inpatient Care (IPD)** | `WARD_MANAGER` | `ipd@northhospital.com` | `/ipd` | Ward bed allocation, MAR nurse charts, discharge summary |
-| **6. Cashier & Accounts** | `CASHIER` | `billing@northhospital.com` | `/billing` | Consolidated invoices, partial payments (UPI/Card), settlement |
-| **7. Nurse Station** | `NURSE` | `nurse@northhospital.com` | `/nurse` | Patient vital signs triage, medication administration |
-| **8. Pharmacy Dispensary** | `PHARMACIST` | `pharmacy@northhospital.com` | `/pharmacy` | Digital prescription queue, drug inventory & dispensing |
-| **9. Patient Portal** | `PATIENT` | `patient@northhospital.com` | `/patient` | Patient personal EHR, appointment history, bills & receipts |
+| **Hospital Admin** | Hospital Director | `EMP-ADM-001` | `admin@northhospital.com` | `/admin` |
+| **Hospital Admin** | Enterprise Super Admin | `EMP-ADM-002` | `admin@northhospital.com` | `/admin` |
+| **OPD** | OPD Department Head | `EMP-OPD-ADM` | `opd.admin@northhospital.com` | `/department/opd` |
+| **OPD** | Attending Physician | `EMP-DOC-101` | `doctor@northhospital.com` | `/doctor` |
+| **OPD** | Doctor Assistant (Chamber 204) | `EMP-AST-204` | `assistant@northhospital.com` | `/assistant` |
+| **OPD** | Triage Staff Nurse | `EMP-NUR-001` | `nurse@northhospital.com` | `/nurse?tab=triage-queue` |
+| **Reception** | Lead Receptionist | `EMP-REC-001` | `reception@northhospital.com` | `/reception` |
+| **Reception** | Front Office Supervisor | `EMP-REC-SUP` | `reception@northhospital.com` | `/reception` |
+| **IPD** | Inpatient Ward Manager | `EMP-IPD-001` | `ipd@northhospital.com` | `/ipd` |
+| **IPD** | Inpatient Staff Nurse | `EMP-NUR-IPD` | `nurse@northhospital.com` | `/nurse` |
+| **Emergency** | ER Department Head | `EMP-ER-001` | `er.admin@northhospital.com` | `/department/3` |
+| **Emergency** | Emergency Trauma Nurse | `EMP-ER-NUR` | `nurse@northhospital.com` | `/nurse?tab=triage-queue` |
+| **OT Suite** | Chief Consultant Surgeon | `EMP-SURG-01` | `surgeon@northhospital.com` | `/ot` |
+| **OT Suite** | Consultant Anesthetist | `EMP-ANES-01` | `surgeon@northhospital.com` | `/ot` |
+| **ICU / CCU** | Intensivist Specialist | `EMP-ICU-001` | `doctor@northhospital.com` | `/doctor` |
+| **ICU / CCU** | Lead CCU Nurse | `EMP-ICU-NUR` | `nurse@northhospital.com` | `/nurse` |
+| **Billing** | Senior Cashier | `EMP-CASH-01` | `billing@northhospital.com` | `/billing` |
+| **Billing** | Finance Supervisor | `EMP-FIN-01` | `billing@northhospital.com` | `/billing` |
+| **Diagnostic Lab** | Senior Medical Technologist | `EMP-LAB-01` | `lab@northhospital.com` | `/lab` |
+| **Diagnostic Lab** | Clinical Pathologist | `EMP-PATH-01` | `lab@northhospital.com` | `/lab` |
+| **Pharmacy** | Lead Clinical Pharmacist | `EMP-PHARM-01` | `pharmacy@northhospital.com` | `/pharmacy` |
+| **Radiology** | Consultant Radiologist | `EMP-RADIO-01` | `lab@northhospital.com` | `/lab` |
+| **Cardiology** | HOD Interventional Cardiologist | `DOC-CARDIO-101` | `cardio.admin@northhospital.com` | `/department/dept-cardiology` |
+| **Cardiology** | Cardiac Telemetry Nurse | `EMP-CARD-NUR` | `nurse@northhospital.com` | `/nurse?tab=triage-queue` |
 
 ---
 
-## 🚀 Recommended 5-Minute Evaluation Flow
-To evaluate the end-to-end integration across departments:
-1. Go to **`/login`** and click the **Reception** card $\rightarrow$ click **Register New Patient** $\rightarrow$ generate a UHID and issue an appointment token.
-2. In the top/sidebar, click **Logout** and select the **Doctor** card $\rightarrow$ open the newly queued patient $\rightarrow$ enter a diagnosis and prescribe medications.
-3. Logout and select the **Laboratory** card $\rightarrow$ advance the patient's lab order to **Validated** / **Report Generated**.
-4. Logout and select the **Billing** card $\rightarrow$ locate the consolidated invoice for the patient $\rightarrow$ click **Record Payment** to test partial/full payment and observe the balance update in real time.
+## ⚡ Development Mode & 1-Click Fast Login
+- Click on any department card on the left panel.
+- Click **"N Demo ▼"** to expand the collapsible demo accounts for that department.
+- Click **"1-Click"** next to any staff member to instantly authenticate and load their dedicated workstation!

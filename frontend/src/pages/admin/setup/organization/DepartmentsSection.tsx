@@ -33,6 +33,43 @@ import { getCampusBuildings } from './CampusInfrastructureSection';
 import { getDepartmentPersonnelStats } from './hospitalStaffStore';
 import { DepartmentAssignedStaffModal } from './DepartmentAssignedStaffModal';
 
+export const defaultCardiologyDept: DepartmentProfileData = {
+  id: 'dept-cardiology',
+  code: 'DEPT-CARDIO',
+  name: 'Cardiology & Cardiovascular Sciences',
+  shortName: 'Cardiology',
+  category: 'clinical',
+  head: 'Dr. Arthur Vance',
+  hours: '24/7 Tertiary Cardiology & Emergency',
+  costCenter: 'CC-CARD-01',
+  revenueCenter: 'RC-CARD-01',
+  budget: 850000,
+  billingEnabled: true,
+  staffCount: 1,
+  status: 'ACTIVE',
+  doctorsCount: 1,
+  nursesCount: 1,
+  techsCount: 0,
+  receptionistsCount: 0,
+  assignedBuildingId: 'bld-cardio-pavilion',
+  buildingAssigned: 'Cardiovascular Sciences & Surgery Pavilion',
+  floorAssigned: 'Ground Floor & Level 1',
+  assignedFloorIds: ['fl-card-0', 'fl-card-1'],
+  assignedWardIds: ['wd-card-triage', 'wd-card-telemetry'],
+  assignedRoomIds: ['rm-card-101'],
+  roomsCount: 1,
+  wardsCount: 2,
+  bedsCount: 12,
+  hasDedicatedWaitingArea: true,
+  consultationEnabled: true,
+  admissionEnabled: true,
+  procedureEnabled: true,
+  labRequestsEnabled: true,
+  prescriptionEnabled: true,
+  isOpen24Hours: true,
+  emergencyEnabled: true,
+};
+
 export const DepartmentsSection: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState<
     'all' | 'clinical' | 'diagnostic' | 'revenue' | 'admin' | 'support'
@@ -49,12 +86,22 @@ export const DepartmentsSection: React.FC = () => {
   const [departments, setDepartments] = useState<DepartmentProfileData[]>(() => {
     try {
       const saved = localStorage.getItem('north_hospital_departments_master');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const hasCardio = parsed.some((d: any) => d.id === 'dept-cardiology' || d.code === 'DEPT-CARDIO');
+          if (!hasCardio) {
+            return [defaultCardiologyDept, ...parsed];
+          }
+          return parsed;
+        }
+      }
     } catch (e) {
       console.error(e);
     }
     return [
-    // Clinical
+      defaultCardiologyDept,
+      // Clinical
     {
       id: '1',
       code: 'DEPT-OPD',
