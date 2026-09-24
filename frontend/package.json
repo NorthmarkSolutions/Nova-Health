@@ -8,7 +8,9 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test:opd": "npx tsx scripts/opdJourney.test.ts"
+    "test:opd": "npx tsx scripts/opdJourney.test.ts",
+    "test:admin": "npx tsx scripts/adminProvisioning.test.ts",
+    "test:auth": "npx tsx scripts/authScalability.test.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.102.8",

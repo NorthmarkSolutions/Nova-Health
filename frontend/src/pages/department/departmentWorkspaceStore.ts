@@ -142,6 +142,37 @@ export const DEFAULT_WORKSPACES: DepartmentWorkspace[] = [
     createdAt: '2026-01-15T08:00:00.000Z',
     updatedAt: '2026-09-18T10:00:00.000Z',
   },
+  {
+    id: 'ws-dept-cardiology',
+    departmentId: 'dept-cardiology',
+    departmentCode: 'DEPT-CARDIO',
+    departmentName: 'Cardiology & Cardiovascular Sciences',
+    shortName: 'Cardiology',
+    category: 'clinical',
+    adminId: 'stf-cardio-101',
+    adminName: 'Dr. Arthur Vance',
+    adminEmail: 'cardio.admin@northhospital.com',
+    operatingHours: '24/7 Tertiary Cardiology & CCU',
+    config: {
+      hasAppointments: true,
+      hasQueue: true,
+      hasAdmissions: true,
+      hasBeds: true,
+      hasDoctors: true,
+      hasTests: true,
+      hasPrescriptions: true,
+      hasRooms: true,
+      hasSchedules: true,
+      hasWalkIn: true,
+      hasBilling: true,
+      dailyCapacity: 60,
+      isWalkInAllowed: true,
+      isTokenSystemEnabled: true,
+      isOnlineAppointmentEnabled: true,
+    },
+    createdAt: '2026-09-24T08:00:00.000Z',
+    updatedAt: '2026-09-24T08:00:00.000Z',
+  },
 ];
 
 // ----------------- DEFAULT OPD DOCTORS -----------------
@@ -200,6 +231,25 @@ export const DEFAULT_OPD_DOCTORS: DepartmentDoctor[] = [
     assignedRoomName: 'Chamber 103 - Women Clinic',
     patientCapacityPerDay: 30,
     avgConsultationMinutes: 15,
+    isAvailable: true,
+    status: 'ACTIVE',
+  },
+  {
+    id: 'doc-cardio-1',
+    departmentId: 'dept-cardiology',
+    staffId: 'stf-cardio-101',
+    fullName: 'Dr. Arthur Vance',
+    employeeCode: 'DOC-CARDIO-101',
+    specialization: 'Interventional Cardiology & Catheterization',
+    qualification: 'MD, DM (Cardiology), FACC',
+    consultationFee: 120,
+    consultationStartTime: '08:30',
+    consultationEndTime: '16:30',
+    workingDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+    assignedRoomId: 'rm-card-101',
+    assignedRoomName: 'Chamber 101 - Cardiology Clinic',
+    patientCapacityPerDay: 35,
+    avgConsultationMinutes: 20,
     isAvailable: true,
     status: 'ACTIVE',
   },
@@ -279,6 +329,21 @@ export const DEFAULT_OPD_ROOMS: DepartmentRoom[] = [
     capacity: 2,
     equipment: ['Electrosurgical Cautery Unit', 'Sterile Minor OT Lamp', 'Portable Suction Pump'],
   },
+  {
+    id: 'rm-card-101',
+    departmentId: 'dept-cardiology',
+    roomNumber: 'CH-101',
+    name: 'Chamber 101 - Cardiology & Vascular Clinic',
+    type: 'consultation',
+    floorName: 'Ground Floor (Level 0)',
+    buildingName: 'Cardiovascular Sciences & Surgery Pavilion',
+    status: 'AVAILABLE',
+    assignedDoctorId: 'doc-cardio-1',
+    assignedDoctorName: 'Dr. Arthur Vance',
+    assignedNurseName: 'Nurse Clara Adams',
+    capacity: 4,
+    equipment: ['Digital Stethoscope', '12-Lead ECG Machine', 'Echocardiography Doppler', 'Defibrillator Unit', 'Treadmill Console'],
+  },
 ];
 
 // ----------------- STORAGE ACCESS HELPERS -----------------
@@ -288,6 +353,11 @@ export function getDepartmentWorkspaces(): DepartmentWorkspace[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
+        const hasCardio = parsed.some((w: any) => w.id === 'ws-dept-cardiology' || w.departmentId === 'dept-cardiology');
+        if (!hasCardio) {
+          const cardioWs = DEFAULT_WORKSPACES.find((w) => w.departmentId === 'dept-cardiology');
+          if (cardioWs) parsed.push(cardioWs);
+        }
         return parsed;
       }
     }
@@ -308,7 +378,7 @@ export function saveDepartmentWorkspaces(workspaces: DepartmentWorkspace[]): voi
 
 export function getDepartmentWorkspaceById(departmentId: string): DepartmentWorkspace {
   const workspaces = getDepartmentWorkspaces();
-  const found = workspaces.find((w) => w.departmentId === departmentId || w.departmentCode.toLowerCase() === departmentId.toLowerCase() || w.shortName.toLowerCase() === departmentId.toLowerCase());
+  const found = workspaces.find((w) => w.id === departmentId || w.departmentId === departmentId || w.departmentCode.toLowerCase() === departmentId.toLowerCase() || w.shortName.toLowerCase() === departmentId.toLowerCase());
   if (found) return found;
 
   // Auto-provision if not found
@@ -405,6 +475,11 @@ export function getDepartmentDoctors(departmentId: string): DepartmentDoctor[] {
     console.error('Failed to load department doctors', err);
   }
 
+  const defaultDocMatches = DEFAULT_OPD_DOCTORS.filter((d) => d.departmentId === departmentId);
+  if (defaultDocMatches.length > 0) {
+    return defaultDocMatches;
+  }
+
   if (departmentId === '1' || departmentId.toLowerCase() === 'opd') {
     return DEFAULT_OPD_DOCTORS;
   }
@@ -492,6 +567,11 @@ export function getDepartmentRooms(departmentId: string): DepartmentRoom[] {
     }
   } catch (err) {
     console.error('Failed to load department rooms', err);
+  }
+
+  const defaultRoomMatches = DEFAULT_OPD_ROOMS.filter((r) => r.departmentId === departmentId);
+  if (defaultRoomMatches.length > 0) {
+    return defaultRoomMatches;
   }
 
   if (departmentId === '1' || departmentId.toLowerCase() === 'opd') {
@@ -692,6 +772,36 @@ export const DEFAULT_OPD_WARDS: DepartmentWard[] = [
     responsibleNurseName: 'Nurse Kavita Verma',
     notes: 'Secondary observation beds for cardiac & triage monitoring',
   },
+  {
+    id: 'wrd-card-1',
+    departmentId: 'dept-cardiology',
+    wardName: 'Rapid Chest Pain Evaluation Bay (CCU Triage)',
+    buildingName: 'Cardiovascular Sciences & Surgery Pavilion',
+    floorName: 'Ground Floor (Level 0)',
+    headNurseId: 'stf-cardio-nurse-1',
+    headNurseName: 'Nurse Clara Adams',
+    totalBeds: 4,
+    responsibleDoctorId: 'doc-cardio-1',
+    responsibleDoctorName: 'Dr. Arthur Vance',
+    responsibleNurseId: 'stf-cardio-nurse-1',
+    responsibleNurseName: 'Nurse Clara Adams',
+    notes: 'Monitored ICU Ventilator beds with continuous cardiac telemetry',
+  },
+  {
+    id: 'wrd-card-2',
+    departmentId: 'dept-cardiology',
+    wardName: 'Coronary Step-Down & Telemetry Ward',
+    buildingName: 'Cardiovascular Sciences & Surgery Pavilion',
+    floorName: 'First Floor (Level 1)',
+    headNurseId: 'stf-cardio-nurse-2',
+    headNurseName: 'Nurse Elena Rostova',
+    totalBeds: 8,
+    responsibleDoctorId: 'doc-cardio-1',
+    responsibleDoctorName: 'Dr. Arthur Vance',
+    responsibleNurseId: 'stf-cardio-nurse-2',
+    responsibleNurseName: 'Nurse Elena Rostova',
+    notes: 'Inpatient cardiac telemetry step-down unit with wireless arrhythmia detection',
+  },
 ];
 
 export function getDepartmentWards(departmentId: string): DepartmentWard[] {
@@ -707,7 +817,11 @@ export function getDepartmentWards(departmentId: string): DepartmentWard[] {
   } catch (err) {
     console.error('Failed to get department wards', err);
   }
-  return DEFAULT_OPD_WARDS;
+
+  const defaultMatches = DEFAULT_OPD_WARDS.filter((w) => w.departmentId === departmentId);
+  if (defaultMatches.length > 0) return defaultMatches;
+
+  return DEFAULT_OPD_WARDS.filter((w) => w.departmentId === '1');
 }
 
 export function saveDepartmentWard(ward: DepartmentWard): void {
