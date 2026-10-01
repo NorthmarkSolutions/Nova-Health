@@ -14,13 +14,26 @@ import { PathologistCatalogView } from './components/PathologistCatalogView';
 export const LabDashboard: React.FC = () => {
   const { role } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
 
   // Determine active role view mode
-  const initialRoleMode = role === RoleType.PATHOLOGIST ? 'pathologist' : 'technician';
+  const initialRoleMode =
+    role === RoleType.PATHOLOGIST || tabParam === 'review' || tabParam === 'signed-reports' || tabParam === 'catalog'
+      ? 'pathologist'
+      : 'technician';
   const [roleMode, setRoleMode] = useState<'technician' | 'pathologist'>(initialRoleMode);
 
+  useEffect(() => {
+    if (tabParam === 'review' || tabParam === 'signed-reports' || tabParam === 'catalog') {
+      setRoleMode('pathologist');
+    } else if (tabParam === 'queue' || tabParam === 'equipment') {
+      setRoleMode('technician');
+    } else if (role === RoleType.PATHOLOGIST) {
+      setRoleMode('pathologist');
+    }
+  }, [tabParam, role]);
+
   // Tab parameter
-  const tabParam = searchParams.get('tab');
   const currentTab = tabParam || (roleMode === 'pathologist' ? 'review' : 'queue');
 
   // Real-time reactive orders

@@ -18,7 +18,8 @@ export type StaffCadre =
   | 'assistant'
   | 'receptionist'
   | 'technician'
-  | 'admin';
+  | 'admin'
+  | 'pathologist';
 
 export interface CadreMeta {
   key: StaffCadre;
@@ -35,6 +36,13 @@ export const CADRE_METADATA: Record<StaffCadre, CadreMeta> = {
     pluralLabel: 'Doctors',
     iconKey: 'Stethoscope',
     badgeColor: '#0284c7',
+  },
+  pathologist: {
+    key: 'pathologist',
+    label: 'Consultant Pathologist',
+    pluralLabel: 'Pathologists',
+    iconKey: 'Microscope',
+    badgeColor: '#7c3aed',
   },
   nurse: {
     key: 'nurse',
@@ -584,7 +592,7 @@ export const DEPARTMENT_LOGIN_NODES: DepartmentNode[] = [
         email: 'lab.admin@northhospital.com',
         targetRoute: '/department/lab',
         badge: 'Lab Admin',
-        departmentId: 'lab',
+        departmentId: 'dept-lab',
         departmentCode: 'LAB',
         departmentName: 'Diagnostic Laboratory',
         avatarInitials: 'MV',
@@ -592,17 +600,17 @@ export const DEPARTMENT_LOGIN_NODES: DepartmentNode[] = [
       {
         id: 'demo-lab-doc',
         employeeId: 'EMP-PATH-01',
-        name: 'Dr. Anita Roy',
+        name: 'Dr. Kavitha Menon',
         designation: 'Consultant Clinical Pathologist & Hematologist',
         role: RoleType.PATHOLOGIST,
-        cadre: 'doctor',
-        email: 'lab@northhospital.com',
-        targetRoute: '/lab',
+        cadre: 'pathologist',
+        email: 'pathologist@northhospital.com',
+        targetRoute: '/lab?tab=review',
         badge: 'Pathologist',
         departmentId: 'dept-lab',
         departmentCode: 'LAB',
         departmentName: 'Diagnostic Laboratory',
-        avatarInitials: 'AR',
+        avatarInitials: 'KM',
       },
       {
         id: 'demo-lab-tech',
@@ -612,7 +620,7 @@ export const DEPARTMENT_LOGIN_NODES: DepartmentNode[] = [
         role: RoleType.LAB_TECH,
         cadre: 'technician',
         email: 'lab@northhospital.com',
-        targetRoute: '/lab',
+        targetRoute: '/lab?tab=queue',
         badge: 'Lab Tech',
         departmentId: 'dept-lab',
         departmentCode: 'LAB',
@@ -745,11 +753,63 @@ export function findDemoStaffByCredential(identifier: string): DemoStaffAccount 
       (a) =>
         a.employeeId.toLowerCase() === query ||
         a.email.toLowerCase() === query ||
+        (a.email.split('@')[0] && a.email.split('@')[0].toLowerCase() === query) ||
         a.name.toLowerCase().includes(query)
     );
     if (match) return match;
   }
+  // Common aliases for lab
+  if (
+    query === 'pathologist' ||
+    query === 'pathology' ||
+    query === 'kavitha' ||
+    query === 'kavitha.menon' ||
+    query === 'kavitha.menon@northhospital.com' ||
+    query === 'emp-path-01'
+  ) {
+    return DEPARTMENT_LOGIN_NODES.find((d) => d.id === 'dept-lab')?.demoAccounts.find((a) => a.cadre === 'pathologist');
+  }
+  if (
+    query === 'lab' ||
+    query === 'labtech' ||
+    query === 'lab tech' ||
+    query === 'technician' ||
+    query === 'sarah' ||
+    query === 'sarah connor' ||
+    query === 'emp-lab-01' ||
+    query === 'david'
+  ) {
+    return DEPARTMENT_LOGIN_NODES.find((d) => d.id === 'dept-lab')?.demoAccounts.find((a) => a.cadre === 'technician');
+  }
+  if (
+    query === 'labadmin' ||
+    query === 'lab admin' ||
+    query === 'marcus' ||
+    query === 'marcus vance' ||
+    query === 'emp-lab-adm' ||
+    query === 'lab.admin@northhospital.com'
+  ) {
+    return DEPARTMENT_LOGIN_NODES.find((d) => d.id === 'dept-lab')?.demoAccounts.find((a) => a.cadre === 'admin');
+  }
   return undefined;
+}
+
+export function getCadrePluralLabel(cadreKey: StaffCadre, deptId?: string): string {
+  if (deptId === 'dept-lab') {
+    if (cadreKey === 'pathologist') return 'Pathologists';
+    if (cadreKey === 'technician') return 'Lab Techs';
+    if (cadreKey === 'admin') return 'Administration';
+  }
+  return CADRE_METADATA[cadreKey]?.pluralLabel || cadreKey;
+}
+
+export function getCadreSingleLabel(cadreKey: StaffCadre, deptId?: string): string {
+  if (deptId === 'dept-lab') {
+    if (cadreKey === 'pathologist') return 'Consultant Pathologist';
+    if (cadreKey === 'technician') return 'Medical Lab Technologist';
+    if (cadreKey === 'admin') return 'Laboratory Administrator';
+  }
+  return CADRE_METADATA[cadreKey]?.label || cadreKey;
 }
 
 // Returns list of unique cadres available within a department

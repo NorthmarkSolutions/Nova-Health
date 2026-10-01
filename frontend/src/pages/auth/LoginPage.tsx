@@ -29,6 +29,7 @@ import {
   Sparkles,
   Zap,
   UserCheck,
+  Microscope,
 } from 'lucide-react';
 import api from '../../services/api';
 import {
@@ -42,6 +43,8 @@ import {
   getDepartmentCadres,
   getDepartmentStaffByCadre,
   findDemoStaffByCredential,
+  getCadrePluralLabel,
+  getCadreSingleLabel,
 } from './authCatalog';
 import {
   requestPasswordReset,
@@ -88,7 +91,11 @@ export const LoginPage: React.FC = () => {
   // Ensure selected cadre exists in the newly chosen department
   useEffect(() => {
     if (!availableCadres.includes(selectedCadre)) {
-      setSelectedCadre(availableCadres[0] || 'admin');
+      if (selectedCadre === 'doctor' && availableCadres.includes('pathologist')) {
+        setSelectedCadre('pathologist');
+      } else {
+        setSelectedCadre(availableCadres[0] || 'admin');
+      }
     }
   }, [availableCadres, selectedCadre]);
 
@@ -209,6 +216,8 @@ export const LoginPage: React.FC = () => {
         return <Receipt size={size} color={color} />;
       case 'FlaskConical':
         return <FlaskConical size={size} color={color} />;
+      case 'Microscope':
+        return <Microscope size={size} color={color} />;
       case 'Pill':
         return <Pill size={size} color={color} />;
       case 'Radio':
@@ -259,7 +268,13 @@ export const LoginPage: React.FC = () => {
 
       if (res.data?.accessToken) {
         login(res.data.accessToken, res.data.user);
-        const destination = resolvedStaff?.targetRoute || activeDepartment.defaultRoute;
+        const destination =
+          resolvedStaff?.targetRoute ||
+          (res.data.user?.role === RoleType.PATHOLOGIST
+            ? '/lab?tab=review'
+            : res.data.user?.role === RoleType.DEPARTMENT_ADMIN && activeDepartment.id === 'dept-lab'
+            ? '/department/lab'
+            : activeDepartment.defaultRoute);
         navigate(destination);
         return;
       }
@@ -800,7 +815,7 @@ export const LoginPage: React.FC = () => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                       {renderIcon(meta.iconKey, 14, isSelected ? meta.badgeColor : '#94a3b8')}
                       <span style={{ fontSize: '0.72rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                        {meta.pluralLabel}
+                        {getCadrePluralLabel(cadreKey, activeDepartment.id)}
                       </span>
                     </div>
                     <span
@@ -835,7 +850,7 @@ export const LoginPage: React.FC = () => {
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.45rem' }}>
               <div style={{ fontSize: '0.6875rem', fontWeight: 800, color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Level 4: Staff Station ({CADRE_METADATA[selectedCadre]?.label || selectedCadre})
+                Level 4: Staff Station ({getCadreSingleLabel(selectedCadre, activeDepartment.id)})
               </div>
               <span style={{ fontSize: '0.625rem', color: '#10b981', fontWeight: 700 }}>
                 ⚡ 1-Click Fast Auth
