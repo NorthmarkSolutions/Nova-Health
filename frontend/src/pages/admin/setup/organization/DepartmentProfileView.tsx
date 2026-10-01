@@ -63,6 +63,7 @@ import {
   getHospitalStaff,
   getDepartmentPersonnelStats,
 } from './hospitalStaffStore';
+import { useCurrency } from '../../../../config/currency';
 
 export interface DepartmentProfileData {
   id: string;
@@ -488,6 +489,7 @@ export const DepartmentProfileView: React.FC<Props> = ({
   onSave,
   onDelete,
 }) => {
+  const { format: formatMoney, symbol } = useCurrency();
   const [activeTab, setActiveTab] = useState<string>(initialTab || 'basic');
 
   useEffect(() => {
@@ -1200,7 +1202,7 @@ export const DepartmentProfileView: React.FC<Props> = ({
             Financial Ledger
           </span>
           <span style={{ fontSize: '1.25rem', fontWeight: 700, marginTop: '0.25rem', color: '#0ea5e9' }}>
-            ${(profile.budget || 0).toLocaleString()} <span style={{ fontSize: '0.75rem', fontWeight: 400, color: 'var(--text-muted)' }}>/ yr</span>
+            {formatMoney(profile.budget || 0)} <span style={{ fontSize: '0.75rem', fontWeight: 400, color: 'var(--text-muted)' }}>/ yr</span>
           </span>
           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
             Cost: {profile.costCenter} • Rev: {profile.revenueCenter || 'N/A'}
@@ -1744,7 +1746,7 @@ export const DepartmentProfileView: React.FC<Props> = ({
                       </div>
                       <div>
                         <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', display: 'block' }}>Default Specialist OPD Tariff</span>
-                        <strong style={{ fontSize: '1rem', color: '#10b981' }}>$50.00 / ₹800</strong>
+                        <strong style={{ fontSize: '1rem', color: '#10b981' }}>{formatMoney(50)}</strong>
                       </div>
                       <div>
                         <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', display: 'block' }}>Follow-up Visit Policy</span>
@@ -1752,7 +1754,7 @@ export const DepartmentProfileView: React.FC<Props> = ({
                       </div>
                       <div>
                         <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', display: 'block' }}>Annual Operating Budget</span>
-                        <strong style={{ fontSize: '1rem' }}>${(profile.budget || 0).toLocaleString()}</strong>
+                        <strong style={{ fontSize: '1rem' }}>{formatMoney(profile.budget || 0)}</strong>
                       </div>
                       <div>
                         <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', display: 'block' }}>Direct Cashier Billing</span>
@@ -2184,7 +2186,7 @@ export const DepartmentProfileView: React.FC<Props> = ({
               </div>
 
               <div className="form-group">
-                <label className="form-label">Annual Operating Budget ($ USD)</label>
+                <label className="form-label">Annual Operating Budget ({symbol})</label>
                 <input
                   type="number"
                   className="form-input"

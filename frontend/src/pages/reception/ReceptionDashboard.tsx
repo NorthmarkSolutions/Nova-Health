@@ -61,10 +61,20 @@ import { BedOccupancyDossierModal } from './components/BedOccupancyDossierModal'
 import { OpenCounterModal } from './components/OpenCounterModal';
 import { DailyClosingReportModal } from './components/DailyClosingReportModal';
 import { FlatCampusBed } from '../../services/patientJourneyService';
-import { BuildingNode, WardNode, BedNode } from '../admin/setup/organization/CampusInfrastructureSection';
+import { BuildingNode, WardNode } from '../admin/setup/organization/CampusInfrastructureSection';
 import { HeartPulse, Layers, Activity } from 'lucide-react';
+import {
+  WorkspaceHeader,
+  KpiCard,
+  KpiRow,
+  RowActionsMenu,
+  ActionSlotItem,
+  MenuItem,
+} from '../../components/workspace';
+import { useCurrency } from '../../config/currency';
 
 export const ReceptionDashboard: React.FC = () => {
+  const { format: formatMoney, code: currencyCode } = useCurrency();
   // Navigation Tabs & Deep-link URL Query Param Synchronization
   const [searchParams, setSearchParams] = useSearchParams();
   const urlTab = searchParams.get('tab') as 'queue' | 'appointments' | 'billing' | 'search' | 'daycare' | null;
@@ -634,572 +644,319 @@ export const ReceptionDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Welcome / Station Gradient Hero Banner (Executive Command Center Aesthetic) */}
-      <div
-        style={{
-          background: 'linear-gradient(135deg, #0b1528 0%, #1e3a8a 45%, #0284c7 100%)',
-          borderRadius: '18px',
-          padding: '1.75rem 2rem',
-          color: '#ffffff',
-          boxShadow: '0 12px 30px -6px rgba(2, 132, 199, 0.35), 0 4px 12px rgba(11, 21, 40, 0.15)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '1.5rem',
-          position: 'relative',
-          overflow: 'hidden',
-        }}
-      >
-        {/* Subtle Decorative Ambient Background Rings */}
-        <div
-          style={{
-            position: 'absolute',
-            right: '-40px',
-            top: '-50px',
-            width: '260px',
-            height: '260px',
-            borderRadius: '50%',
-            background: 'radial-gradient(circle, rgba(56, 189, 248, 0.15) 0%, rgba(2, 132, 199, 0) 70%)',
-            pointerEvents: 'none',
-          }}
-        />
-
-        <div style={{ maxWidth: '660px', position: 'relative', zIndex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', marginBottom: '0.625rem', flexWrap: 'wrap' }}>
-            <span
-              style={{
-                fontSize: '0.75rem',
-                fontWeight: 800,
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase',
-                backgroundColor: 'rgba(255, 255, 255, 0.16)',
-                padding: '0.25rem 0.65rem',
-                borderRadius: '6px',
-                border: '1px solid rgba(255, 255, 255, 0.25)',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.35rem',
-              }}
-            >
-              <Shield size={12} color="#7dd3fc" /> Reception Desk 01
-            </span>
-            <span
-              style={{
-                fontSize: '0.75rem',
-                fontWeight: 700,
-                color: '#bae6fd',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.35rem',
-              }}
-            >
-              <Building2 size={13} /> OPD Ambulatory Care
-            </span>
-            <span
-              style={{
-                fontSize: '0.75rem',
-                fontWeight: 700,
-                color: '#e0f2fe',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.35rem',
-              }}
-            >
-              <Clock size={13} /> {counterSession.shift} (08:00 - 16:00)
-            </span>
-            <span
-              style={{
-                fontSize: '0.75rem',
-                fontWeight: 800,
-                color: counterSession.status === 'OPEN' ? '#a7f3d0' : '#fecaca',
-                backgroundColor: counterSession.status === 'OPEN' ? 'rgba(16, 185, 129, 0.22)' : 'rgba(239, 68, 68, 0.22)',
-                border: counterSession.status === 'OPEN' ? '1px solid rgba(52, 211, 153, 0.35)' : '1px solid rgba(248, 113, 113, 0.35)',
-                padding: '0.2rem 0.65rem',
-                borderRadius: '999px',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.35rem',
-              }}
-            >
-              <span
-                style={{
-                  width: '7px',
-                  height: '7px',
-                  borderRadius: '50%',
-                  backgroundColor: counterSession.status === 'OPEN' ? '#34d399' : '#ef4444',
-                  boxShadow: counterSession.status === 'OPEN' ? '0 0 6px #34d399' : 'none',
-                }}
-              />
-              {counterSession.status === 'OPEN' ? 'Active / Online' : 'Counter Closed'}
-            </span>
-          </div>
-
-          <h2 style={{ fontSize: '1.75rem', fontWeight: 900, margin: '0 0 0.4rem 0', letterSpacing: '-0.025em' }}>
-            OPD Reception & Calling Cockpit
-          </h2>
-          <p style={{ margin: 0, fontSize: '0.875rem', color: '#e0f2fe', lineHeight: 1.55, display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', backgroundColor: 'rgba(255,255,255,0.14)', padding: '0.15rem 0.5rem', borderRadius: '6px', fontSize: '0.8125rem', fontWeight: 700 }}>
-              👤 {counterSession.receptionistName}
-            </span>
-            <span>Station Lead • Patient intake, doctor queue dispatch, counter settlement & bed admissions.</span>
-          </p>
-        </div>
-
-        {/* Primary Header Actions */}
-        <div style={{ display: 'flex', gap: '0.625rem', flexWrap: 'wrap', position: 'relative', zIndex: 1 }}>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => setShowClosingReportModal(true)}
-            style={{
-              backgroundColor: 'rgba(255, 255, 255, 0.12)',
-              color: '#ffffff',
-              border: '1px solid rgba(255, 255, 255, 0.25)',
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              padding: '0.625rem 1rem',
-              borderRadius: '10px',
-              backdropFilter: 'blur(8px)',
-              transition: 'var(--transition)',
-            }}
-          >
-            <FileSpreadsheet size={16} /> Daily Closing
-          </button>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => setShowTvDisplayModal(true)}
-            style={{
-              backgroundColor: 'rgba(255, 255, 255, 0.12)',
-              color: '#ffffff',
-              border: '1px solid rgba(255, 255, 255, 0.25)',
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              padding: '0.625rem 1rem',
-              borderRadius: '10px',
-              backdropFilter: 'blur(8px)',
-              transition: 'var(--transition)',
-            }}
-            title="Open Waiting Lobby TV Display in new window or modal"
-          >
-            <Tv size={16} /> Lobby TV
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={handleCallNext}
-            style={{
-              background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-              border: '1px solid #b45309',
-              color: '#ffffff',
-              fontWeight: 800,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              padding: '0.625rem 1.15rem',
-              borderRadius: '10px',
-              boxShadow: '0 4px 14px rgba(217, 119, 6, 0.35)',
-              transition: 'var(--transition)',
-            }}
-          >
-            <Volume2 size={16} /> Call Next Patient
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => setShowQuickWalkInModal(true)}
-            style={{
-              backgroundColor: '#0284c7',
-              border: '1px solid #38bdf8',
-              color: '#ffffff',
-              fontWeight: 800,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              padding: '0.625rem 1.15rem',
-              borderRadius: '10px',
-              boxShadow: '0 4px 14px rgba(2, 132, 199, 0.3)',
-              transition: 'var(--transition)',
-            }}
-          >
-            <Zap size={16} /> Walk-In Token
-          </button>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => setShowRegWizardModal(true)}
-            style={{
-              backgroundColor: '#ffffff',
-              border: '1px solid #ffffff',
-              color: '#0f172a',
-              fontWeight: 800,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              padding: '0.625rem 1.25rem',
-              borderRadius: '10px',
-              boxShadow: '0 4px 14px rgba(0, 0, 0, 0.12)',
-              transition: 'var(--transition)',
-            }}
-          >
-            <Plus size={16} color="#0284c7" /> Register Patient
-          </button>
-        </div>
-      </div>
-
-      {/* Daily Counter Shift Session Bar (Elevated Glassmorphic Telemetry Strip) */}
+      {/* 1. WORKSPACE HEADER (§ 5: Standardized SaaS header, Reception & Calling Cockpit) */}
       <div
         style={{
           backgroundColor: '#ffffff',
-          borderRadius: '14px',
-          border: '1.5px solid var(--border-color)',
-          padding: '0.875rem 1.5rem',
-          boxShadow: '0 4px 16px -2px rgba(0,0,0,0.03)',
+          border: '1px solid var(--border-color)',
+          borderRadius: '12px',
+          padding: '20px 24px',
+        }}
+      >
+        <WorkspaceHeader
+          title="OPD Reception & Calling Cockpit"
+          description="Station Lead • Patient intake, doctor queue dispatch, counter settlement & bed admissions."
+          icon={<UserPlus size={20} />}
+          actions={
+            <>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowClosingReportModal(true)}
+                style={{
+                  backgroundColor: '#ffffff',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--secondary)',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  padding: '7px 14px',
+                  borderRadius: '8px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  cursor: 'pointer',
+                }}
+              >
+                <FileSpreadsheet size={16} />
+                <span>Daily Closing</span>
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowTvDisplayModal(true)}
+                title="Open Waiting Lobby TV Display in new window or modal"
+                style={{
+                  backgroundColor: '#ffffff',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--secondary)',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  padding: '7px 14px',
+                  borderRadius: '8px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  cursor: 'pointer',
+                }}
+              >
+                <Tv size={16} />
+                <span>Lobby TV</span>
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleCallNext}
+                style={{
+                  backgroundColor: 'var(--primary)',
+                  color: '#ffffff',
+                  border: 'none',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  padding: '7px 16px',
+                  borderRadius: '8px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  cursor: 'pointer',
+                  boxShadow: 'var(--shadow-sm)',
+                }}
+              >
+                <Volume2 size={16} />
+                <span>Call Next Patient</span>
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowQuickWalkInModal(true)}
+                style={{
+                  backgroundColor: '#ffffff',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--secondary)',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  padding: '7px 14px',
+                  borderRadius: '8px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  cursor: 'pointer',
+                }}
+              >
+                <Zap size={16} />
+                <span>Walk-In Token</span>
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowRegWizardModal(true)}
+                style={{
+                  backgroundColor: '#ffffff',
+                  border: '1px solid var(--primary)',
+                  color: 'var(--primary)',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  padding: '7px 14px',
+                  borderRadius: '8px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  cursor: 'pointer',
+                }}
+              >
+                <Plus size={16} color="var(--primary)" />
+                <span>Register Patient</span>
+              </button>
+            </>
+          }
+        />
+      </div>
+
+      {/* Daily Counter Shift Session Bar (§ 8: White card, 12px radius, soft shadow) */}
+      <div
+        style={{
+          backgroundColor: '#ffffff',
+          borderRadius: '12px',
+          border: '1px solid var(--border-color)',
+          padding: '20px',
+          boxShadow: 'var(--shadow-sm)',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           flexWrap: 'wrap',
-          gap: '1rem',
+          gap: '16px',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
           <div
             style={{
-              width: '42px',
-              height: '42px',
+              width: '40px',
+              height: '40px',
               borderRadius: '10px',
-              backgroundColor: counterSession.status === 'OPEN' ? '#dcfce7' : '#fee2e2',
-              color: counterSession.status === 'OPEN' ? '#15803d' : '#991b1b',
+              backgroundColor: 'var(--gray-50)',
+              border: '1px solid var(--border-color)',
+              color: counterSession.status === 'OPEN' ? 'var(--success)' : 'var(--text-muted)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: counterSession.status === 'OPEN' ? '0 2px 6px rgba(22, 163, 74, 0.15)' : 'none',
+              flexShrink: 0,
             }}
           >
             <Shield size={20} />
           </div>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '0.875rem', fontWeight: 800, color: 'var(--secondary)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--secondary)' }}>
                 {counterSession.counterNumber} • {counterSession.shift}
               </span>
               <span
                 style={{
-                  fontSize: '0.6875rem',
-                  fontWeight: 800,
-                  backgroundColor: counterSession.status === 'OPEN' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
-                  color: counterSession.status === 'OPEN' ? '#059669' : '#dc2626',
-                  padding: '0.2rem 0.5rem',
-                  borderRadius: '6px',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  backgroundColor: 'transparent',
+                  border: counterSession.status === 'OPEN' ? '1px solid var(--success)' : '1px solid var(--danger)',
+                  color: counterSession.status === 'OPEN' ? 'var(--success)' : 'var(--danger)',
+                  padding: '2px 8px',
+                  borderRadius: '999px',
                   textTransform: 'uppercase',
                   letterSpacing: '0.04em',
+                  lineHeight: 1.4,
                 }}
               >
                 {counterSession.status}
               </span>
               <span
                 style={{
-                  fontSize: '0.6875rem',
-                  fontWeight: 700,
-                  color: '#0369a1',
-                  backgroundColor: '#e0f2fe',
-                  border: '1px solid #bae6fd',
-                  padding: '0.2rem 0.55rem',
-                  borderRadius: '6px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  color: 'var(--primary)',
+                  backgroundColor: 'transparent',
+                  border: '1px solid var(--primary)',
+                  padding: '2px 8px',
+                  borderRadius: '999px',
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: '0.3rem',
+                  gap: '4px',
+                  lineHeight: 1.4,
                 }}
               >
                 <Sparkles size={12} /> Tariffs Synced Live
               </span>
             </div>
-            <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: '0.25rem 0 0 0', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-              <span>Opening Float: <strong style={{ color: 'var(--secondary)' }}>${counterSession.openingFloat}.00</strong></span>
+            <div
+              style={{
+                fontSize: '13px',
+                color: 'var(--text-muted)',
+                marginTop: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                flexWrap: 'wrap',
+              }}
+            >
+              <span>
+                Opening Float: <strong style={{ color: 'var(--secondary)', fontWeight: 600 }}>{formatMoney(counterSession.openingFloat)}</strong>
+              </span>
               <span style={{ color: 'var(--border-color)' }}>•</span>
-              <span>Total Collections: <strong style={{ color: 'var(--secondary)' }}>${totalCollectionsToday}.00</strong></span>
+              <span>
+                Total Collections: <strong style={{ color: 'var(--secondary)', fontWeight: 600 }}>{formatMoney(totalCollectionsToday)}</strong>
+              </span>
               <span style={{ color: 'var(--border-color)' }}>•</span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                Live In-Drawer Cash:
-                <strong style={{ backgroundColor: '#dcfce7', color: '#15803d', padding: '0.15rem 0.5rem', borderRadius: '6px', fontSize: '0.875rem', fontWeight: 800 }}>
-                  ${counterSession.openingFloat + totalCollectionsToday}.00
-                </strong>
+              <span>
+                Live In-Drawer Cash: <strong style={{ color: 'var(--secondary)', fontWeight: 700 }}>{formatMoney(counterSession.openingFloat + totalCollectionsToday)}</strong>
               </span>
             </div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <button
             type="button"
-            className="btn btn-secondary btn-sm"
+            className="btn btn-secondary"
             onClick={() => setShowOpenCounterModal(true)}
-            style={{ fontSize: '0.75rem', padding: '0.4rem 0.85rem', fontWeight: 700 }}
+            style={{
+              backgroundColor: '#ffffff',
+              border: '1px solid var(--border-color)',
+              color: 'var(--secondary)',
+              fontSize: '13px',
+              fontWeight: 500,
+              padding: '6px 12px',
+              borderRadius: '8px',
+              cursor: 'pointer',
+            }}
           >
             {counterSession.status === 'OPEN' ? 'Edit Float' : 'Open Counter'}
           </button>
           <button
             type="button"
-            className="btn btn-secondary btn-sm"
+            className="btn btn-secondary"
             onClick={() => setShowClosingReportModal(true)}
-            style={{ fontSize: '0.75rem', padding: '0.4rem 0.85rem', color: '#0284c7', fontWeight: 700, borderColor: '#bae6fd', backgroundColor: '#f0f9ff' }}
+            style={{
+              backgroundColor: '#ffffff',
+              border: '1px solid var(--border-color)',
+              color: 'var(--secondary)',
+              fontSize: '13px',
+              fontWeight: 500,
+              padding: '6px 12px',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
           >
-            Shift Handover →
+            <span>Shift Handover</span>
+            <ArrowRight size={14} />
           </button>
         </div>
       </div>
 
-      {/* KPI Summary Cards (Elevated Cards matching Department & Admin Standards) */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-          gap: '1.25rem',
-        }}
-      >
-        {/* Total Patients Today */}
-        <div
-          className="card"
-          style={{
-            padding: '1.25rem 1.35rem',
-            borderRadius: '14px',
-            border: '1.5px solid #bfdbfe',
-            backgroundColor: '#ffffff',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.02)',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            gap: '0.75rem',
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', color: '#1e40af', letterSpacing: '0.04em' }}>
-              Total Visits Today
-            </span>
-            <div
-              style={{
-                width: '38px',
-                height: '38px',
-                borderRadius: '10px',
-                backgroundColor: '#eff6ff',
-                color: '#2563eb',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Users size={20} />
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: '1.85rem', fontWeight: 900, color: '#1e3a8a', lineHeight: 1 }}>
-              {totalVisitsToday} <span style={{ fontSize: '0.875rem', color: '#60a5fa', fontWeight: 700 }}>Visits</span>
-            </div>
-            <div style={{ fontSize: '0.75rem', color: '#3b82f6', marginTop: '0.35rem', fontWeight: 600 }}>
-              All active & checked-in tokens
-            </div>
-          </div>
-        </div>
-
-        {/* Waiting Queue */}
-        <div
-          className="card"
-          style={{
-            padding: '1.25rem 1.35rem',
-            borderRadius: '14px',
-            border: '1.5px solid #fed7aa',
-            backgroundColor: '#ffffff',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.02)',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            gap: '0.75rem',
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', color: '#9a3412', letterSpacing: '0.04em' }}>
-              Waiting in Lobby
-            </span>
-            <div
-              style={{
-                width: '38px',
-                height: '38px',
-                borderRadius: '10px',
-                backgroundColor: '#fff7ed',
-                color: '#ea580c',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Clock size={20} />
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: '1.85rem', fontWeight: 900, color: '#c2410c', lineHeight: 1 }}>
-              {waitingInLobby} <span style={{ fontSize: '0.875rem', color: '#fb923c', fontWeight: 700 }}>In Lobby</span>
-            </div>
-            <div style={{ fontSize: '0.75rem', color: '#c2410c', marginTop: '0.35rem', fontWeight: 600 }}>
-              Awaiting doctor chamber calling
-            </div>
-          </div>
-        </div>
-
-        {/* In Consultation */}
-        <div
-          className="card"
-          style={{
-            padding: '1.25rem 1.35rem',
-            borderRadius: '14px',
-            border: '1.5px solid #bbf7d0',
-            backgroundColor: '#ffffff',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.02)',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            gap: '0.75rem',
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', color: '#166534', letterSpacing: '0.04em' }}>
-              In Consultation
-            </span>
-            <div
-              style={{
-                width: '38px',
-                height: '38px',
-                borderRadius: '10px',
-                backgroundColor: '#f0fdf4',
-                color: '#16a34a',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <CheckCircle2 size={20} />
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: '1.85rem', fontWeight: 900, color: '#15803d', lineHeight: 1 }}>
-              {inConsultation} <span style={{ fontSize: '0.875rem', color: '#4ade80', fontWeight: 700 }}>Active</span>
-            </div>
-            <div style={{ fontSize: '0.75rem', color: '#15803d', marginTop: '0.35rem', fontWeight: 600 }}>
-              Currently inside doctor chambers
-            </div>
-          </div>
-        </div>
-
-        {/* Counter Revenue */}
-        <div
-          className="card"
-          style={{
-            padding: '1.25rem 1.35rem',
-            borderRadius: '14px',
-            border: '1.5px solid #99f6e4',
-            backgroundColor: '#ffffff',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.02)',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            gap: '0.75rem',
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', color: '#115e59', letterSpacing: '0.04em' }}>
-              Counter Revenue
-            </span>
-            <div
-              style={{
-                width: '38px',
-                height: '38px',
-                borderRadius: '10px',
-                backgroundColor: '#f0fdfa',
-                color: '#0d9488',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <DollarSign size={20} />
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: '1.85rem', fontWeight: 900, color: '#0f766e', lineHeight: 1 }}>
-              ${totalCollectionsToday}.00 <span style={{ fontSize: '0.875rem', color: '#2dd4bf', fontWeight: 700 }}>USD</span>
-            </div>
-            <div style={{ fontSize: '0.75rem', color: '#0f766e', marginTop: '0.35rem', fontWeight: 600 }}>
-              Consultation & desk collections
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Workstation Segmented Subtabs Bar */}
-      <div
-        style={{
-          display: 'flex',
-          gap: '0.375rem',
-          backgroundColor: '#f1f5f9',
-          padding: '0.375rem',
-          borderRadius: '12px',
-          border: '1px solid #e2e8f0',
-          overflowX: 'auto',
-        }}
-      >
-        {[
-          { id: 'queue', label: '1. 🎫 Live Token Queue & Calling Desk', count: queue.length },
-          { id: 'appointments', label: '2. 📅 Doctor Availability & Slot Booking', count: `${doctorsRoster.length} Doctors` },
-          { id: 'billing', label: '3. 💳 Counter Billing & Receipts', count: invoices.length },
-          { id: 'search', label: '4. 👥 Patient Master Directory & Dossier', count: patients.length },
-          { id: 'daycare', label: '5. 🛏️ Hospital Bed Roster & Observation Care', count: `${bedStats.occupied}/${bedStats.total} Beds` },
-        ].map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id as any)}
-              style={{
-                padding: '0.625rem 1.15rem',
-                borderRadius: '9px',
-                fontWeight: 800,
-                fontSize: '0.8125rem',
-                border: 'none',
-                cursor: 'pointer',
-                backgroundColor: isActive ? '#ffffff' : 'transparent',
-                color: isActive ? '#0284c7' : '#64748b',
-                boxShadow: isActive ? '0 2px 8px rgba(0, 0, 0, 0.08)' : 'none',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                whiteSpace: 'nowrap',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              <span>{tab.label}</span>
-              {tab.count !== undefined && (
-                <span
-                  style={{
-                    fontSize: '0.6875rem',
-                    backgroundColor: isActive ? '#e0f2fe' : '#e2e8f0',
-                    color: isActive ? '#0284c7' : '#475569',
-                    padding: '0.15rem 0.5rem',
-                    borderRadius: '999px',
-                    fontWeight: 900,
-                  }}
-                >
-                  {tab.count}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+      {/* KPI Summary Cards (§ 9 & Workspace Standards) */}
+      <KpiRow>
+        <KpiCard
+          label="Total Visits Today"
+          value={totalVisitsToday}
+          trend="Visits"
+          trendColor="var(--primary)"
+          subtext="All active & checked-in tokens"
+          iconBg="var(--primary-light)"
+          iconColor="var(--primary)"
+          icon={<Users size={18} />}
+        />
+        <KpiCard
+          label="Waiting in Lobby"
+          value={waitingInLobby}
+          trend="In Lobby"
+          trendColor="var(--warning)"
+          subtext="Awaiting doctor chamber calling"
+          iconBg="var(--warning-light)"
+          iconColor="var(--warning)"
+          icon={<Clock size={18} />}
+        />
+        <KpiCard
+          label="In Consultation"
+          value={inConsultation}
+          trend="Active"
+          trendColor="var(--success)"
+          subtext="Currently inside doctor chambers"
+          iconBg="var(--success-light)"
+          iconColor="var(--success)"
+          icon={<CheckCircle2 size={18} />}
+        />
+        <KpiCard
+          label="Counter Revenue"
+          value={formatMoney(totalCollectionsToday)}
+          trend={currencyCode}
+          trendColor="var(--primary)"
+          subtext="Consultation & desk collections"
+          iconBg="var(--primary-light)"
+          iconColor="var(--primary)"
+          icon={<DollarSign size={18} />}
+        />
+      </KpiRow>
 
       {/* ========================================================================= */}
       {/* TAB 1: LIVE TOKEN QUEUE & CALLING DESK                                    */}
@@ -1279,7 +1036,7 @@ export const ReceptionDashboard: React.FC = () => {
                       <th style={{ width: '110px', fontSize: '0.75rem', color: '#475569', fontWeight: 700 }}>Slot & Type</th>
                       <th style={{ width: '95px', fontSize: '0.75rem', color: '#475569', fontWeight: 700 }}>Desk Bill</th>
                       <th style={{ width: '120px', fontSize: '0.75rem', color: '#475569', fontWeight: 700 }}>Queue Status</th>
-                      <th style={{ width: '130px', textAlign: 'right', fontSize: '0.75rem', color: '#475569', fontWeight: 700 }}>Action</th>
+                      <th style={{ width: '160px', textAlign: 'right', fontSize: '0.75rem', color: '#475569', fontWeight: 700 }}>Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1383,7 +1140,7 @@ export const ReceptionDashboard: React.FC = () => {
                             {item.feePaid ? (
                               <div>
                                 <span style={{ color: '#15803d', fontWeight: 800, fontSize: '0.8125rem' }}>
-                                  ${item.totalFee || 75}.00
+                                  {formatMoney(item.totalFee || 75)}
                                 </span>
                                 <div style={{ fontSize: '0.6563rem', color: '#16a34a', fontWeight: 700 }}>
                                   ✓ Paid
@@ -1392,7 +1149,7 @@ export const ReceptionDashboard: React.FC = () => {
                             ) : (
                               <div>
                                 <span style={{ color: '#b45309', fontWeight: 800, fontSize: '0.8125rem' }}>
-                                  ${item.totalFee || 75}.00
+                                  {formatMoney(item.totalFee || 75)}
                                 </span>
                                 <button
                                   type="button"
@@ -1464,226 +1221,119 @@ export const ReceptionDashboard: React.FC = () => {
                             )}
                           </td>
 
-                          {/* Contextual Action & Dropdown */}
-                          <td style={{ textAlign: 'right', verticalAlign: 'middle', position: 'relative' }}>
-                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                              {/* Primary Contextual Action Button */}
-                              {item.status !== 'IN_CONSULTATION' && item.status !== 'COMPLETED' && (
-                                <button
-                                  type="button"
-                                  className="btn btn-primary btn-sm"
-                                  onClick={() => handleCallSpecificToken(item)}
-                                  style={{ fontWeight: 800, padding: '0.3rem 0.65rem', fontSize: '0.75rem' }}
-                                  title="Call Patient to Chamber"
-                                >
-                                  Call
-                                </button>
-                              )}
+                          {/* Contextual Action Column via RowActionsMenu (§ 10 & § 12) */}
+                          <td style={{ textAlign: 'right', verticalAlign: 'middle' }}>
+                            {(() => {
+                              const fixedActions: ActionSlotItem[] = [];
 
-                              {item.status === 'IN_CONSULTATION' && (
-                                <button
-                                  type="button"
-                                  className="btn btn-primary btn-sm"
-                                  onClick={() => handlePatientCheckOut(item)}
-                                  style={{ backgroundColor: '#15803d', borderColor: '#15803d', fontWeight: 800, padding: '0.3rem 0.65rem', fontSize: '0.75rem' }}
-                                  title="Check-Out Patient"
-                                >
-                                  Check-Out
-                                </button>
-                              )}
-
-                              {item.status === 'COMPLETED' && (
-                                <button
-                                  type="button"
-                                  className="btn btn-secondary btn-sm"
-                                  onClick={() => {
+                              if (item.status === 'IN_CONSULTATION') {
+                                fixedActions.push({
+                                  label: 'Check-Out',
+                                  variant: 'primary',
+                                  icon: <Check size={14} />,
+                                  onClick: () => handlePatientCheckOut(item),
+                                  title: 'Check-Out Patient',
+                                  width: '96px',
+                                });
+                              } else if (item.status === 'COMPLETED') {
+                                fixedActions.push({
+                                  label: 'Print',
+                                  variant: 'secondary',
+                                  icon: <Printer size={14} />,
+                                  onClick: () => {
                                     setSelectedTokenForPrint(item);
                                     setShowTokenPrintModal(true);
-                                  }}
-                                  style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem' }}
-                                  title="Print Slip"
-                                >
-                                  <Printer size={13} />
-                                </button>
-                              )}
+                                  },
+                                  title: 'Print Slip',
+                                  width: '96px',
+                                });
+                              } else {
+                                fixedActions.push({
+                                  label: 'Call',
+                                  variant: 'secondary',
+                                  icon: <Volume2 size={14} color="var(--primary)" />,
+                                  style: { color: 'var(--primary)' },
+                                  onClick: () => handleCallSpecificToken(item),
+                                  title: 'Call Patient to Chamber',
+                                  width: '96px',
+                                });
+                              }
 
-                              {/* More Options Dropdown Toggle */}
-                              <div style={{ position: 'relative' }}>
-                                <button
-                                  type="button"
-                                  className="btn btn-secondary btn-sm"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setActionMenuToken(actionMenuToken === item.token ? null : item.token);
-                                  }}
-                                  style={{ padding: '0.3rem 0.45rem' }}
-                                  title="More Quick Actions"
-                                >
-                                  <MoreVertical size={14} />
-                                </button>
+                              const menuItems: MenuItem[] = [
+                                {
+                                  id: 'print-slip',
+                                  icon: <Printer size={15} color="var(--primary)" style={{ flexShrink: 0 }} />,
+                                  label: 'Print Token Slip',
+                                  onClick: () => {
+                                    setSelectedTokenForPrint(item);
+                                    setShowTokenPrintModal(true);
+                                  },
+                                },
+                                {
+                                  id: 'counter-bill',
+                                  icon: <Receipt size={15} color="var(--success)" style={{ flexShrink: 0 }} />,
+                                  label: 'Counter Bill Receipt',
+                                  onClick: () => {
+                                    setSelectedTokenForBill(item);
+                                    setShowBillingModal(true);
+                                  },
+                                },
+                              ];
 
-                                {/* Dropdown Menu */}
-                                {actionMenuToken === item.token && (
-                                  <div
-                                    onClick={(e) => e.stopPropagation()}
-                                    style={{
-                                      position: 'absolute',
-                                      right: 0,
-                                      top: '110%',
-                                      backgroundColor: '#ffffff',
-                                      borderRadius: '10px',
-                                      boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15)',
-                                      border: '1px solid #e2e8f0',
-                                      zIndex: 100,
-                                      minWidth: '180px',
-                                      padding: '0.4rem',
-                                      display: 'flex',
-                                      flexDirection: 'column',
-                                      gap: '0.2rem',
-                                      textAlign: 'left',
-                                    }}
-                                  >
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setSelectedTokenForPrint(item);
-                                        setShowTokenPrintModal(true);
-                                        setActionMenuToken(null);
-                                      }}
-                                      style={{
-                                        border: 'none',
-                                        background: 'transparent',
-                                        padding: '0.45rem 0.65rem',
-                                        fontSize: '0.7813rem',
-                                        fontWeight: 600,
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '0.5rem',
-                                        borderRadius: '6px',
-                                        cursor: 'pointer',
-                                        color: 'var(--text-main)',
-                                      }}
-                                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
-                                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-                                    >
-                                      <Printer size={14} color="#0284c7" />
-                                      <span>Print Token Slip</span>
-                                    </button>
+                              if (item.status === 'WAITING') {
+                                menuItems.push({
+                                  id: 'mark-triage',
+                                  icon: <Stethoscope size={15} color="var(--primary)" style={{ flexShrink: 0 }} />,
+                                  label: 'Mark Nurse Triaged',
+                                  onClick: () => handleMarkTriage(item.token),
+                                });
+                              }
 
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setSelectedTokenForBill(item);
-                                        setShowBillingModal(true);
-                                        setActionMenuToken(null);
-                                      }}
-                                      style={{
-                                        border: 'none',
-                                        background: 'transparent',
-                                        padding: '0.45rem 0.65rem',
-                                        fontSize: '0.7813rem',
-                                        fontWeight: 600,
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '0.5rem',
-                                        borderRadius: '6px',
-                                        cursor: 'pointer',
-                                        color: 'var(--text-main)',
-                                      }}
-                                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
-                                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-                                    >
-                                      <Receipt size={14} color="#16a34a" />
-                                      <span>Counter Bill Receipt</span>
-                                    </button>
+                              if (item.priority !== 'URGENT' && item.status !== 'COMPLETED') {
+                                menuItems.push({
+                                  id: 'bump-urgent',
+                                  icon: <AlertTriangle size={15} color="var(--danger)" style={{ flexShrink: 0 }} />,
+                                  label: 'Mark Urgent Priority',
+                                  danger: true,
+                                  confirm: {
+                                    title: `Escalate Token #${item.token} to Urgent?`,
+                                    description: 'Bumps patient queue priority for immediate clinical attention.',
+                                    confirmText: 'Mark Urgent',
+                                    cancelText: 'Cancel',
+                                    danger: true,
+                                  },
+                                  onClick: () => handleBumpUrgent(item.token),
+                                });
+                              }
 
-                                    {item.status === 'WAITING' && (
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          handleMarkTriage(item.token);
-                                          setActionMenuToken(null);
-                                        }}
-                                        style={{
-                                          border: 'none',
-                                          background: 'transparent',
-                                          padding: '0.45rem 0.65rem',
-                                          fontSize: '0.7813rem',
-                                          fontWeight: 600,
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          gap: '0.5rem',
-                                          borderRadius: '6px',
-                                          cursor: 'pointer',
-                                          color: 'var(--text-main)',
-                                        }}
-                                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
-                                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-                                      >
-                                        <Stethoscope size={14} color="#9333ea" />
-                                        <span>Mark Nurse Triaged</span>
-                                      </button>
-                                    )}
+                              if (item.status !== 'COMPLETED') {
+                                menuItems.push({
+                                  id: 'mark-no-show',
+                                  icon: <XCircle size={15} color="var(--text-muted)" style={{ flexShrink: 0 }} />,
+                                  label: 'Mark No-Show',
+                                  danger: true,
+                                  dividerBefore: true,
+                                  confirm: {
+                                    title: `Mark Token #${item.token} as No-Show?`,
+                                    description: 'Cancels this active token and removes the patient from the queue.',
+                                    confirmText: 'Mark No-Show',
+                                    cancelText: 'Cancel',
+                                    danger: true,
+                                  },
+                                  onClick: () => handleMarkNoShow(item.token),
+                                });
+                              }
 
-                                    {item.priority !== 'URGENT' && item.status !== 'COMPLETED' && (
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          handleBumpUrgent(item.token);
-                                          setActionMenuToken(null);
-                                        }}
-                                        style={{
-                                          border: 'none',
-                                          background: 'transparent',
-                                          padding: '0.45rem 0.65rem',
-                                          fontSize: '0.7813rem',
-                                          fontWeight: 600,
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          gap: '0.5rem',
-                                          borderRadius: '6px',
-                                          cursor: 'pointer',
-                                          color: '#dc2626',
-                                        }}
-                                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#fee2e2')}
-                                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-                                      >
-                                        <AlertTriangle size={14} color="#dc2626" />
-                                        <span>Mark Urgent Priority</span>
-                                      </button>
-                                    )}
-
-                                    {item.status !== 'COMPLETED' && (
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          handleMarkNoShow(item.token);
-                                          setActionMenuToken(null);
-                                        }}
-                                        style={{
-                                          border: 'none',
-                                          background: 'transparent',
-                                          padding: '0.45rem 0.65rem',
-                                          fontSize: '0.7813rem',
-                                          fontWeight: 600,
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          gap: '0.5rem',
-                                          borderRadius: '6px',
-                                          cursor: 'pointer',
-                                          color: '#64748b',
-                                        }}
-                                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
-                                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-                                      >
-                                        <XCircle size={14} color="#64748b" />
-                                        <span>Mark No-Show</span>
-                                      </button>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
+                              return (
+                                <RowActionsMenu
+                                  fixedActions={fixedActions}
+                                  menuItems={menuItems}
+                                  isOpen={actionMenuToken === item.token}
+                                  onOpen={() => setActionMenuToken(item.token)}
+                                  onClose={() => setActionMenuToken(null)}
+                                />
+                              );
+                            })()}
                           </td>
                         </tr>
                       ))
@@ -1840,14 +1490,14 @@ export const ReceptionDashboard: React.FC = () => {
                 <div style={{ backgroundColor: '#ffffff', padding: '0.65rem 0.75rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
                   <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Opening Float</div>
                   <div style={{ fontSize: '1.125rem', fontWeight: 900, color: '#0284c7', marginTop: '0.15rem' }}>
-                    ${counterSession.openingFloat}.00
+                    {formatMoney(counterSession.openingFloat)}
                   </div>
                 </div>
 
                 <div style={{ backgroundColor: '#ffffff', padding: '0.65rem 0.75rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
                   <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Cash Collected</div>
                   <div style={{ fontSize: '1.125rem', fontWeight: 900, color: '#16a34a', marginTop: '0.15rem' }}>
-                    ${totalCollectionsToday}.00
+                    {formatMoney(totalCollectionsToday)}
                   </div>
                 </div>
               </div>
@@ -1866,7 +1516,7 @@ export const ReceptionDashboard: React.FC = () => {
                 <div>
                   <div style={{ fontSize: '0.6875rem', color: '#166534', fontWeight: 700, textTransform: 'uppercase' }}>Total in Drawer</div>
                   <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#15803d' }}>
-                    ${counterSession.openingFloat + totalCollectionsToday}.00
+                    {formatMoney(counterSession.openingFloat + totalCollectionsToday)}
                   </div>
                 </div>
                 <button
@@ -2001,7 +1651,7 @@ export const ReceptionDashboard: React.FC = () => {
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.75rem', paddingTop: '0.5rem', borderTop: '1px dashed #cbd5e1', fontSize: '0.75rem' }}>
                       <span>
-                        Standard OPD: <strong style={{ color: '#0284c7' }}>${doc.fee}</strong> • Follow-Up: <strong>${doc.followUpFee}</strong>
+                        Standard OPD: <strong style={{ color: '#0284c7' }}>{formatMoney(doc.fee)}</strong> • Follow-Up: <strong>{formatMoney(doc.followUpFee)}</strong>
                       </span>
                       <span style={{ color: '#0284c7', fontWeight: 700 }}>Next: {doc.nextSlot}</span>
                     </div>
@@ -2021,7 +1671,7 @@ export const ReceptionDashboard: React.FC = () => {
                 </h3>
               </div>
               <p style={{ fontSize: '0.7813rem', color: 'var(--text-muted)', margin: '0.2rem 0 0' }}>
-                Assigned to {selectedBookingDoctorObj.room} • Standard Tariff: ${selectedBookingDoctorObj.fee} | Follow-up: ${selectedBookingDoctorObj.followUpFee}
+                Assigned to {selectedBookingDoctorObj.room} • Standard Tariff: {formatMoney(selectedBookingDoctorObj.fee)} | Follow-up: {formatMoney(selectedBookingDoctorObj.followUpFee)}
               </p>
             </div>
 
@@ -2078,7 +1728,7 @@ export const ReceptionDashboard: React.FC = () => {
                       onClick={() => setBookingVisitType(cat)}
                       style={{ fontSize: '0.7813rem', padding: '0.35rem 0.75rem' }}
                     >
-                      {cat} {cat === 'Follow-Up' ? `(Discounted $${selectedBookingDoctorObj.followUpFee})` : ''}
+                      {cat} {cat === 'Follow-Up' ? `(Discounted ${formatMoney(selectedBookingDoctorObj.followUpFee)})` : ''}
                     </button>
                   ))}
                 </div>
@@ -2160,11 +1810,12 @@ export const ReceptionDashboard: React.FC = () => {
                     Slot: <strong>{selectedBookingSlot}</strong> with {selectedBookingDoctor}
                   </div>
                   <div style={{ fontSize: '1.15rem', fontWeight: 900, color: '#0284c7', marginTop: '0.15rem' }}>
-                    Total Tariff: $
-                    {bookingVisitType === 'Follow-Up'
-                      ? selectedBookingDoctorObj.followUpFee + (tariffMaster.triageVitalsFee || 10)
-                      : selectedBookingDoctorObj.fee + (tariffMaster.triageVitalsFee || 10)}
-                    .00
+                    Total Tariff:{' '}
+                    {formatMoney(
+                      bookingVisitType === 'Follow-Up'
+                        ? selectedBookingDoctorObj.followUpFee + (tariffMaster.triageVitalsFee || 10)
+                        : selectedBookingDoctorObj.fee + (tariffMaster.triageVitalsFee || 10)
+                    )}
                   </div>
                 </div>
 
@@ -2199,7 +1850,7 @@ export const ReceptionDashboard: React.FC = () => {
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
               <span className="badge badge-success" style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem' }}>
-                Total Collected: ${totalCollectionsToday}.00
+                Total Collected: {formatMoney(totalCollectionsToday)}
               </span>
             </div>
           </div>
@@ -2240,8 +1891,8 @@ export const ReceptionDashboard: React.FC = () => {
                             {inv.category}
                           </span>
                         </td>
-                        <td><strong>${inv.total}.00</strong></td>
-                        <td style={{ color: '#15803d', fontWeight: 800 }}>${inv.paid}.00</td>
+                        <td><strong>{formatMoney(inv.total)}</strong></td>
+                        <td style={{ color: '#15803d', fontWeight: 800 }}>{formatMoney(inv.paid)}</td>
                         <td>
                           <span
                             className={`badge ${
@@ -2732,7 +2383,7 @@ export const ReceptionDashboard: React.FC = () => {
                           </span>
                           <span>•</span>
                           <span>
-                            Tariff: <strong style={{ color: '#15803d' }}>${wardDailyTariff}.00 / 24h</strong> (${wardHourlyTariff}/hr)
+                            Tariff: <strong style={{ color: '#15803d' }}>{formatMoney(wardDailyTariff)} / 24h</strong> ({formatMoney(wardHourlyTariff)}/hr)
                           </span>
                         </div>
                       </div>
@@ -2909,7 +2560,7 @@ export const ReceptionDashboard: React.FC = () => {
 
                                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
                                           <span>⏱️ In Bed Since: {pt.admissionDate ? pt.admissionDate.split(' ')[1] || '09:30' : '09:30'}</span>
-                                          <strong style={{ color: '#15803d' }}>${Math.round(b.dailyTariff / 8) || 20}/hr</strong>
+                                          <strong style={{ color: '#15803d' }}>{formatMoney(Math.round(b.dailyTariff / 8) || 20)}/hr</strong>
                                         </div>
 
                                         <button
@@ -2984,7 +2635,7 @@ export const ReceptionDashboard: React.FC = () => {
                                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.75rem', color: '#15803d' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-muted)' }}>
                                           <span>Tariff Rate:</span>
-                                          <strong>${b.dailyTariff}/24h (${Math.round(b.dailyTariff / 8)}/hr)</strong>
+                                          <strong>{formatMoney(b.dailyTariff)}/24h ({formatMoney(Math.round(b.dailyTariff / 8))}/hr)</strong>
                                         </div>
                                         <div style={{ fontSize: '0.6875rem', color: '#16a34a' }}>
                                           ✨ Sanitized & Ready for Intake

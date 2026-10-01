@@ -12,12 +12,14 @@ import {
 } from 'lucide-react';
 import { DepartmentWorkspace } from '../../types';
 import { getDepartmentDoctors, getDepartmentRooms } from './departmentWorkspaceStore';
+import { useCurrency } from '../../config/currency';
 
 interface Props {
   workspace: DepartmentWorkspace;
 }
 
 export const DepartmentReports: React.FC<Props> = ({ workspace }) => {
+  const { format: formatMoney } = useCurrency();
   const doctors = getDepartmentDoctors(workspace.departmentId);
   const rooms = getDepartmentRooms(workspace.departmentId);
 
@@ -116,7 +118,7 @@ export const DepartmentReports: React.FC<Props> = ({ workspace }) => {
             Consultation Revenue
           </span>
           <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#c2410c', marginTop: '0.25rem' }}>
-            $6,450
+            {formatMoney(6450)}
           </div>
           <div style={{ fontSize: '0.75rem', color: '#ea580c', marginTop: '0.25rem' }}>
             Settled tariffs today

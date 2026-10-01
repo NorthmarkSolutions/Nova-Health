@@ -174,6 +174,15 @@ export interface DailyCounterSession {
   notes?: string;
 }
 
+export interface LabTariffItem {
+  testName: string;
+  code?: string;
+  basePrice: number;
+  tpaPrice: number;
+  statSurcharge: string;
+  effectiveDate?: string;
+}
+
 export interface SharedLabOrder {
   id: string;
   orderNo: string;
@@ -185,20 +194,34 @@ export interface SharedLabOrder {
   category: string;
   sampleType: string;
   container: string;
+  containerColor?: string;
   doctor: string;
   barcode: string;
-  stage: 'COLLECTED' | 'PROCESSING' | 'RESULT_ENTERED' | 'VALIDATED' | 'REPORT_GENERATED';
+  priority?: 'ROUTINE' | 'STAT' | 'URGENT';
+  stage: 'ORDERED' | 'COLLECTED' | 'SAMPLE_COLLECTED' | 'PROCESSING' | 'RESULT_ENTERED' | 'VALIDATED' | 'REPORT_GENERATED';
   price: number;
   isFlaggedAbnormal: boolean;
+  isFlaggedCritical?: boolean;
+  criticalAcknowledged?: boolean;
+  criticalAcknowledgedBy?: string;
+  criticalAcknowledgedAt?: string;
+  criticalAckNote?: string;
   parameters: {
     paramName: string;
     observedValue: string;
     referenceRange: string;
     unit: string;
     isAbnormal: boolean;
+    isCritical?: boolean;
+    flag?: string;
   }[];
   technicianNote?: string;
   pathologistRemarks?: string;
+  sampleCollector?: string;
+  collectedAt?: string;
+  approvedBy?: string;
+  approvedAt?: string;
+  reportId?: string;
 }
 
 export interface SharedInvoice {
@@ -403,6 +426,19 @@ const DEFAULT_QUEUE: SharedQueueToken[] = [
   },
 ];
 
+const DEFAULT_LAB_TARIFFS: Record<string, LabTariffItem> = {
+  'Complete Blood Count (CBC) with ESR': { testName: 'Complete Blood Count (CBC) with ESR', code: 'HEM-001', basePrice: 450, tpaPrice: 380, statSurcharge: 'Rs. 200' },
+  'Liver Function Test (LFT)': { testName: 'Liver Function Test (LFT)', code: 'BIO-002', basePrice: 1200, tpaPrice: 1050, statSurcharge: 'Rs. 300' },
+  'Kidney Function Test (KFT)': { testName: 'Kidney Function Test (KFT)', code: 'BIO-003', basePrice: 950, tpaPrice: 850, statSurcharge: 'Rs. 250' },
+  'Lipid Profile': { testName: 'Lipid Profile', code: 'BIO-004', basePrice: 800, tpaPrice: 720, statSurcharge: 'Rs. 200' },
+  'HbA1c Glycated Hemoglobin': { testName: 'HbA1c Glycated Hemoglobin', code: 'BIO-005', basePrice: 650, tpaPrice: 580, statSurcharge: 'Rs. 150' },
+  'Serum Electrolytes': { testName: 'Serum Electrolytes', code: 'BIO-006', basePrice: 550, tpaPrice: 480, statSurcharge: 'Rs. 150' },
+  '12-Lead ECG': { testName: '12-Lead ECG', code: 'RAD-001', basePrice: 350, tpaPrice: 300, statSurcharge: 'Rs. 100' },
+  'Chest X-Ray PA View': { testName: 'Chest X-Ray PA View', code: 'RAD-002', basePrice: 600, tpaPrice: 520, statSurcharge: 'Rs. 150' },
+  'Ultrasound Abdomen (USG)': { testName: 'Ultrasound Abdomen (USG)', code: 'RAD-003', basePrice: 1500, tpaPrice: 1300, statSurcharge: 'Rs. 400' },
+  'CT Brain (Plain)': { testName: 'CT Brain (Plain)', code: 'RAD-004', basePrice: 3500, tpaPrice: 3100, statSurcharge: 'Rs. 800' },
+};
+
 const DEFAULT_LAB_ORDERS: SharedLabOrder[] = [
   {
     id: 'lab-01',
@@ -415,10 +451,12 @@ const DEFAULT_LAB_ORDERS: SharedLabOrder[] = [
     category: 'Hematology',
     sampleType: 'Whole Blood',
     container: 'EDTA Vacutainer (Lavender Cap)',
+    containerColor: '#8b5cf6',
     doctor: 'Dr. Sarah Jenkins',
     barcode: 'BC-2026-0915-01',
+    priority: 'ROUTINE',
     stage: 'PROCESSING',
-    price: 45.0,
+    price: 450.0,
     isFlaggedAbnormal: false,
     parameters: [
       { paramName: 'Hemoglobin (Hb)', observedValue: '14.2', referenceRange: '13.0 - 17.0', unit: 'g/dL', isAbnormal: false },
@@ -426,7 +464,87 @@ const DEFAULT_LAB_ORDERS: SharedLabOrder[] = [
       { paramName: 'Platelet Count', observedValue: '280,000', referenceRange: '150,000 - 450,000', unit: '/mcL', isAbnormal: false },
       { paramName: 'Erythrocyte Sedimentation Rate (ESR)', observedValue: '12', referenceRange: '0 - 15', unit: 'mm/1st hr', isAbnormal: false },
     ],
-    technicianNote: 'Specimen processed on automated analyzer.',
+    technicianNote: 'Specimen processed on automated Sysmex analyzer.',
+  },
+  {
+    id: 'lab-02',
+    orderNo: 'LAB-202609-002',
+    patientName: 'Eleanor Vance',
+    uhid: 'UHID-202609-00002',
+    age: 62,
+    gender: 'FEMALE',
+    testName: 'Serum Electrolytes',
+    category: 'Biochemistry',
+    sampleType: 'Serum',
+    container: 'SST Vacutainer (Gold Cap)',
+    containerColor: '#eab308',
+    doctor: 'Dr. Sarah Jenkins',
+    barcode: 'BC-2026-0922-02',
+    priority: 'STAT',
+    stage: 'RESULT_ENTERED',
+    price: 550.0,
+    isFlaggedAbnormal: true,
+    isFlaggedCritical: true,
+    criticalAcknowledged: false,
+    parameters: [
+      { paramName: 'Sodium (Na+)', observedValue: '138', referenceRange: '136 - 145', unit: 'mEq/L', isAbnormal: false },
+      { paramName: 'Potassium (K+)', observedValue: '6.8', referenceRange: '3.5 - 5.0', unit: 'mEq/L', isAbnormal: true, isCritical: true, flag: 'CRITICAL_HIGH' },
+      { paramName: 'Chloride (Cl-)', observedValue: '101', referenceRange: '98 - 107', unit: 'mEq/L', isAbnormal: false },
+      { paramName: 'Bicarbonate (HCO3-)', observedValue: '22', referenceRange: '22 - 29', unit: 'mEq/L', isAbnormal: false },
+    ],
+    technicianNote: 'Critical high Potassium verified via repeat re-run on analyzer.',
+    pathologistRemarks: 'CRITICAL VALUE: Severe Hyperkalemia (K+ 6.8 mEq/L). Immediate physician notification mandatory.',
+  },
+  {
+    id: 'lab-03',
+    orderNo: 'LAB-202609-003',
+    patientName: 'Robert Fox',
+    uhid: 'UHID-202609-00001',
+    age: 38,
+    gender: 'MALE',
+    testName: 'Lipid Profile',
+    category: 'Biochemistry',
+    sampleType: 'Serum',
+    container: 'SST Vacutainer (Gold Cap)',
+    containerColor: '#eab308',
+    doctor: 'Dr. Sarah Jenkins',
+    barcode: 'BC-2026-0920-03',
+    priority: 'ROUTINE',
+    stage: 'REPORT_GENERATED',
+    price: 800.0,
+    isFlaggedAbnormal: true,
+    parameters: [
+      { paramName: 'Total Cholesterol', observedValue: '224', referenceRange: '< 200', unit: 'mg/dL', isAbnormal: true, flag: 'HIGH' },
+      { paramName: 'Triglycerides', observedValue: '168', referenceRange: '< 150', unit: 'mg/dL', isAbnormal: true, flag: 'HIGH' },
+      { paramName: 'HDL Cholesterol', observedValue: '42', referenceRange: '> 40', unit: 'mg/dL', isAbnormal: false },
+      { paramName: 'LDL Cholesterol', observedValue: '148', referenceRange: '< 100', unit: 'mg/dL', isAbnormal: true, flag: 'HIGH' },
+    ],
+    technicianNote: 'Sample processed without hemolysis.',
+    pathologistRemarks: 'Borderline hypercholesterolemia. Dietary modifications and cardiovascular follow-up recommended.',
+    approvedBy: 'Dr. Ananya Iyer, MD (Pathology)',
+    approvedAt: '2026-09-20 14:30',
+    reportId: 'REP-202609-003',
+  },
+  {
+    id: 'lab-04',
+    orderNo: 'LAB-202609-004',
+    patientName: 'Eleanor Vance',
+    uhid: 'UHID-202609-00002',
+    age: 62,
+    gender: 'FEMALE',
+    testName: 'Liver Function Test (LFT)',
+    category: 'Biochemistry',
+    sampleType: 'Serum',
+    container: 'SST Vacutainer (Gold Cap)',
+    containerColor: '#eab308',
+    doctor: 'Dr. Michael Chang',
+    barcode: 'BC-2026-0925-04',
+    priority: 'ROUTINE',
+    stage: 'ORDERED',
+    price: 1200.0,
+    isFlaggedAbnormal: false,
+    parameters: [],
+    technicianNote: 'Awaiting phlebotomy collection in Triage / Day Care ward.',
   },
 ];
 
@@ -960,7 +1078,48 @@ export const patientJourneyService = {
     window.dispatchEvent(new Event('nh_data_sync'));
   },
 
-  // --- Laboratory Orders ---
+  // --- Laboratory Orders & Tariffs ---
+  getLabTariffs(): Record<string, LabTariffItem> {
+    const raw = localStorage.getItem('nh_lab_tariffs');
+    if (!raw) {
+      localStorage.setItem('nh_lab_tariffs', JSON.stringify(DEFAULT_LAB_TARIFFS));
+      return DEFAULT_LAB_TARIFFS;
+    }
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return DEFAULT_LAB_TARIFFS;
+    }
+  },
+
+  getLabTestPrice(testName: string, isStat: boolean = false): number {
+    const tariffs = this.getLabTariffs();
+    const item = tariffs[testName];
+    if (item) {
+      let price = item.basePrice;
+      if (isStat && item.statSurcharge) {
+        const extra = parseFloat(item.statSurcharge.replace(/[^0-9.]/g, '')) || 0;
+        price += extra;
+      }
+      return price;
+    }
+    return isStat ? 600 : 450;
+  },
+
+  updateLabTariff(tariff: LabTariffItem): void {
+    const tariffs = this.getLabTariffs();
+    tariffs[tariff.testName] = tariff;
+    localStorage.setItem('nh_lab_tariffs', JSON.stringify(tariffs));
+    window.dispatchEvent(new Event('nh_data_sync'));
+  },
+
+  syncAllLabTariffs(newTariffs: Record<string, LabTariffItem>): void {
+    const current = this.getLabTariffs();
+    const updated = { ...current, ...newTariffs };
+    localStorage.setItem('nh_lab_tariffs', JSON.stringify(updated));
+    window.dispatchEvent(new Event('nh_data_sync'));
+  },
+
   getLabOrders(): SharedLabOrder[] {
     const raw = localStorage.getItem('nh_lab_orders');
     if (!raw) {
@@ -978,6 +1137,7 @@ export const patientJourneyService = {
     const list = this.getLabOrders();
     const updated = [order, ...list.filter((o) => o.id !== order.id)];
     localStorage.setItem('nh_lab_orders', JSON.stringify(updated));
+    window.dispatchEvent(new Event('nh_data_sync'));
     return order;
   },
 
@@ -985,6 +1145,103 @@ export const patientJourneyService = {
     const list = this.getLabOrders();
     const updated = list.map((o) => (o.id === orderId ? { ...o, ...updates } : o));
     localStorage.setItem('nh_lab_orders', JSON.stringify(updated));
+    window.dispatchEvent(new Event('nh_data_sync'));
+  },
+
+  collectSample(orderId: string, collectorName: string = 'Nurse Clara Adams'): SharedLabOrder | null {
+    const list = this.getLabOrders();
+    const target = list.find((o) => o.id === orderId);
+    if (!target) return null;
+
+    const updatedOrder: SharedLabOrder = {
+      ...target,
+      stage: 'COLLECTED',
+      sampleCollector: collectorName,
+      collectedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      barcode: target.barcode || `BC-${Date.now().toString().slice(-8)}`,
+    };
+
+    const updatedList = list.map((o) => (o.id === orderId ? updatedOrder : o));
+    localStorage.setItem('nh_lab_orders', JSON.stringify(updatedList));
+    window.dispatchEvent(new Event('nh_data_sync'));
+    return updatedOrder;
+  },
+
+  acknowledgeCriticalLabOrder(orderId: string, doctorName: string, ackNote?: string): SharedLabOrder | null {
+    const list = this.getLabOrders();
+    const target = list.find((o) => o.id === orderId);
+    if (!target) return null;
+
+    const updatedOrder: SharedLabOrder = {
+      ...target,
+      criticalAcknowledged: true,
+      criticalAcknowledgedBy: doctorName,
+      criticalAcknowledgedAt: new Date().toLocaleString(),
+      criticalAckNote: ackNote || 'Acknowledged by Attending Physician',
+    };
+
+    const updatedList = list.map((o) => (o.id === orderId ? updatedOrder : o));
+    localStorage.setItem('nh_lab_orders', JSON.stringify(updatedList));
+    window.dispatchEvent(new Event('nh_data_sync'));
+    return updatedOrder;
+  },
+
+  appendLabOrderToBilling(order: SharedLabOrder): SharedInvoice {
+    const invoices = this.getInvoices();
+    const openInv = invoices.find(
+      (inv) => inv.uhid === order.uhid && (inv.status === 'UNPAID' || inv.status === 'PARTIALLY_PAID')
+    );
+
+    const labItem = {
+      source: 'Laboratory' as const,
+      description: `${order.testName}${order.priority === 'STAT' ? ' [STAT]' : ''}`,
+      qty: 1,
+      unitPrice: order.price,
+      total: order.price,
+    };
+
+    if (openInv) {
+      const alreadyHas = openInv.items.some((it) => it.description === labItem.description);
+      if (!alreadyHas) {
+        const updatedItems = [...openInv.items, labItem];
+        const newSubtotal = openInv.subtotal + order.price;
+        const newTotal = newSubtotal - openInv.discount + openInv.tax - openInv.advanceDeducted;
+        const newBalance = Math.max(0, newTotal - openInv.paid);
+
+        const updatedInv: SharedInvoice = {
+          ...openInv,
+          subtotal: newSubtotal,
+          total: newTotal,
+          balance: newBalance,
+          items: updatedItems,
+        };
+
+        this.updateInvoice(openInv.id, updatedInv);
+        return updatedInv;
+      }
+      return openInv;
+    }
+
+    const newInv: SharedInvoice = {
+      id: `inv-lab-${Date.now()}`,
+      invNo: `INV-LAB-${Math.floor(1000 + Math.random() * 9000)}`,
+      patientName: order.patientName,
+      uhid: order.uhid,
+      phone: '+91 98765 43210',
+      category: 'LAB',
+      date: new Date().toISOString().split('T')[0],
+      subtotal: order.price,
+      discount: 0,
+      tax: 0,
+      advanceDeducted: 0,
+      total: order.price,
+      paid: 0,
+      balance: order.price,
+      status: 'UNPAID',
+      items: [labItem],
+    };
+
+    return this.addInvoice(newInv);
   },
 
   // --- Invoices ---
@@ -1076,7 +1333,9 @@ export const patientJourneyService = {
     localStorage.setItem('nh_patients', JSON.stringify(DEFAULT_PATIENTS));
     localStorage.setItem('nh_queue', JSON.stringify(DEFAULT_QUEUE));
     localStorage.setItem('nh_lab_orders', JSON.stringify(DEFAULT_LAB_ORDERS));
+    localStorage.setItem('nh_lab_tariffs', JSON.stringify(DEFAULT_LAB_TARIFFS));
     localStorage.setItem('nh_invoices', JSON.stringify(DEFAULT_INVOICES));
+    window.dispatchEvent(new Event('nh_data_sync'));
   },
 
   // --- Campus Infrastructure & Bed Management ---

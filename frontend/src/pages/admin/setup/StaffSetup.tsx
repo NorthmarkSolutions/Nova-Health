@@ -13,8 +13,10 @@ import {
   Mail,
   Phone,
 } from 'lucide-react';
+import { useCurrency } from '../../../config/currency';
 
 export const StaffSetup: React.FC = () => {
+  const { format: formatMoney, symbol } = useCurrency();
   const [activeSubTab, setActiveSubTab] = useState<
     'doctors' | 'nurses' | 'technicians' | 'receptionists' | 'administrators'
   >('doctors');
@@ -33,7 +35,7 @@ export const StaffSetup: React.FC = () => {
       phone: '+1 555-019-2834',
       dept: 'General Medicine',
       specialty: 'Internal Medicine',
-      fee: '$75.00',
+      fee: 75,
       license: 'MED-98421',
       schedule: 'Mon - Fri (09:00 - 17:00)',
       status: 'ACTIVE',
@@ -45,7 +47,7 @@ export const StaffSetup: React.FC = () => {
       phone: '+1 555-019-5512',
       dept: 'Cardiology',
       specialty: 'Interventional Cardiology',
-      fee: '$120.00',
+      fee: 120,
       license: 'MED-77192',
       schedule: 'Mon, Wed, Fri (10:00 - 16:00)',
       status: 'ACTIVE',
@@ -57,7 +59,7 @@ export const StaffSetup: React.FC = () => {
       phone: '+1 555-019-8833',
       dept: 'Orthopedics',
       specialty: 'Joint & Spine Surgery',
-      fee: '$100.00',
+      fee: 100,
       license: 'MED-66231',
       schedule: 'Tue, Thu, Sat (09:00 - 15:00)',
       status: 'ACTIVE',
@@ -278,7 +280,7 @@ export const StaffSetup: React.FC = () => {
                         <div>{doc.dept}</div>
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{doc.specialty}</div>
                       </td>
-                      <td><span style={{ fontWeight: 700, color: 'var(--primary)' }}>{doc.fee}</span></td>
+                      <td><span style={{ fontWeight: 700, color: 'var(--primary)' }}>{typeof doc.fee === 'number' ? formatMoney(doc.fee) : (isNaN(Number(String(doc.fee).replace(/[^0-9.]/g, ''))) ? doc.fee : formatMoney(Number(String(doc.fee).replace(/[^0-9.]/g, ''))))}</span></td>
                       <td><code>{doc.license}</code></td>
                       <td><span style={{ fontSize: '0.8125rem' }}>{doc.schedule}</span></td>
                       <td>
@@ -589,11 +591,11 @@ export const StaffSetup: React.FC = () => {
                     />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Consultation Fee</label>
+                    <label className="form-label">Consultation Fee ({symbol})</label>
                     <input
                       className="form-input"
-                      placeholder="$85.00"
-                      onChange={(e) => setFormData({ ...formData, fee: e.target.value })}
+                      placeholder={`e.g. ${formatMoney(85)}`}
+                      onChange={(e) => setFormData({ ...formData, fee: Number(e.target.value) || e.target.value })}
                       required
                     />
                   </div>

@@ -21,6 +21,7 @@ import {
   SharedPatient,
   patientJourneyService,
 } from '../../../services/patientJourneyService';
+import { useCurrency } from '../../../config/currency';
 
 interface Props {
   isOpen: boolean;
@@ -42,6 +43,8 @@ export const DailyClosingReportModal: React.FC<Props> = ({
   onSessionClosed,
 }) => {
   if (!isOpen) return null;
+
+  const { format: formatMoney } = useCurrency();
 
   // Compute Shift Financials
   const cashInvoices = invoices.filter((i) => i.status === 'PAID');
@@ -191,15 +194,15 @@ export const DailyClosingReportModal: React.FC<Props> = ({
             <div style={{ border: '1px solid #e2e8f0', borderRadius: '10px', overflow: 'hidden' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', padding: '0.6rem 1rem', borderBottom: '1px solid #e2e8f0', fontSize: '0.8125rem' }}>
                 <span>Opening Cash Float (Verified at shift start)</span>
-                <strong style={{ textAlign: 'right' }}>${openingFloat}.00</strong>
+                <strong style={{ textAlign: 'right' }}>{formatMoney(openingFloat)}</strong>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', padding: '0.6rem 1rem', borderBottom: '1px solid #e2e8f0', fontSize: '0.8125rem' }}>
                 <span>OPD Consultation & Registration Counter Revenue ({invoices.length} Invoices)</span>
-                <strong style={{ textAlign: 'right', color: '#15803d' }}>+${cashTotal}.00</strong>
+                <strong style={{ textAlign: 'right', color: '#15803d' }}>+{formatMoney(cashTotal)}</strong>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', padding: '0.75rem 1rem', backgroundColor: '#f1f5f9', fontWeight: 900, fontSize: '0.9375rem', color: 'var(--secondary)' }}>
                 <span>Total Expected Cash in Drawer</span>
-                <span style={{ textAlign: 'right', color: '#0284c7' }}>${expectedTotalCashInDrawer}.00</span>
+                <span style={{ textAlign: 'right', color: '#0284c7' }}>{formatMoney(expectedTotalCashInDrawer)}</span>
               </div>
             </div>
 
@@ -229,7 +232,7 @@ export const DailyClosingReportModal: React.FC<Props> = ({
                     color: cashVariance === 0 ? '#15803d' : '#991b1b',
                   }}
                 >
-                  {cashVariance === 0 ? '✓ Balanced ($0 Variance)' : `⚠️ Variance: ${cashVariance > 0 ? '+' : ''}$${cashVariance}.00`}
+                  {cashVariance === 0 ? `✓ Balanced (${formatMoney(0)} Variance)` : `⚠️ Variance: ${cashVariance > 0 ? '+' : ''}${formatMoney(cashVariance)}`}
                 </span>
               </div>
             </div>

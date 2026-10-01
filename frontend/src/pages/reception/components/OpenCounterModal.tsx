@@ -9,6 +9,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { DailyCounterSession, patientJourneyService } from '../../../services/patientJourneyService';
+import { useCurrency } from '../../../config/currency';
 
 interface Props {
   isOpen: boolean;
@@ -25,6 +26,7 @@ export const OpenCounterModal: React.FC<Props> = ({
 }) => {
   if (!isOpen) return null;
 
+  const { symbol } = useCurrency();
   const [counterNumber, setCounterNumber] = useState(currentSession.counterNumber || 'Desk #1');
   const [receptionistName, setReceptionistName] = useState(currentSession.receptionistName || 'Emma FrontDesk');
   const [shift, setShift] = useState(currentSession.shift || 'Morning Shift (08:00 - 16:00)');
@@ -150,7 +152,7 @@ export const OpenCounterModal: React.FC<Props> = ({
             }}
           >
             <label className="form-label" style={{ margin: 0, color: 'var(--secondary)' }}>
-              Opening Cash Float in Drawer ($) *
+              Opening Cash Float in Drawer ({symbol}) *
             </label>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
               <input

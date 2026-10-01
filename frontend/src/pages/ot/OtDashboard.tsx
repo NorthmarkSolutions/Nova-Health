@@ -19,9 +19,11 @@ import {
 } from 'lucide-react';
 import { SurgeryBooking, SurgeryStatus, RoleType } from '../../types';
 import { useAuth } from '../../context/AuthContext';
+import { useCurrency } from '../../config/currency';
 
 export const OtDashboard: React.FC = () => {
   const { role } = useAuth();
+  const { format: formatMoney } = useCurrency();
   const [activeTab, setActiveTab] = useState<'schedule' | 'checklist' | 'postop' | 'equipment'>('schedule');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRoom, setSelectedRoom] = useState('ALL');
@@ -543,7 +545,7 @@ export const OtDashboard: React.FC = () => {
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '0.5rem' }}>
                     <div style={{ display: 'flex', gap: '1rem', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-                      <span>Estimated Surgical Cost: <strong>${surg.estimatedCost.toFixed(2)}</strong></span>
+                      <span>Estimated Surgical Cost: <strong>{formatMoney(surg.estimatedCost)}</strong></span>
                       <span>PACU Recovery: Stable</span>
                     </div>
 
@@ -556,7 +558,7 @@ export const OtDashboard: React.FC = () => {
                       </button>
                       <button
                         className="btn btn-primary btn-sm"
-                        onClick={() => alert(`OT Bill Generated: $${surg.estimatedCost.toFixed(2)} queued in Cashier desk.`)}
+                        onClick={() => alert(`OT Bill Generated: ${formatMoney(surg.estimatedCost)} queued in Cashier desk.`)}
                       >
                         <Receipt size={14} /> Send OT Bill to Cashier
                       </button>

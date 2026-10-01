@@ -12,11 +12,24 @@ import {
   X,
   Percent,
 } from 'lucide-react';
+import { useCurrency } from '../../../config/currency';
 
 export const FinancialSetup: React.FC = () => {
+  const { format: formatMoney, symbol } = useCurrency();
   const [activeSubTab, setActiveSubTab] = useState<
     'billingHeads' | 'taxes' | 'packages' | 'insurancePlans' | 'paymentMethods'
   >('billingHeads');
+
+  const formatChargeStr = (charge: string) => {
+    if (!charge) return '';
+    const match = charge.match(/^(\d+)(\/.*)?$/);
+    if (match) {
+      const num = parseFloat(match[1]);
+      const suffix = match[2] || '';
+      return `${formatMoney(num)}${suffix}`;
+    }
+    return charge;
+  };
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -25,12 +38,12 @@ export const FinancialSetup: React.FC = () => {
 
   // Billing Heads State
   const [billingHeads, setBillingHeads] = useState([
-    { id: '1', code: 'BH-CONS', name: 'Doctor OPD Consultation', dept: 'Clinical OPD', tax: '0% (Exempt)', defaultCharge: '$75.00', status: 'ACTIVE' },
-    { id: '2', code: 'BH-BED-ICU', name: 'ICU Critical Care Bed Tariff', dept: 'Inpatient IPD', tax: '0% (Exempt)', defaultCharge: '$1,200.00/day', status: 'ACTIVE' },
-    { id: '3', code: 'BH-NURS', name: 'Daily Inpatient Nursing Care', dept: 'Nursing Desk', tax: '0% (Exempt)', defaultCharge: '$120.00/day', status: 'ACTIVE' },
+    { id: '1', code: 'BH-CONS', name: 'Doctor OPD Consultation', dept: 'Clinical OPD', tax: '0% (Exempt)', defaultCharge: '75', status: 'ACTIVE' },
+    { id: '2', code: 'BH-BED-ICU', name: 'ICU Critical Care Bed Tariff', dept: 'Inpatient IPD', tax: '0% (Exempt)', defaultCharge: '1200/day', status: 'ACTIVE' },
+    { id: '3', code: 'BH-NURS', name: 'Daily Inpatient Nursing Care', dept: 'Nursing Desk', tax: '0% (Exempt)', defaultCharge: '120/day', status: 'ACTIVE' },
     { id: '4', code: 'BH-LAB', name: 'Pathology & Diagnostic Investigation', dept: 'Pathology Lab', tax: '0% (Exempt)', defaultCharge: 'Itemized', status: 'ACTIVE' },
     { id: '5', code: 'BH-PHARM', name: 'Pharmacy Medication & Consumables', dept: 'Central Pharmacy', tax: '5% - 12% GST', defaultCharge: 'Itemized (MRP)', status: 'ACTIVE' },
-    { id: '6', code: 'BH-OT', name: 'Operation Theatre & Anesthesia Charges', dept: 'Surgery & OT', tax: '0% (Exempt)', defaultCharge: '$650.00/hr', status: 'ACTIVE' },
+    { id: '6', code: 'BH-OT', name: 'Operation Theatre & Anesthesia Charges', dept: 'Surgery & OT', tax: '0% (Exempt)', defaultCharge: '650/hr', status: 'ACTIVE' },
   ]);
 
   // Taxes State
@@ -38,7 +51,7 @@ export const FinancialSetup: React.FC = () => {
     { id: '1', name: 'Healthcare Services Tax (Exempt)', rate: '0.0%', cgst: '0%', sgst: '0%', appliesTo: 'Doctor Visits, Inpatient Beds, Surgeries', status: 'ACTIVE' },
     { id: '2', name: 'Essential Life-Saving Drugs', rate: '5.0%', cgst: '2.5%', sgst: '2.5%', appliesTo: 'Prescription Pharma, Vaccines, Insulin', status: 'ACTIVE' },
     { id: '3', name: 'Diagnostic Reagents & Medical Devices', rate: '12.0%', cgst: '6.0%', sgst: '6.0%', appliesTo: 'Lab Kits, Orthopedic Implants, Syringes', status: 'ACTIVE' },
-    { id: '4', name: 'Luxury Inpatient Room Surcharge', rate: '18.0%', cgst: '9.0%', sgst: '9.0%', appliesTo: 'Deluxe Suites & VIP Amenities (> $500/day)', status: 'ACTIVE' },
+    { id: '4', name: 'Luxury Inpatient Room Surcharge', rate: '18.0%', cgst: '9.0%', sgst: '9.0%', appliesTo: 'Deluxe Suites & VIP Amenities (> 500/day)', status: 'ACTIVE' },
   ]);
 
   // Packages State
@@ -48,8 +61,8 @@ export const FinancialSetup: React.FC = () => {
       code: 'PKG-EXEC-01',
       name: 'Executive Whole Body Wellness Screening',
       items: 'CBC, Lipid, LFT, KFT, HbA1c, ECG, Chest X-Ray, Phys. Consult',
-      originalPrice: '$420.00',
-      pkgPrice: '$249.00',
+      originalPrice: 420,
+      pkgPrice: 249,
       discount: '40% OFF',
       status: 'ACTIVE',
     },
@@ -58,8 +71,8 @@ export const FinancialSetup: React.FC = () => {
       code: 'PKG-CARD-02',
       name: 'Comprehensive Cardiac Health Package',
       items: 'Echo 2D, TMT Treadmill, Lipid Profile, Troponin, Cardio Consult',
-      originalPrice: '$550.00',
-      pkgPrice: '$349.00',
+      originalPrice: 550,
+      pkgPrice: 349,
       discount: '36% OFF',
       status: 'ACTIVE',
     },
@@ -68,8 +81,8 @@ export const FinancialSetup: React.FC = () => {
       code: 'PKG-MATERN-03',
       name: 'Standard Normal Delivery Maternity Bundle',
       items: '3-Day Ward, Normal Delivery OT, Neonatal Care, Routine Labs',
-      originalPrice: '$3,200.00',
-      pkgPrice: '$2,200.00',
+      originalPrice: 3200,
+      pkgPrice: 2200,
       discount: '31% OFF',
       status: 'ACTIVE',
     },
@@ -77,10 +90,10 @@ export const FinancialSetup: React.FC = () => {
 
   // Insurance Plans State
   const [insurancePlans, setInsurancePlans] = useState([
-    { id: '1', code: 'INS-STAR', name: 'Star Health & Allied Insurance', tpa: 'Direct Empanelment', preAuthLimit: '$15,000', cashless: 'YES', contact: '1800-425-2255' },
-    { id: '2', code: 'INS-HDFC', name: 'HDFC ERGO General Health', tpa: 'Medi Assist TPA', preAuthLimit: '$20,000', cashless: 'YES', contact: '1800-2666' },
-    { id: '3', code: 'INS-ICICI', name: 'ICICI Lombard Health Care', tpa: 'Paramount TPA', preAuthLimit: '$18,000', cashless: 'YES', contact: '1800-266-7780' },
-    { id: '4', code: 'INS-CGHS', name: 'Central Govt Health Scheme (CGHS)', tpa: 'Govt Portal Desk', preAuthLimit: '$50,000', cashless: 'YES', contact: '011-2306-1234' },
+    { id: '1', code: 'INS-STAR', name: 'Star Health & Allied Insurance', tpa: 'Direct Empanelment', preAuthLimit: 15000, cashless: 'YES', contact: '1800-425-2255' },
+    { id: '2', code: 'INS-HDFC', name: 'HDFC ERGO General Health', tpa: 'Medi Assist TPA', preAuthLimit: 20000, cashless: 'YES', contact: '1800-2666' },
+    { id: '3', code: 'INS-ICICI', name: 'ICICI Lombard Health Care', tpa: 'Paramount TPA', preAuthLimit: 18000, cashless: 'YES', contact: '1800-266-7780' },
+    { id: '4', code: 'INS-CGHS', name: 'Central Govt Health Scheme (CGHS)', tpa: 'Govt Portal Desk', preAuthLimit: 50000, cashless: 'YES', contact: '011-2306-1234' },
   ]);
 
   // Payment Methods State
@@ -198,7 +211,7 @@ export const FinancialSetup: React.FC = () => {
                       <td><strong>{head.name}</strong></td>
                       <td>{head.dept}</td>
                       <td><span className="badge badge-secondary">{head.tax}</span></td>
-                      <td><span style={{ fontWeight: 700, color: 'var(--teal)' }}>{head.defaultCharge}</span></td>
+                      <td><span style={{ fontWeight: 700, color: 'var(--teal)' }}>{formatChargeStr(head.defaultCharge)}</span></td>
                       <td><span className="badge badge-success">{head.status}</span></td>
                       <td style={{ textAlign: 'right' }}>
                         <div style={{ display: 'inline-flex', gap: '0.375rem' }}>
@@ -253,7 +266,7 @@ export const FinancialSetup: React.FC = () => {
                       <td><span className="badge badge-info" style={{ fontSize: '0.875rem' }}>{tax.rate}</span></td>
                       <td>{tax.cgst}</td>
                       <td>{tax.sgst}</td>
-                      <td><span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>{tax.appliesTo}</span></td>
+                      <td><span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>{tax.appliesTo.replace('500/day', `${formatMoney(500)}/day`)}</span></td>
                       <td><span className="badge badge-success">{tax.status}</span></td>
                       <td style={{ textAlign: 'right' }}>
                         <div style={{ display: 'inline-flex', gap: '0.375rem' }}>
@@ -308,8 +321,8 @@ export const FinancialSetup: React.FC = () => {
                       <td><code>{pkg.code}</code></td>
                       <td><strong>{pkg.name}</strong></td>
                       <td><span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>{pkg.items}</span></td>
-                      <td><del style={{ color: 'var(--text-light)' }}>{pkg.originalPrice}</del></td>
-                      <td><span style={{ fontWeight: 800, color: 'var(--primary)', fontSize: '1rem' }}>{pkg.pkgPrice}</span></td>
+                      <td><del style={{ color: 'var(--text-light)' }}>{formatMoney(pkg.originalPrice)}</del></td>
+                      <td><span style={{ fontWeight: 800, color: 'var(--primary)', fontSize: '1rem' }}>{formatMoney(pkg.pkgPrice)}</span></td>
                       <td><span className="badge badge-success">{pkg.discount}</span></td>
                       <td><span className="badge badge-success">{pkg.status}</span></td>
                       <td style={{ textAlign: 'right' }}>
@@ -364,7 +377,7 @@ export const FinancialSetup: React.FC = () => {
                       <td><strong>{ins.code}</strong></td>
                       <td><strong>{ins.name}</strong></td>
                       <td><span className="badge badge-info">{ins.tpa}</span></td>
-                      <td><span style={{ fontWeight: 700, color: 'var(--teal)' }}>{ins.preAuthLimit}</span></td>
+                      <td><span style={{ fontWeight: 700, color: 'var(--teal)' }}>{formatMoney(ins.preAuthLimit)}</span></td>
                       <td><span className="badge badge-success">{ins.cashless}</span></td>
                       <td>{ins.contact}</td>
                       <td style={{ textAlign: 'right' }}>
@@ -458,8 +471,8 @@ export const FinancialSetup: React.FC = () => {
                     <input className="form-input" placeholder="e.g. Radiology" onChange={(e) => setFormData({ ...formData, dept: e.target.value })} required />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Base Charge</label>
-                    <input className="form-input" placeholder="e.g. $40.00" onChange={(e) => setFormData({ ...formData, defaultCharge: e.target.value })} required />
+                    <label className="form-label">Base Charge ({symbol})</label>
+                    <input className="form-input" placeholder={`e.g. ${formatMoney(40)}`} onChange={(e) => setFormData({ ...formData, defaultCharge: e.target.value })} required />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Default Tax</label>
@@ -504,12 +517,12 @@ export const FinancialSetup: React.FC = () => {
                     <input className="form-input" placeholder="e.g. 4 Consults, 4 HbA1c, Eye Check" onChange={(e) => setFormData({ ...formData, items: e.target.value })} required />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Original Price</label>
-                    <input className="form-input" placeholder="e.g. $300.00" onChange={(e) => setFormData({ ...formData, originalPrice: e.target.value })} required />
+                    <label className="form-label">Original Price ({symbol})</label>
+                    <input className="form-input" placeholder={`e.g. ${formatMoney(300)}`} onChange={(e) => setFormData({ ...formData, originalPrice: parseFloat(e.target.value) || 0 })} required />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Package Price</label>
-                    <input className="form-input" placeholder="e.g. $199.00" onChange={(e) => setFormData({ ...formData, pkgPrice: e.target.value })} required />
+                    <label className="form-label">Package Price ({symbol})</label>
+                    <input className="form-input" placeholder={`e.g. ${formatMoney(199)}`} onChange={(e) => setFormData({ ...formData, pkgPrice: parseFloat(e.target.value) || 0 })} required />
                   </div>
                 </>
               )}
@@ -529,8 +542,8 @@ export const FinancialSetup: React.FC = () => {
                     <input className="form-input" placeholder="e.g. Vidal Health TPA" onChange={(e) => setFormData({ ...formData, tpa: e.target.value })} required />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Pre-Auth Auto Limit</label>
-                    <input className="form-input" placeholder="e.g. $10,000" onChange={(e) => setFormData({ ...formData, preAuthLimit: e.target.value })} />
+                    <label className="form-label">Pre-Auth Auto Limit ({symbol})</label>
+                    <input className="form-input" placeholder={`e.g. ${formatMoney(10000)}`} onChange={(e) => setFormData({ ...formData, preAuthLimit: parseFloat(e.target.value) || 0 })} />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Helpline</label>

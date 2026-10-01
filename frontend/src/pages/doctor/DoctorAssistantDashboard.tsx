@@ -40,6 +40,13 @@ import {
   SharedPrescription,
   SharedLabOrder,
 } from '../../services/patientJourneyService';
+import {
+  WorkspaceHeader,
+  KpiRow,
+  KpiCard,
+  RowActionsMenu,
+  PrimaryActionBar,
+} from '../../components/workspace';
 
 interface AttachedDocument {
   id: string;
@@ -52,12 +59,10 @@ interface AttachedDocument {
 }
 
 export const DoctorAssistantDashboard: React.FC = () => {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = searchParams.get('tab') || 'queue';
-
-  const handleTabChange = (t: string) => {
-    setSearchParams({ tab: t });
-  };
+  const [searchParams] = useSearchParams();
+  const validTabs = ['queue', 'investigations', 'handoff'];
+  const rawTab = searchParams.get('tab');
+  const activeTab = validTabs.includes(rawTab || '') ? rawTab! : 'queue';
 
   // Assigned Doctor & Chamber Context
   const [selectedDoctor, setSelectedDoctor] = useState('Dr. Sarah Jenkins (Cardiology)');
@@ -68,6 +73,7 @@ export const DoctorAssistantDashboard: React.FC = () => {
   const [queue, setQueue] = useState<SharedQueueToken[]>(() => patientJourneyService.getQueue());
   const [prescriptions, setPrescriptions] = useState<SharedPrescription[]>(() => patientJourneyService.getPrescriptions());
   const [labOrders, setLabOrders] = useState<SharedLabOrder[]>(() => patientJourneyService.getLabOrders());
+  const [selectedOrderForAssistantModal, setSelectedOrderForAssistantModal] = useState<SharedLabOrder | null>(null);
 
   // Attached External Documents Store
   const [attachedDocs, setAttachedDocs] = useState<AttachedDocument[]>([
@@ -444,348 +450,172 @@ export const DoctorAssistantDashboard: React.FC = () => {
   });
 
   return (
-    <div style={{ padding: '1.5rem', backgroundColor: '#f8fafc', minHeight: '100vh', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+    <div
+      style={{
+        padding: '24px',
+        backgroundColor: 'var(--bg-main)',
+        minHeight: '100%',
+        width: '100%',
+        boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '24px',
+      }}
+    >
       {/* Toast Notification */}
       {toastMessage && (
         <div
           style={{
             position: 'fixed',
-            top: '1.25rem',
-            right: '1.5rem',
-            backgroundColor: '#0f172a',
+            top: '24px',
+            right: '24px',
+            backgroundColor: 'var(--secondary)',
             color: '#ffffff',
-            padding: '0.875rem 1.25rem',
+            padding: '12px 18px',
             borderRadius: '10px',
-            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)',
+            boxShadow: 'var(--shadow-lg)',
             display: 'flex',
             alignItems: 'center',
-            gap: '0.625rem',
+            gap: '10px',
             zIndex: 9999,
-            fontSize: '0.875rem',
-            fontWeight: 700,
-            borderLeft: '4px solid #10b981',
-            animation: 'slideIn 0.3s ease',
+            fontSize: '14px',
+            fontWeight: 500,
+            borderLeft: '4px solid var(--success)',
           }}
         >
-          <CheckCircle2 size={18} color="#10b981" />
+          <CheckCircle2 size={16} color="var(--success)" />
           <span>{toastMessage}</span>
         </div>
       )}
 
-      {/* TOP HEADER: Doctor Assistant Station Status Bar */}
-      <div
-        className="card"
-        style={{
-          padding: '1.25rem 1.5rem',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '1rem',
-          backgroundColor: '#ffffff',
-          borderLeft: '5px solid #0284c7',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div
-            style={{
-              width: '48px',
-              height: '48px',
-              borderRadius: '12px',
-              backgroundColor: '#e0f2fe',
-              color: '#0284c7',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Stethoscope size={26} />
-          </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <h2 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 800, color: 'var(--secondary)' }}>
-                OPD Doctor Assistant Workstation
-              </h2>
-              <span className="badge badge-info" style={{ fontSize: '0.75rem', fontWeight: 800 }}>
-                Chamber Ante-Room
+      {/* 1. WORKSPACE HEADER (§ 5: Standardized SaaS header, Chamber Selector & Session Status) */}
+      <WorkspaceHeader
+        title="OPD Doctor Assistant Workstation"
+        description="Pre-consultation patient triage, vitals intake, diagnostic investigation tracking, and chamber handoff."
+        icon={<Stethoscope size={20} />}
+        actions={
+          <>
+            {/* Chamber Selector */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                backgroundColor: '#ffffff',
+                padding: '4px 10px',
+                borderRadius: '10px',
+                border: '1px solid var(--border-color)',
+              }}
+            >
+              <span
+                style={{
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: 'var(--text-muted)',
+                  textTransform: 'uppercase',
+                }}
+              >
+                Chamber:
               </span>
-            </div>
-            <p style={{ margin: '0.2rem 0 0', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
-              Assigned Physician: <strong>{selectedDoctor}</strong> • Room: <strong>{assignedChamber}</strong> • Morning Shift
-            </p>
-          </div>
-        </div>
-
-        {/* Assigned Doctor & Chamber Context */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem', flexWrap: 'wrap' }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              backgroundColor: '#f1f5f9',
-              padding: '0.5rem 0.875rem',
-              borderRadius: '8px',
-              border: '1px solid #e2e8f0',
-            }}
-          >
-            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-              Chamber:
-            </span>
-            <select
-              value={selectedDoctor}
-              onChange={(e) => setSelectedDoctor(e.target.value)}
-              style={{
-                border: 'none',
-                background: 'transparent',
-                fontWeight: 800,
-                fontSize: '0.875rem',
-                color: 'var(--secondary)',
-                cursor: 'pointer',
-                outline: 'none',
-              }}
-            >
-              <option value="Dr. Sarah Jenkins (Cardiology)">Dr. Sarah Jenkins (Cardiology - 204)</option>
-              <option value="Dr. Robert Chen (Internal Medicine)">Dr. Robert Chen (Internal Med - 205)</option>
-              <option value="Dr. Emily Watson (Pediatrics)">Dr. Emily Watson (Pediatrics - 206)</option>
-            </select>
-          </div>
-
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              backgroundColor: currentInChamber ? '#166534' : '#0f172a',
-              color: '#ffffff',
-              padding: '0.5rem 1rem',
-              borderRadius: '8px',
-              fontSize: '0.875rem',
-              fontWeight: 800,
-            }}
-          >
-            <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: currentInChamber ? '#4ade80' : '#38bdf8', display: 'inline-block' }} />
-            <span>{currentInChamber ? 'In Session' : 'Chamber Ready'}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* SUB-NAVIGATION TAB PILLS (Matching Queue & Consultation Tab standards) */}
-      <div style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem', overflowX: 'auto' }}>
-        <button
-          type="button"
-          onClick={() => handleTabChange('dashboard')}
-          className={`subtab-pill ${activeTab === 'dashboard' ? 'active' : ''}`}
-        >
-          <LayoutDashboard size={16} />
-          <span>Dashboard Overview</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleTabChange('queue')}
-          className={`subtab-pill ${activeTab === 'queue' ? 'active' : ''}`}
-        >
-          <Users size={16} />
-          <span>1. Queue & Patient Preparation ({waitingPatients.length})</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleTabChange('investigations')}
-          className={`subtab-pill ${activeTab === 'investigations' ? 'active' : ''}`}
-        >
-          <FlaskConical size={16} />
-          <span>2. Investigations & Reports ({labOrders.length})</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleTabChange('handoff')}
-          className={`subtab-pill ${activeTab === 'handoff' ? 'active' : ''}`}
-        >
-          <CheckCircle2 size={16} />
-          <span>3. Consultation Handoff & Follow-Up ({completedPatients.length})</span>
-        </button>
-      </div>
-
-      {/* ======================================================================= */}
-      {/* SCREEN 0: DASHBOARD OVERVIEW                                            */}
-      {/* ======================================================================= */}
-      {activeTab === 'dashboard' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-          {/* KPI Metrics Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-            <div className="card" style={{ padding: '1.25rem', borderLeft: '4px solid #0284c7' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                Patients Waiting
-              </div>
-              <div style={{ fontSize: '2rem', fontWeight: 900, color: '#0284c7', margin: '0.25rem 0' }}>
-                {waitingPatients.length}
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Waiting in OPD lobby</div>
+              <select
+                value={selectedDoctor}
+                onChange={(e) => setSelectedDoctor(e.target.value)}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  color: 'var(--secondary)',
+                  cursor: 'pointer',
+                  outline: 'none',
+                }}
+              >
+                <option value="Dr. Sarah Jenkins (Cardiology)">Dr. Sarah Jenkins (Chamber 204)</option>
+                <option value="Dr. Robert Chen (Internal Medicine)">Dr. Robert Chen (Chamber 205)</option>
+                <option value="Dr. Emily Watson (Pediatrics)">Dr. Emily Watson (Chamber 206)</option>
+              </select>
             </div>
 
-            <div className="card" style={{ padding: '1.25rem', borderLeft: '4px solid #10b981' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                Patients Ready / Triaged
-              </div>
-              <div style={{ fontSize: '2rem', fontWeight: 900, color: '#10b981', margin: '0.25rem 0' }}>
-                {triagedReadyPatients.length}
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Vitals pushed to Doctor</div>
-            </div>
-
-            <div className="card" style={{ padding: '1.25rem', borderLeft: '4px solid #8b5cf6' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                In Consultation
-              </div>
-              <div style={{ fontSize: '2rem', fontWeight: 900, color: '#8b5cf6', margin: '0.25rem 0' }}>
-                {currentInChamber ? '1' : '0'}
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Inside Chamber 204</div>
-            </div>
-
-            <div className="card" style={{ padding: '1.25rem', borderLeft: '4px solid #f59e0b' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                Reports Pending
-              </div>
-              <div style={{ fontSize: '2rem', fontWeight: 900, color: '#f59e0b', margin: '0.25rem 0' }}>
-                {labOrders.filter((o) => o.stage !== 'REPORT_GENERATED').length}
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Processing in Lab</div>
-            </div>
-
-            <div className="card" style={{ padding: '1.25rem', borderLeft: '4px solid #059669' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                Reports Ready
-              </div>
-              <div style={{ fontSize: '2rem', fontWeight: 900, color: '#059669', margin: '0.25rem 0' }}>
-                {labOrders.filter((o) => o.stage === 'REPORT_GENERATED').length}
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Ready for doctor review</div>
-            </div>
-
-            <div className="card" style={{ padding: '1.25rem', borderLeft: '4px solid #6366f1' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                Follow-Ups Pending
-              </div>
-              <div style={{ fontSize: '2rem', fontWeight: 900, color: '#6366f1', margin: '0.25rem 0' }}>
-                {completedPatients.length}
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b' }}>To book & dispatch</div>
-            </div>
-          </div>
-
-          {/* Quick Workflow Launchers */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.25rem' }}>
+            {/* Chamber Session Status - Small dot + label */}
             <div
-              className="card"
-              onClick={() => handleTabChange('queue')}
               style={{
-                padding: '1.5rem',
-                cursor: 'pointer',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '13px',
+                fontWeight: 600,
+                color: currentInChamber ? 'var(--success)' : 'var(--text-muted)',
+                padding: '6px 12px',
+                borderRadius: '10px',
+                backgroundColor: '#ffffff',
+                border: '1px solid var(--border-color)',
               }}
             >
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
-                  <div style={{ padding: '0.75rem', borderRadius: '10px', backgroundColor: '#e0f2fe', color: '#0284c7' }}>
-                    <Users size={24} />
-                  </div>
-                  <div>
-                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: 'var(--secondary)' }}>
-                      1. Queue & Patient Prep
-                    </h3>
-                    <p style={{ margin: '0.2rem 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      Core Workstation • 80% Daily Triage
-                    </p>
-                  </div>
-                </div>
-                <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', lineHeight: '1.5' }}>
-                  Call waiting tokens with audio chime, record 6 vital signs, capture chief complaints, and push telemetry directly to the doctor’s chamber.
-                </p>
-              </div>
-              <div style={{ marginTop: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#0284c7', fontWeight: 800, fontSize: '0.875rem' }}>
-                <span>Launch Queue & Triage Desk</span> <ArrowRight size={16} />
-              </div>
+              <span
+                style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: currentInChamber ? 'var(--success)' : 'var(--primary)',
+                  display: 'inline-block',
+                }}
+              />
+              <span>{currentInChamber ? 'In Session' : 'Chamber Ready'}</span>
             </div>
+          </>
+        }
+      />
 
-            <div
-              className="card"
-              onClick={() => handleTabChange('investigations')}
-              style={{
-                padding: '1.5rem',
-                cursor: 'pointer',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-              }}
-            >
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
-                  <div style={{ padding: '0.75rem', borderRadius: '10px', backgroundColor: '#fef3c7', color: '#b45309' }}>
-                    <FlaskConical size={24} />
-                  </div>
-                  <div>
-                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: 'var(--secondary)' }}>
-                      2. Investigations & Reports
-                    </h3>
-                    <p style={{ margin: '0.2rem 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      Diagnostics & External Docs
-                    </p>
-                  </div>
-                </div>
-                <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', lineHeight: '1.5' }}>
-                  Track laboratory specimen progression, review ready ECGs/X-Rays, attach external PDFs, and alert the physician when critical results arrive.
-                </p>
-              </div>
-              <div style={{ marginTop: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#b45309', fontWeight: 800, fontSize: '0.875rem' }}>
-                <span>Track Diagnostic Reports</span> <ArrowRight size={16} />
-              </div>
-            </div>
+      {/* 2. KPI ROW (§ 9: Max 5 cards, 120px height) */}
+      <KpiRow>
+        <KpiCard
+          label="Waiting in Lobby"
+          value={waitingPatients.length}
+          trend="Awaiting Intake"
+          trendColor="var(--warning)"
+          iconBg="var(--warning-light)"
+          iconColor="var(--warning)"
+          icon={<Clock size={18} />}
+        />
+        <KpiCard
+          label="Now in Chamber"
+          value={currentInChamber ? 1 : 0}
+          trend={currentInChamber ? `Token #${currentInChamber.token} inside` : 'Chamber 204 Ready'}
+          trendColor="var(--primary)"
+          iconBg="var(--primary-light)"
+          iconColor="var(--primary)"
+          icon={<Stethoscope size={18} />}
+        />
+        <KpiCard
+          label="Prepared for Doctor"
+          value={triagedReadyPatients.length}
+          trend="Vitals Pushed"
+          trendColor="var(--success)"
+          iconBg="var(--success-light)"
+          iconColor="var(--success)"
+          icon={<CheckCircle2 size={18} />}
+        />
+        <KpiCard
+          label="Pending Investigations"
+          value={labOrders.filter((o) => o.stage !== 'REPORT_GENERATED').length}
+          trend="Processing in Lab"
+          trendColor="var(--info)"
+          iconBg="var(--info-light)"
+          iconColor="var(--info)"
+          icon={<FlaskConical size={18} />}
+        />
+        <KpiCard
+          label="Completed Consultations"
+          value={completedPatients.length}
+          trend="Ready for Handoff"
+          trendColor="var(--success)"
+          iconBg="var(--success-light)"
+          iconColor="var(--success)"
+          icon={<Activity size={18} />}
+        />
+      </KpiRow>
 
-            <div
-              className="card"
-              onClick={() => handleTabChange('handoff')}
-              style={{
-                padding: '1.5rem',
-                cursor: 'pointer',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-              }}
-            >
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
-                  <div style={{ padding: '0.75rem', borderRadius: '10px', backgroundColor: '#dcfce7', color: '#15803d' }}>
-                    <CheckCircle2 size={24} />
-                  </div>
-                  <div>
-                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: 'var(--secondary)' }}>
-                      3. Consultation Handoff
-                    </h3>
-                    <p style={{ margin: '0.2rem 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      Dispatch, Rx Print & Follow-up
-                    </p>
-                  </div>
-                </div>
-                <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', lineHeight: '1.5' }}>
-                  Pre-doctor checklist, print official prescription sheets, coordinate next appointment dates, and route patients to Lab, Pharmacy, or Billing.
-                </p>
-              </div>
-              <div style={{ marginTop: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#15803d', fontWeight: 800, fontSize: '0.875rem' }}>
-                <span>Manage Patient Dispatches</span> <ArrowRight size={16} />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+
 
       {/* ======================================================================= */}
       {/* SCREEN 1: QUEUE & PATIENT PREPARATION (80% DAILY WORK)                  */}
@@ -795,78 +625,115 @@ export const DoctorAssistantDashboard: React.FC = () => {
           style={{
             display: 'grid',
             gridTemplateColumns: '380px minmax(0, 1fr)',
-            gap: '1.25rem',
+            gap: '24px',
             alignItems: 'start',
           }}
         >
           {/* Left Column: Chamber Queue & Token Calling Desk */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {/* Primary Calling Button */}
-            {waitingPatients.length > 0 ? (
-              <button
-                type="button"
-                onClick={() => handleCallToken(waitingPatients[0])}
-                className="btn btn-primary"
-                style={{
-                  width: '100%',
-                  padding: '1.15rem 1.5rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  borderRadius: '14px',
-                  fontSize: '1.05rem',
-                  fontWeight: 900,
-                  backgroundColor: '#0284c7',
-                  boxShadow: '0 4px 14px rgba(2, 132, 199, 0.35)',
-                  cursor: 'pointer',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <Volume2 size={24} />
-                  <span>Call Next Token (#{waitingPatients[0].token})</span>
-                </div>
-                <span style={{ backgroundColor: 'rgba(255, 255, 255, 0.25)', padding: '0.2rem 0.6rem', borderRadius: '6px', fontSize: '0.75rem' }}>
-                  {waitingPatients[0].priority === 'URGENT' ? '🚨 URGENT' : 'Ready'}
-                </span>
-              </button>
-            ) : (
-              <div
-                style={{
-                  padding: '1rem',
-                  backgroundColor: '#f1f5f9',
-                  border: '1px dashed #cbd5e1',
-                  borderRadius: '12px',
-                  textAlign: 'center',
-                  fontSize: '0.875rem',
-                  color: 'var(--text-muted)',
-                  fontWeight: 700,
-                }}
-              >
-                ✓ All waiting patients currently attended
-              </div>
-            )}
-
-            {/* Currently In Chamber Card */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Call Next Token Card (§ 12) */}
             <div
               className="card"
               style={{
-                padding: '1.25rem',
-                backgroundColor: currentInChamber ? '#f0fdf4' : '#ffffff',
-                border: `1.5px solid ${currentInChamber ? '#86efac' : '#e2e8f0'}`,
+                padding: '16px 20px',
+                backgroundColor: '#ffffff',
+                border: '1px solid var(--border-color)',
+                borderRadius: '12px',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '0.875rem',
+                gap: '12px',
+                boxShadow: 'var(--shadow-xs)',
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: currentInChamber ? '#16a34a' : '#94a3b8', display: 'inline-block' }} />
-                  <span style={{ fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', color: currentInChamber ? '#15803d' : 'var(--text-muted)' }}>
+                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                  Next in Queue
+                </span>
+                {waitingPatients[0] && (
+                  <span
+                    className={`badge ${waitingPatients[0].priority === 'URGENT' ? 'badge-danger' : 'badge-secondary'}`}
+                    style={{ fontSize: '11px' }}
+                  >
+                    {waitingPatients[0].priority === 'URGENT' ? '🚨 URGENT' : 'Ready'}
+                  </span>
+                )}
+              </div>
+
+              {waitingPatients.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => handleCallToken(waitingPatients[0])}
+                  className="btn btn-primary"
+                  style={{
+                    width: '100%',
+                    height: '42px',
+                    borderRadius: '10px',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Volume2 size={16} />
+                  <span>Call Next Token (#{waitingPatients[0].token})</span>
+                </button>
+              ) : (
+                <div
+                  style={{
+                    padding: '8px',
+                    textAlign: 'center',
+                    fontSize: '13px',
+                    color: 'var(--text-muted)',
+                  }}
+                >
+                  ✓ All waiting patients currently attended
+                </div>
+              )}
+            </div>
+
+            {/* Currently In Chamber Card (§ 8) */}
+            <div
+              className="card"
+              style={{
+                padding: '16px 20px',
+                backgroundColor: '#ffffff',
+                border: '1px solid var(--border-color)',
+                borderLeft: currentInChamber ? '4px solid var(--success)' : '4px solid var(--border-color)',
+                borderRadius: '12px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+                boxShadow: 'var(--shadow-xs)',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span
+                    style={{
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      backgroundColor: currentInChamber ? 'var(--success)' : 'var(--text-light)',
+                      display: 'inline-block',
+                    }}
+                  />
+                  <span
+                    style={{
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em',
+                      color: currentInChamber ? 'var(--success)' : 'var(--text-muted)',
+                    }}
+                  >
                     Now In Chamber (Cabin 204)
                   </span>
                 </div>
                 {currentInChamber?.callingStatus === 'CALLING' && (
-                  <span className="badge badge-warning" style={{ fontSize: '0.6875rem' }}>
+                  <span className="badge badge-warning" style={{ fontSize: '11px' }}>
                     Calling at Door...
                   </span>
                 )}
@@ -875,84 +742,122 @@ export const DoctorAssistantDashboard: React.FC = () => {
               {currentInChamber ? (
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                       <div
                         style={{
-                          fontSize: '2rem',
-                          fontWeight: 900,
-                          fontFamily: 'monospace',
-                          color: '#0f172a',
-                          backgroundColor: '#ffffff',
-                          border: '1px solid #bbf7d0',
+                          fontSize: '1.75rem',
+                          fontWeight: 700,
+                          color: 'var(--secondary)',
+                          backgroundColor: 'var(--bg-main)',
+                          border: '1px solid var(--border-color)',
                           borderRadius: '8px',
-                          padding: '0.2rem 0.6rem',
+                          padding: '4px 10px',
+                          lineHeight: 1,
                         }}
                       >
                         #{String(currentInChamber.token).padStart(2, '0')}
                       </div>
                       <div>
-                        <strong style={{ fontSize: '1.1rem', color: '#0f172a', display: 'block' }}>
+                        <strong style={{ fontSize: '1rem', color: 'var(--secondary)', display: 'block' }}>
                           {currentInChamber.patient}
                         </strong>
-                        <div style={{ fontSize: '0.7813rem', color: '#475569' }}>
-                          UHID: {currentInChamber.uhid} • {currentInChamber.age}Y/{currentInChamber.gender}
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                          <span>UHID: {currentInChamber.uhid} • {currentInChamber.age}Y/{currentInChamber.gender}</span>
+                          {(() => {
+                            const cOrders = labOrders.filter((o) => o.uhid === currentInChamber.uhid);
+                            if (cOrders.length === 0) return null;
+                            if (cOrders.some((o) => o.stage === 'REPORT_GENERATED' || o.stage === 'VALIDATED')) {
+                              return <span className="badge badge-success" style={{ fontSize: '10px', padding: '1px 6px' }}>✓ Report Ready</span>;
+                            }
+                            if (cOrders.some((o) => o.stage === 'PROCESSING' || o.stage === 'RESULT_ENTERED')) {
+                              return <span className="badge badge-info" style={{ fontSize: '10px', padding: '1px 6px' }}>⚙️ In Analysis</span>;
+                            }
+                            if (cOrders.some((o) => o.stage === 'COLLECTED' || o.stage === 'SAMPLE_COLLECTED')) {
+                              return <span className="badge badge-warning" style={{ fontSize: '10px', padding: '1px 6px' }}>🧪 Collected</span>;
+                            }
+                            return <span className="badge badge-secondary" style={{ fontSize: '10px', padding: '1px 6px' }}>📋 Ordered</span>;
+                          })()}
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
-                    <button
-                      type="button"
-                      onClick={() => handleCallToken(currentInChamber)}
-                      className="btn btn-secondary btn-sm"
-                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', fontSize: '0.7813rem', fontWeight: 700 }}
-                    >
-                      <Volume2 size={14} /> Re-Chime
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handlePutOnHold(currentInChamber)}
-                      className="btn btn-secondary btn-sm"
-                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', fontSize: '0.7813rem', fontWeight: 700 }}
-                    >
-                      <RotateCcw size={14} /> Hold
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleMarkNoShow(currentInChamber)}
-                      className="btn btn-secondary btn-sm"
-                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#dc2626', fontSize: '0.7813rem', fontWeight: 700 }}
-                      title="Mark Absent / No Show"
-                    >
-                      <UserX size={14} />
-                    </button>
+                  <div style={{ marginTop: '14px' }}>
+                    <RowActionsMenu
+                      fixedActions={[
+                        {
+                          icon: <Volume2 size={14} />,
+                          label: 'Re-Chime',
+                          onClick: () => handleCallToken(currentInChamber),
+                          variant: 'secondary',
+                          title: 'Call patient chime again',
+                          width: 104,
+                        },
+                        {
+                          icon: <RotateCcw size={14} />,
+                          label: 'Hold',
+                          onClick: () => handlePutOnHold(currentInChamber),
+                          variant: 'secondary',
+                          title: 'Put patient on hold',
+                          width: 84,
+                        },
+                      ]}
+                      menuItems={[
+                        {
+                          id: 'no-show',
+                          icon: <UserX size={14} color="var(--danger)" />,
+                          label: 'Mark as No Show',
+                          danger: true,
+                          confirm: {
+                            title: `Mark Token #${currentInChamber.token} as No Show?`,
+                            description: 'Patient will be flagged absent and removed from the active queue.',
+                            confirmText: 'Mark Absent',
+                            cancelText: 'Cancel',
+                            danger: true,
+                          },
+                          onClick: () => handleMarkNoShow(currentInChamber),
+                        },
+                      ]}
+                    />
                   </div>
                 </div>
               ) : (
-                <div style={{ padding: '1rem 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+                <div style={{ padding: '16px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
                   Chamber 204 is currently idle. Call next patient into cabin.
                 </div>
               )}
             </div>
 
             {/* Waiting Queue List */}
-            <div className="card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.625rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <Users size={16} color="#0284c7" />
-                  <span style={{ fontSize: '0.8125rem', fontWeight: 800, color: 'var(--secondary)', textTransform: 'uppercase' }}>
+            <div
+              className="card"
+              style={{
+                padding: '16px 20px',
+                backgroundColor: '#ffffff',
+                border: '1px solid var(--border-color)',
+                borderLeft: '4px solid var(--primary)',
+                borderRadius: '12px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+                boxShadow: 'var(--shadow-xs)',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Users size={16} color="var(--primary)" />
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                     Waiting In Lobby ({waitingPatients.length})
                   </span>
                 </div>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 500 }}>
                   Click to Prepare
                 </span>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '420px', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '420px', overflowY: 'auto' }}>
                 {waitingPatients.length === 0 ? (
-                  <div style={{ padding: '2rem 1rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+                  <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
                     No patients waiting in queue.
                   </div>
                 ) : (
@@ -963,40 +868,58 @@ export const DoctorAssistantDashboard: React.FC = () => {
                         key={item.id}
                         onClick={() => setActiveIntakeId(item.id)}
                         style={{
-                          padding: '0.75rem 0.875rem',
-                          borderRadius: '8px',
-                          backgroundColor: isSelected ? '#eff6ff' : '#f8fafc',
-                          border: `1.5px solid ${isSelected ? '#0284c7' : '#e2e8f0'}`,
+                          padding: '10px 12px',
+                          borderRadius: '10px',
+                          backgroundColor: isSelected ? 'var(--primary-light)' : '#ffffff',
+                          border: `1px solid ${isSelected ? 'var(--primary)' : 'var(--border-color)'}`,
+                          borderLeft: isSelected ? '3px solid var(--primary)' : '1px solid var(--border-color)',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'space-between',
                           cursor: 'pointer',
                           transition: 'all 0.15s ease',
+                          gap: '8px',
                         }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
                           <div
                             style={{
-                              fontSize: '1.15rem',
-                              fontWeight: 900,
-                              fontFamily: 'monospace',
-                              color: isSelected ? '#0284c7' : 'var(--secondary)',
-                              width: '38px',
+                              fontSize: '1.1rem',
+                              fontWeight: 700,
+                              color: isSelected ? 'var(--primary)' : 'var(--secondary)',
+                              width: '32px',
+                              flexShrink: 0,
                             }}
                           >
                             #{String(item.token).padStart(2, '0')}
                           </div>
-                          <div>
-                            <strong style={{ fontSize: '0.875rem', color: 'var(--secondary)', display: 'block' }}>
+                          <div style={{ minWidth: 0 }}>
+                            <strong style={{ fontSize: '13px', color: 'var(--secondary)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {item.patient}
                             </strong>
-                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                              {item.age}Y • {item.gender} • {item.time}
-                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                                {item.age}Y • {item.gender} • {item.time}
+                              </span>
+                              {(() => {
+                                const pOrders = labOrders.filter((o) => o.uhid === item.uhid);
+                                if (pOrders.length === 0) return null;
+                                if (pOrders.some((o) => o.stage === 'REPORT_GENERATED' || o.stage === 'VALIDATED')) {
+                                  return <span className="badge badge-success" style={{ fontSize: '10px', padding: '1px 5px' }}>✓ Ready</span>;
+                                }
+                                if (pOrders.some((o) => o.stage === 'PROCESSING' || o.stage === 'RESULT_ENTERED')) {
+                                  return <span className="badge badge-info" style={{ fontSize: '10px', padding: '1px 5px' }}>⚙️ In Analysis</span>;
+                                }
+                                if (pOrders.some((o) => o.stage === 'COLLECTED' || o.stage === 'SAMPLE_COLLECTED')) {
+                                  return <span className="badge badge-warning" style={{ fontSize: '10px', padding: '1px 5px' }}>🧪 Collected</span>;
+                                }
+                                return <span className="badge badge-secondary" style={{ fontSize: '10px', padding: '1px 5px' }}>📋 Ordered</span>;
+                              })()}
+                            </div>
                           </div>
                         </div>
 
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
                           <span
                             className={`badge ${
                               item.status === 'TRIAGED'
@@ -1005,7 +928,7 @@ export const DoctorAssistantDashboard: React.FC = () => {
                                 ? 'badge-danger'
                                 : 'badge-secondary'
                             }`}
-                            style={{ fontSize: '0.6875rem' }}
+                            style={{ fontSize: '11px' }}
                           >
                             {item.status === 'TRIAGED' ? '✓ Triaged' : item.priority === 'URGENT' ? '🚨 URGENT' : 'Waiting'}
                           </span>
@@ -1016,10 +939,10 @@ export const DoctorAssistantDashboard: React.FC = () => {
                               handleCallToken(item);
                             }}
                             className="btn btn-secondary btn-sm"
-                            style={{ padding: '0.25rem 0.45rem', fontSize: '0.7rem' }}
-                            title="Call directly"
+                            style={{ width: '32px', height: '32px', padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px' }}
+                            title="Call token directly"
                           >
-                            <Play size={12} />
+                            <Play size={13} />
                           </button>
                         </div>
                       </div>
@@ -1031,124 +954,127 @@ export const DoctorAssistantDashboard: React.FC = () => {
           </div>
 
           {/* Right Column: Rapid Pre-Consult Triage & Clinical Alerts */}
-          <div className="card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          <div className="card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
             {/* Active Intake Header */}
             {activeIntakeToken ? (
               <div
                 style={{
-                  padding: '1rem 1.25rem',
-                  backgroundColor: '#f0f9ff',
+                  padding: '14px 18px',
+                  backgroundColor: '#ffffff',
                   borderRadius: '12px',
-                  border: '1px solid #bae6fd',
+                  border: '1px solid var(--border-color)',
+                  borderLeft: '4px solid var(--primary)',
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
                   flexWrap: 'wrap',
-                  gap: '0.75rem',
+                  gap: '12px',
+                  boxShadow: 'var(--shadow-xs)',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <div
                     style={{
-                      width: '44px',
-                      height: '44px',
+                      width: '40px',
+                      height: '40px',
                       borderRadius: '10px',
-                      backgroundColor: '#0284c7',
-                      color: '#ffffff',
-                      fontWeight: 800,
-                      fontSize: '1.1rem',
+                      backgroundColor: 'var(--primary-light)',
+                      color: 'var(--primary)',
+                      fontWeight: 700,
+                      fontSize: '1rem',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
+                      flexShrink: 0,
                     }}
                   >
                     #{activeIntakeToken.token}
                   </div>
                   <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <strong style={{ fontSize: '1.1rem', color: '#0f172a' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <strong style={{ fontSize: '15px', color: 'var(--secondary)' }}>
                         {activeIntakeToken.patient}
                       </strong>
-                      <span className="badge badge-info" style={{ fontSize: '0.7rem' }}>
+                      <span className="badge badge-primary" style={{ fontSize: '11px' }}>
                         Token #{activeIntakeToken.token}
                       </span>
                     </div>
-                    <div style={{ fontSize: '0.8125rem', color: '#475569', marginTop: '0.15rem' }}>
-                      UHID: <strong>{activeIntakeToken.uhid}</strong> • {activeIntakeToken.age} Yrs / {activeIntakeToken.gender} • Blood Group: <strong style={{ color: '#dc2626' }}>{activeIntakeToken.bloodGroup || 'O+'}</strong>
+                    <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                      UHID: <strong style={{ color: 'var(--secondary)' }}>{activeIntakeToken.uhid}</strong> • {activeIntakeToken.age} Yrs / {activeIntakeToken.gender} • Blood Group: <strong style={{ color: 'var(--danger)' }}>{activeIntakeToken.bloodGroup || 'O+'}</strong>
                     </div>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', gap: '8px' }}>
                   <button
                     type="button"
                     onClick={() => setShowUploadModal(true)}
                     className="btn btn-secondary btn-sm"
-                    style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontWeight: 700 }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, height: '36px', borderRadius: '8px' }}
                   >
-                    <Upload size={14} /> Attach Outside Records
+                    <Upload size={14} /> <span>Attach Outside Records</span>
                   </button>
                 </div>
               </div>
             ) : (
-              <div style={{ padding: '1rem', backgroundColor: '#f1f5f9', borderRadius: '8px', color: 'var(--text-muted)' }}>
+              <div style={{ padding: '16px', backgroundColor: '#ffffff', border: '1px solid var(--border-color)', borderRadius: '10px', color: 'var(--text-muted)', fontSize: '13px' }}>
                 Select a patient from the queue to start pre-consult vitals recording.
               </div>
             )}
 
             {/* Vitals Form */}
-            <form onSubmit={handleSaveAndPushVitals} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <form onSubmit={handleSaveAndPushVitals} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                    <HeartPulse size={18} color="#dc2626" />
-                    <h4 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 800, color: 'var(--secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      1. Vital Signs Intake
-                    </h4>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <HeartPulse size={18} color="var(--primary)" />
+                    <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: 'var(--secondary)' }}>
+                      Vital Signs Intake
+                    </h3>
                   </div>
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <span style={{ padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700, backgroundColor: bpCategory.color + '20', color: bpCategory.color }}>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <span style={{ padding: '3px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, backgroundColor: bpCategory.color + '20', color: bpCategory.color }}>
                       {bpCategory.label}
                     </span>
-                    <span style={{ padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700, backgroundColor: bmiCategory.color + '20', color: bmiCategory.color }}>
+                    <span style={{ padding: '3px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, backgroundColor: bmiCategory.color + '20', color: bmiCategory.color }}>
                       BMI: {bmiValue} ({bmiCategory.label})
                     </span>
                   </div>
                 </div>
 
                 {/* 6 Vital Metric Cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.875rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '14px' }}>
                   {/* BP */}
-                  <div style={{ padding: '0.75rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem' }}>
+                  <div style={{ padding: '12px', backgroundColor: '#ffffff', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
                       Blood Pressure (mmHg)
                     </label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <input
                         type="number"
                         value={systolic}
                         onChange={(e) => setSystolic(e.target.value)}
                         placeholder="120"
                         className="form-input"
-                        style={{ padding: '0.4rem 0.5rem', fontWeight: 800, fontSize: '0.9375rem', textAlign: 'center' }}
+                        style={{ padding: '6px 8px', fontWeight: 700, fontSize: '14px', textAlign: 'center', height: '36px' }}
                         required
                       />
-                      <span style={{ fontWeight: 800, color: '#94a3b8' }}>/</span>
+                      <span style={{ fontWeight: 700, color: 'var(--text-light)' }}>/</span>
                       <input
                         type="number"
                         value={diastolic}
                         onChange={(e) => setDiastolic(e.target.value)}
                         placeholder="80"
                         className="form-input"
-                        style={{ padding: '0.4rem 0.5rem', fontWeight: 800, fontSize: '0.9375rem', textAlign: 'center' }}
+                        style={{ padding: '6px 8px', fontWeight: 700, fontSize: '14px', textAlign: 'center', height: '36px' }}
                         required
                       />
                     </div>
                   </div>
 
                   {/* Pulse */}
-                  <div style={{ padding: '0.75rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem' }}>
+                  <div style={{ padding: '12px', backgroundColor: '#ffffff', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
                       Pulse Rate (bpm)
                     </label>
                     <input
@@ -1157,14 +1083,14 @@ export const DoctorAssistantDashboard: React.FC = () => {
                       onChange={(e) => setPulse(e.target.value)}
                       placeholder="74"
                       className="form-input"
-                      style={{ padding: '0.4rem 0.5rem', fontWeight: 800, fontSize: '0.9375rem' }}
+                      style={{ padding: '6px 8px', fontWeight: 700, fontSize: '14px', height: '36px' }}
                       required
                     />
                   </div>
 
                   {/* Temp */}
-                  <div style={{ padding: '0.75rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem' }}>
+                  <div style={{ padding: '12px', backgroundColor: '#ffffff', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
                       Body Temp (°F)
                     </label>
                     <input
@@ -1174,14 +1100,14 @@ export const DoctorAssistantDashboard: React.FC = () => {
                       onChange={(e) => setTemp(e.target.value)}
                       placeholder="98.4"
                       className="form-input"
-                      style={{ padding: '0.4rem 0.5rem', fontWeight: 800, fontSize: '0.9375rem' }}
+                      style={{ padding: '6px 8px', fontWeight: 700, fontSize: '14px', height: '36px' }}
                       required
                     />
                   </div>
 
                   {/* SpO2 */}
-                  <div style={{ padding: '0.75rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem' }}>
+                  <div style={{ padding: '12px', backgroundColor: '#ffffff', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
                       Oxygen SpO2 (%)
                     </label>
                     <input
@@ -1190,24 +1116,24 @@ export const DoctorAssistantDashboard: React.FC = () => {
                       onChange={(e) => setSpo2(e.target.value)}
                       placeholder="99"
                       className="form-input"
-                      style={{ padding: '0.4rem 0.5rem', fontWeight: 800, fontSize: '0.9375rem', color: '#047857' }}
+                      style={{ padding: '6px 8px', fontWeight: 700, fontSize: '14px', color: 'var(--success)', height: '36px' }}
                       required
                     />
                   </div>
 
                   {/* Height & Weight */}
-                  <div style={{ padding: '0.75rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem' }}>
+                  <div style={{ padding: '12px', backgroundColor: '#ffffff', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
                       Height (cm) / Wt (kg)
                     </label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <input
                         type="number"
                         value={height}
                         onChange={(e) => setHeight(e.target.value)}
                         placeholder="178"
                         className="form-input"
-                        style={{ padding: '0.4rem 0.5rem', fontWeight: 800, fontSize: '0.875rem' }}
+                        style={{ padding: '6px 8px', fontWeight: 700, fontSize: '13px', height: '36px' }}
                         required
                       />
                       <input
@@ -1216,15 +1142,15 @@ export const DoctorAssistantDashboard: React.FC = () => {
                         onChange={(e) => setWeight(e.target.value)}
                         placeholder="76"
                         className="form-input"
-                        style={{ padding: '0.4rem 0.5rem', fontWeight: 800, fontSize: '0.875rem' }}
+                        style={{ padding: '6px 8px', fontWeight: 700, fontSize: '13px', height: '36px' }}
                         required
                       />
                     </div>
                   </div>
 
                   {/* RBS */}
-                  <div style={{ padding: '0.75rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem' }}>
+                  <div style={{ padding: '12px', backgroundColor: '#ffffff', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
                       Blood Sugar RBS (mg/dL)
                     </label>
                     <input
@@ -1233,7 +1159,7 @@ export const DoctorAssistantDashboard: React.FC = () => {
                       onChange={(e) => setRbs(e.target.value)}
                       placeholder="108"
                       className="form-input"
-                      style={{ padding: '0.4rem 0.5rem', fontWeight: 800, fontSize: '0.9375rem', color: '#0284c7' }}
+                      style={{ padding: '6px 8px', fontWeight: 700, fontSize: '14px', color: 'var(--primary)', height: '36px' }}
                     />
                   </div>
                 </div>
@@ -1241,11 +1167,14 @@ export const DoctorAssistantDashboard: React.FC = () => {
 
               {/* Presenting Complaints & Symptoms */}
               <div>
-                <label style={{ fontSize: '0.8125rem', fontWeight: 800, color: 'var(--secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: '0.5rem' }}>
-                  2. Presenting Complaints & Rapid Symptoms
-                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+                  <Activity size={18} color="var(--primary)" />
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: 'var(--secondary)' }}>
+                    Presenting Complaints & Symptoms
+                  </h3>
+                </div>
 
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '0.75rem' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
                   {[
                     'Fever',
                     'Dry Cough',
@@ -1267,13 +1196,13 @@ export const DoctorAssistantDashboard: React.FC = () => {
                         type="button"
                         onClick={() => toggleSymptom(sym)}
                         style={{
-                          padding: '0.35rem 0.75rem',
+                          padding: '6px 14px',
                           borderRadius: '20px',
-                          fontSize: '0.7813rem',
+                          fontSize: '12px',
                           fontWeight: 600,
-                          backgroundColor: active ? '#0284c7' : '#f1f5f9',
+                          backgroundColor: active ? 'var(--primary)' : '#ffffff',
                           color: active ? '#ffffff' : 'var(--text-main)',
-                          border: `1px solid ${active ? '#0284c7' : '#cbd5e1'}`,
+                          border: `1px solid ${active ? 'var(--primary)' : 'var(--border-color)'}`,
                           cursor: 'pointer',
                           transition: 'all 0.15s ease',
                         }}
@@ -1285,14 +1214,14 @@ export const DoctorAssistantDashboard: React.FC = () => {
                   })}
                 </div>
 
-                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
                   <input
                     type="text"
                     value={customSymptom}
                     onChange={(e) => setCustomSymptom(e.target.value)}
                     placeholder="Type other symptom and press enter..."
                     className="form-input"
-                    style={{ flex: 1, padding: '0.45rem 0.75rem', fontSize: '0.8125rem' }}
+                    style={{ flex: 1, padding: '8px 12px', fontSize: '13px' }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
@@ -1304,7 +1233,7 @@ export const DoctorAssistantDashboard: React.FC = () => {
                     type="button"
                     onClick={addCustomSymptom}
                     className="btn btn-secondary btn-sm"
-                    style={{ fontWeight: 700 }}
+                    style={{ fontWeight: 600, height: '38px', padding: '0 14px' }}
                   >
                     Add Symptom
                   </button>
@@ -1316,53 +1245,46 @@ export const DoctorAssistantDashboard: React.FC = () => {
                   placeholder="Patient verbatim statement or additional clinical observation..."
                   className="form-textarea"
                   rows={2}
-                  style={{ width: '100%', fontSize: '0.8125rem' }}
+                  style={{ width: '100%', fontSize: '13px', borderRadius: '10px' }}
                 />
               </div>
 
               {/* Clinical Alerts: Allergies, Chronic Conditions & Home Medications */}
               <div>
-                <label style={{ fontSize: '0.8125rem', fontWeight: 800, color: 'var(--secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: '0.5rem' }}>
-                  3. Clinical Safety Alerts & Medical History
-                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+                  <AlertTriangle size={18} color="var(--danger)" />
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: 'var(--secondary)' }}>
+                    Clinical Safety Alerts & Medical History
+                  </h3>
+                </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.875rem' }}>
-                  {/* Allergies */}
-                  <div style={{ padding: '0.875rem', backgroundColor: '#fef2f2', borderRadius: '10px', border: '1px solid #fecaca' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#991b1b', fontWeight: 800, fontSize: '0.8125rem', marginBottom: '0.5rem' }}>
-                      <AlertTriangle size={15} color="#dc2626" />
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+                  {/* Drug Allergies */}
+                  <div style={{ padding: '14px', backgroundColor: '#ffffff', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--danger)', fontWeight: 600, fontSize: '13px', marginBottom: '8px' }}>
+                      <AlertTriangle size={15} color="var(--danger)" />
                       <span>Drug Allergies</span>
                     </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.5rem' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
                       {allergies.map((allg) => (
                         <span
                           key={allg}
-                          style={{
-                            padding: '0.2rem 0.55rem',
-                            borderRadius: '4px',
-                            fontSize: '0.75rem',
-                            fontWeight: 700,
-                            backgroundColor: '#fee2e2',
-                            color: '#b91c1c',
-                            border: '1px solid #fca5a5',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '0.3rem',
-                          }}
+                          className="badge badge-danger"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                         >
                           {allg}
                           <X size={12} style={{ cursor: 'pointer' }} onClick={() => removeAllergy(allg)} />
                         </span>
                       ))}
                     </div>
-                    <div style={{ display: 'flex', gap: '0.35rem' }}>
+                    <div style={{ display: 'flex', gap: '6px' }}>
                       <input
                         type="text"
                         value={customAllergy}
                         onChange={(e) => setCustomAllergy(e.target.value)}
                         placeholder="Add allergy..."
                         className="form-input"
-                        style={{ flex: 1, padding: '0.35rem 0.5rem', fontSize: '0.75rem' }}
+                        style={{ height: '36px', flex: 1, padding: '0 8px', fontSize: '12px' }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             e.preventDefault();
@@ -1370,31 +1292,23 @@ export const DoctorAssistantDashboard: React.FC = () => {
                           }
                         }}
                       />
-                      <button type="button" onClick={addAllergy} className="btn btn-danger btn-sm" style={{ padding: '0.35rem 0.6rem', fontSize: '0.75rem' }}>
+                      <button type="button" onClick={addAllergy} className="btn btn-secondary btn-sm" style={{ height: '36px', padding: '0 10px' }}>
                         +
                       </button>
                     </div>
                   </div>
 
                   {/* Chronic Conditions */}
-                  <div style={{ padding: '0.875rem', backgroundColor: '#fffbeb', borderRadius: '10px', border: '1px solid #fde68a' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#92400e', fontWeight: 800, fontSize: '0.8125rem', marginBottom: '0.5rem' }}>
-                      <HeartPulse size={15} color="#b45309" />
+                  <div style={{ padding: '14px', backgroundColor: '#ffffff', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--warning)', fontWeight: 600, fontSize: '13px', marginBottom: '8px' }}>
+                      <HeartPulse size={15} color="var(--warning)" />
                       <span>Chronic Conditions</span>
                     </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
                       {chronicConditions.map((cond) => (
                         <span
                           key={cond}
-                          style={{
-                            padding: '0.2rem 0.55rem',
-                            borderRadius: '4px',
-                            fontSize: '0.75rem',
-                            fontWeight: 700,
-                            backgroundColor: '#fef3c7',
-                            color: '#92400e',
-                            border: '1px solid #fcd34d',
-                          }}
+                          className="badge badge-warning"
                         >
                           {cond}
                         </span>
@@ -1403,41 +1317,31 @@ export const DoctorAssistantDashboard: React.FC = () => {
                   </div>
 
                   {/* Current Home Medications */}
-                  <div style={{ padding: '0.875rem', backgroundColor: '#f0fdf4', borderRadius: '10px', border: '1px solid #bbf7d0' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#166534', fontWeight: 800, fontSize: '0.8125rem', marginBottom: '0.5rem' }}>
-                      <Pill size={15} color="#15803d" />
+                  <div style={{ padding: '14px', backgroundColor: '#ffffff', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--primary)', fontWeight: 600, fontSize: '13px', marginBottom: '8px' }}>
+                      <Pill size={15} color="var(--primary)" />
                       <span>Current Home Meds</span>
                     </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.5rem' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
                       {currentMedications.map((med) => (
                         <span
                           key={med}
-                          style={{
-                            padding: '0.2rem 0.55rem',
-                            borderRadius: '4px',
-                            fontSize: '0.75rem',
-                            fontWeight: 700,
-                            backgroundColor: '#dcfce7',
-                            color: '#15803d',
-                            border: '1px solid #86efac',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '0.3rem',
-                          }}
+                          className="badge badge-success"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                         >
                           {med}
                           <X size={12} style={{ cursor: 'pointer' }} onClick={() => removeCurrentMed(med)} />
                         </span>
                       ))}
                     </div>
-                    <div style={{ display: 'flex', gap: '0.35rem' }}>
+                    <div style={{ display: 'flex', gap: '6px' }}>
                       <input
                         type="text"
                         value={customMed}
                         onChange={(e) => setCustomMed(e.target.value)}
                         placeholder="Add med (e.g. Aspirin)..."
                         className="form-input"
-                        style={{ flex: 1, padding: '0.35rem 0.5rem', fontSize: '0.75rem' }}
+                        style={{ height: '36px', flex: 1, padding: '0 8px', fontSize: '12px' }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             e.preventDefault();
@@ -1445,7 +1349,7 @@ export const DoctorAssistantDashboard: React.FC = () => {
                           }
                         }}
                       />
-                      <button type="button" onClick={addCurrentMed} className="btn btn-success btn-sm" style={{ padding: '0.35rem 0.6rem', fontSize: '0.75rem' }}>
+                      <button type="button" onClick={addCurrentMed} className="btn btn-secondary btn-sm" style={{ height: '36px', padding: '0 10px' }}>
                         +
                       </button>
                     </div>
@@ -1453,28 +1357,22 @@ export const DoctorAssistantDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* Primary Action Button: Push Vitals Directly to Doctor Screen */}
-              <button
-                type="submit"
-                className="btn btn-primary"
-                style={{
-                  width: '100%',
-                  padding: '0.9375rem 1.5rem',
-                  fontSize: '0.9375rem',
-                  fontWeight: 800,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.625rem',
-                  backgroundColor: '#059669',
-                  boxShadow: '0 4px 12px rgba(5, 150, 105, 0.3)',
-                  borderRadius: '10px',
-                  cursor: 'pointer',
+              {/* Primary Action Bar (§ 11 & § 13) */}
+              <PrimaryActionBar
+                primaryAction={{
+                  label: `Save & Push Vitals Directly to ${selectedDoctor.split('(')[0].trim()}`,
+                  icon: <ArrowRight size={16} />,
+                  onClick: () => handleSaveAndPushVitals({ preventDefault: () => {} } as any),
+                  variant: 'primary',
                 }}
-              >
-                <CheckCircle2 size={18} />
-                <span>Save & Push Vitals Directly to {selectedDoctor.split('(')[0]} ➔</span>
-              </button>
+                statusText={
+                  activeIntakeToken ? (
+                    <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                      Token #{activeIntakeToken.token} • {activeIntakeToken.patient} ({activeIntakeToken.uhid})
+                    </span>
+                  ) : undefined
+                }
+              />
             </form>
           </div>
         </div>
@@ -1557,12 +1455,14 @@ export const DoctorAssistantDashboard: React.FC = () => {
                         style={{
                           padding: '1rem',
                           borderRadius: '10px',
-                          border: `1.5px solid ${isReady ? '#86efac' : '#e2e8f0'}`,
-                          backgroundColor: isReady ? '#f0fdf4' : '#ffffff',
+                          border: '1px solid var(--border-color)',
+                          borderLeft: isReady ? '4px solid var(--success)' : '4px solid var(--border-color)',
+                          backgroundColor: '#ffffff',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'space-between',
                           gap: '1rem',
+                          boxShadow: 'var(--shadow-xs)',
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
@@ -1571,8 +1471,8 @@ export const DoctorAssistantDashboard: React.FC = () => {
                               width: '42px',
                               height: '42px',
                               borderRadius: '8px',
-                              backgroundColor: isReady ? '#dcfce7' : '#f1f5f9',
-                              color: isReady ? '#15803d' : '#0284c7',
+                              backgroundColor: isReady ? 'var(--success-light)' : 'var(--bg-main)',
+                              color: isReady ? 'var(--success)' : 'var(--primary)',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
@@ -1593,41 +1493,41 @@ export const DoctorAssistantDashboard: React.FC = () => {
                           </div>
                         </div>
 
-                        <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <span
-                            style={{
-                              padding: '0.25rem 0.6rem',
-                              borderRadius: '4px',
-                              fontSize: '0.7188rem',
-                              fontWeight: 800,
-                              backgroundColor: isReady ? '#dcfce7' : '#fef3c7',
-                              color: isReady ? '#15803d' : '#92400e',
-                              border: `1px solid ${isReady ? '#86efac' : '#fde68a'}`,
-                            }}
+                            className={`badge ${isReady ? 'badge-success' : 'badge-warning'}`}
+                            style={{ fontSize: '11px' }}
                           >
-                            {isReady ? '✓ Report Validated & Ready' : order.stage.replace('_', ' ')}
+                            {isReady ? '✓ Report Ready' : order.stage.replace('_', ' ')}
                           </span>
 
-                          <div style={{ display: 'flex', gap: '0.35rem' }}>
-                            {isReady && (
-                              <button
-                                type="button"
-                                onClick={() => showToast(`🔔 Dr. Sarah Jenkins notified that ${order.testName} for ${order.patientName} is ready in Chamber 204!`)}
-                                className="btn btn-primary btn-sm"
-                                style={{ fontSize: '0.7188rem', padding: '0.25rem 0.5rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
-                              >
-                                <Bell size={12} /> Notify Doctor
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => showToast(`Viewing digital test report for ${order.testName}...`)}
-                              className="btn btn-secondary btn-sm"
-                              style={{ fontSize: '0.7188rem', padding: '0.25rem 0.5rem' }}
-                            >
-                              <Eye size={12} /> View Details
-                            </button>
-                          </div>
+                          <RowActionsMenu
+                            fixedActions={[
+                              ...(isReady
+                                ? [
+                                    {
+                                      icon: <Bell size={13} />,
+                                      label: 'Notify',
+                                      onClick: () =>
+                                        showToast(
+                                          `🔔 Dr. Sarah Jenkins notified that ${order.testName} for ${order.patientName} is ready in Chamber 204!`
+                                        ),
+                                      variant: 'primary' as const,
+                                      title: 'Notify Doctor',
+                                      width: 90,
+                                    },
+                                  ]
+                                : []),
+                              {
+                                icon: <Eye size={13} />,
+                                label: 'View',
+                                onClick: () => setSelectedOrderForAssistantModal(order),
+                                variant: 'secondary' as const,
+                                title: 'View Order Status',
+                                width: 78,
+                              },
+                            ]}
+                          />
                         </div>
                       </div>
                     );
@@ -1716,17 +1616,19 @@ export const DoctorAssistantDashboard: React.FC = () => {
                       style={{
                         padding: '1.15rem',
                         borderRadius: '10px',
-                        border: '1.5px solid #bbf7d0',
-                        backgroundColor: '#f0fdf4',
+                        border: '1px solid var(--border-color)',
+                        borderLeft: '4px solid var(--success)',
+                        backgroundColor: '#ffffff',
                         display: 'flex',
                         flexDirection: 'column',
                         gap: '0.75rem',
+                        boxShadow: 'var(--shadow-xs)',
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <strong style={{ fontSize: '1.05rem', color: '#0f172a' }}>{item.patient}</strong>
+                            <strong style={{ fontSize: '1.05rem', color: 'var(--secondary)' }}>{item.patient}</strong>
                             <span className="badge badge-success" style={{ fontSize: '0.7rem' }}>
                               ✓ Consultation Concluded
                             </span>
@@ -1743,7 +1645,7 @@ export const DoctorAssistantDashboard: React.FC = () => {
                       </div>
 
                       {/* Action Handoff Bar */}
-                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', borderTop: '1px solid #dcfce7', paddingTop: '0.75rem' }}>
+                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
                         {relatedRx && (
                           <button
                             type="button"
@@ -1940,7 +1842,7 @@ export const DoctorAssistantDashboard: React.FC = () => {
                   type="button"
                   onClick={() => handleConfirmFollowUp(activeIntakeToken?.patient || 'Patient', activeIntakeToken?.uhid || '')}
                   className="btn btn-primary"
-                  style={{ width: '100%', fontWeight: 800, padding: '0.625rem', backgroundColor: '#6366f1' }}
+                  style={{ width: '100%', fontWeight: 700, padding: '0.625rem' }}
                 >
                   <CheckCircle2 size={16} /> Confirm Follow-Up Appointment
                 </button>
@@ -2126,6 +2028,120 @@ export const DoctorAssistantDashboard: React.FC = () => {
                 <div style={{ fontSize: '0.8125rem', fontWeight: 800 }}>{selectedRxForPrint.doctorName}</div>
                 <div style={{ fontSize: '0.7188rem', color: 'var(--text-muted)' }}>Authorized Medical Sign-off</div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Assistant Order Tracking Modal - Strictly NO Clinical Values */}
+      {selectedOrderForAssistantModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.65)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100,
+            padding: '1.5rem',
+          }}
+        >
+          <div
+            className="card"
+            style={{
+              maxWidth: '520px',
+              width: '100%',
+              padding: '1.5rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1rem',
+              backgroundColor: '#ffffff',
+              borderRadius: '12px',
+              boxShadow: 'var(--shadow-lg)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <FlaskConical size={20} color="var(--primary)" />
+                <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: 'var(--secondary)' }}>
+                  Diagnostic Order Logistics
+                </h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedOrderForAssistantModal(null)}
+                style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#64748b' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', backgroundColor: '#f8fafc', padding: '0.85rem', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.8125rem' }}>
+              <div>
+                <span style={{ color: 'var(--text-muted)' }}>Order Number:</span>
+                <strong style={{ display: 'block', color: '#0f172a' }}>#{selectedOrderForAssistantModal.orderNo}</strong>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-muted)' }}>Specimen Barcode:</span>
+                <strong style={{ display: 'block', color: '#0f172a' }}>{selectedOrderForAssistantModal.barcode}</strong>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-muted)' }}>Patient Name:</span>
+                <strong style={{ display: 'block', color: '#0f172a' }}>{selectedOrderForAssistantModal.patientName}</strong>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-muted)' }}>Patient UHID:</span>
+                <strong style={{ display: 'block', color: '#0f172a' }}>{selectedOrderForAssistantModal.uhid}</strong>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-muted)' }}>Test Requested:</span>
+                <strong style={{ display: 'block', color: 'var(--primary)' }}>{selectedOrderForAssistantModal.testName}</strong>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-muted)' }}>Sample Type:</span>
+                <strong style={{ display: 'block', color: '#0f172a' }}>{selectedOrderForAssistantModal.sampleType}</strong>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-muted)' }}>Referring Doctor:</span>
+                <strong style={{ display: 'block', color: '#0f172a' }}>{selectedOrderForAssistantModal.doctor}</strong>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-muted)' }}>Current Status:</span>
+                <span className={`badge ${selectedOrderForAssistantModal.stage === 'REPORT_GENERATED' ? 'badge-success' : 'badge-warning'}`} style={{ display: 'inline-block', marginTop: '2px' }}>
+                  {selectedOrderForAssistantModal.stage === 'REPORT_GENERATED' ? '✓ Report Ready' : selectedOrderForAssistantModal.stage.replace('_', ' ')}
+                </span>
+              </div>
+            </div>
+
+            {/* Privacy Restriction Notice (Constraint: NO clinical values for assistant) */}
+            <div
+              style={{
+                padding: '0.75rem 1rem',
+                backgroundColor: '#eff6ff',
+                border: '1px solid #bfdbfe',
+                borderRadius: '8px',
+                fontSize: '0.7813rem',
+                color: '#1e40af',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+              }}
+            >
+              <ShieldAlert size={16} color="#2563eb" style={{ flexShrink: 0 }} />
+              <span>
+                <strong>Confidential Clinical Record:</strong> Biological values, numerical findings, and diagnostic impressions are restricted to authorized Attending Physicians only.
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #f1f5f9', paddingTop: '0.75rem' }}>
+              <button
+                type="button"
+                onClick={() => setSelectedOrderForAssistantModal(null)}
+                className="btn btn-secondary btn-sm"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

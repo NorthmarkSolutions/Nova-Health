@@ -17,8 +17,10 @@ import {
   CheckCircle2,
   Archive,
 } from 'lucide-react';
+import { useCurrency } from '../../../../config/currency';
 
 export const BranchesSection: React.FC = () => {
+  const { format: formatMoney } = useCurrency();
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState<any>(null);
@@ -35,7 +37,7 @@ export const BranchesSection: React.FC = () => {
       hours: '24/7 (All Departments)',
       infrastructure: { buildings: 4, floors: 5, wards: 8, rooms: 120, beds: 350 },
       services: { opd: true, ipd: true, emergency: true, icu: true, ot: true, lab: true, radiology: true, pharmacy: true },
-      performance: { occupancy: '84%', revenueToday: '$24,500', patientVolume: '240 Visits', utilization: '92%' },
+      performance: { occupancy: '84%', revenueToday: 24500, patientVolume: '240 Visits', utilization: '92%' },
       status: 'ACTIVE',
     },
     {
@@ -48,7 +50,7 @@ export const BranchesSection: React.FC = () => {
       hours: 'Mon - Sat (08:00 - 20:00)',
       infrastructure: { buildings: 1, floors: 2, wards: 2, rooms: 24, beds: 60 },
       services: { opd: true, ipd: false, emergency: false, icu: false, ot: true, lab: true, radiology: true, pharmacy: true },
-      performance: { occupancy: '62%', revenueToday: '$8,400', patientVolume: '85 Visits', utilization: '78%' },
+      performance: { occupancy: '62%', revenueToday: 8400, patientVolume: '85 Visits', utilization: '78%' },
       status: 'ACTIVE',
     },
     {
@@ -61,7 +63,7 @@ export const BranchesSection: React.FC = () => {
       hours: 'Mon - Sun (06:00 - 22:00)',
       infrastructure: { buildings: 1, floors: 1, wards: 1, rooms: 12, beds: 25 },
       services: { opd: true, ipd: false, emergency: false, icu: false, ot: false, lab: true, radiology: false, pharmacy: true },
-      performance: { occupancy: '90%', revenueToday: '$4,200', patientVolume: '45 Visits', utilization: '88%' },
+      performance: { occupancy: '90%', revenueToday: 4200, patientVolume: '45 Visits', utilization: '88%' },
       status: 'ACTIVE',
     },
   ]);
@@ -70,7 +72,7 @@ export const BranchesSection: React.FC = () => {
     setFormData({
       services: { opd: true, ipd: true, emergency: true, icu: true, ot: true, lab: true, radiology: true, pharmacy: true },
       infrastructure: { buildings: 1, floors: 1, wards: 1, rooms: 10, beds: 20 },
-      performance: { occupancy: '0%', revenueToday: '$0', patientVolume: '0', utilization: '0%' },
+      performance: { occupancy: '0%', revenueToday: 0, patientVolume: '0', utilization: '0%' },
     });
     setSelectedBranch(null);
     setIsModalOpen(true);
@@ -178,7 +180,7 @@ export const BranchesSection: React.FC = () => {
                 <div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Today's Revenue</div>
                   <div style={{ fontSize: '1.125rem', fontWeight: 800, color: 'var(--success)' }}>
-                    {branch.performance.revenueToday}
+                    {typeof branch.performance.revenueToday === 'number' ? formatMoney(branch.performance.revenueToday) : branch.performance.revenueToday}
                   </div>
                 </div>
                 <div>

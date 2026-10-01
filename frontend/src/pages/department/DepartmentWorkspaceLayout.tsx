@@ -1,5 +1,4 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
+﻿import React from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { RoleType, DepartmentWorkspace } from '../../types';
 import {
@@ -10,15 +9,9 @@ import {
   Calendar,
   Settings,
   TrendingUp,
-  Hospital,
-  Building2,
-  LogOut,
-  ChevronRight,
-  ShieldCheck,
-  ArrowLeft,
-  Sparkles,
-  Layers,
   Activity,
+  LogOut,
+  Search,
 } from 'lucide-react';
 import { getDepartmentWorkspaces } from './departmentWorkspaceStore';
 
@@ -27,6 +20,7 @@ interface Props {
   activeTab: string;
   onSelectTab: (tabId: string) => void;
   onSwitchDepartment?: (departmentId: string) => void;
+  customNavItems?: Array<{ id: string; label: string; icon: React.ReactNode; badge?: string }>;
   children: React.ReactNode;
 }
 
@@ -35,142 +29,161 @@ export const DepartmentWorkspaceLayout: React.FC<Props> = ({
   activeTab,
   onSelectTab,
   onSwitchDepartment,
+  customNavItems,
   children,
 }) => {
   const { user, role, logout } = useAuth();
-  const navigate = useNavigate();
   const isHospitalAdmin = role === RoleType.HOSPITAL_ADMIN || role === RoleType.SUPER_ADMIN;
   const allWorkspaces = getDepartmentWorkspaces();
 
-  const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
-    { id: 'staff', label: '1. Staff Pool & Roster', icon: <Users size={18} /> },
-    { id: 'scheduling', label: '2. Duty Scheduling', icon: <Calendar size={18} /> },
-    { id: 'doctors', label: '3. Doctors & Chambers', icon: <Stethoscope size={18} /> },
-    { id: 'rooms', label: '4. Rooms & Facilities', icon: <DoorClosed size={18} /> },
-    { id: 'settings', label: '5. Department Settings', icon: <Settings size={18} /> },
-    { id: 'operations', label: '6. OPD Operations', icon: <Activity size={18} />, badge: 'Live Desk' },
-    { id: 'reports', label: 'Reports & Analytics', icon: <TrendingUp size={18} /> },
+  const defaultNavItems = [
+    { id: 'dashboard', label: 'Overview', icon: <LayoutDashboard size={16} /> },
+    { id: 'staff', label: 'Staff & roster', icon: <Users size={16} /> },
+    { id: 'scheduling', label: 'Duty scheduling', icon: <Calendar size={16} /> },
+    { id: 'doctors', label: 'Doctors & Chambers', icon: <Stethoscope size={16} /> },
+    { id: 'rooms', label: 'Rooms & Facilities', icon: <DoorClosed size={16} /> },
+    { id: 'operations', label: 'OPD Operations', icon: <Activity size={16} />, badge: 'Live' },
+    { id: 'settings', label: 'Department settings', icon: <Settings size={16} /> },
+    { id: 'reports', label: 'Reports & analytics', icon: <TrendingUp size={16} /> },
   ];
 
+  const itemsToRender = customNavItems || defaultNavItems;
+
+  const displayName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Staff Member';
+  const initials = displayName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase() || 'U';
+
+  const today = new Date().toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f1f5f9' }}>
-      {/* Department Workspace Sidebar */}
+    <div style={{ display: 'flex', minHeight: '100vh', background: '#F9FAFB', fontFamily: 'Inter, sans-serif' }}>
+      {/* WHITE SIDEBAR */}
       <aside
         style={{
           width: '260px',
-          backgroundColor: '#0f172a',
-          color: '#ffffff',
+          flexShrink: 0,
+          background: '#FFFFFF',
+          borderRight: '1px solid #E5E7EB',
           display: 'flex',
           flexDirection: 'column',
-          borderRight: '1px solid #1e293b',
-          flexShrink: 0,
+          padding: '20px 16px',
+          gap: '20px',
+          position: 'sticky',
+          top: 0,
+          height: '100vh',
+          overflowY: 'auto',
         }}
       >
-        {/* Brand Header */}
-        <div
-          style={{
-            padding: '1.25rem 1.5rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.75rem',
-            borderBottom: '1px solid #1e293b',
-          }}
-        >
+        {/* Brand */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '0 4px' }}>
           <div
             style={{
-              width: '38px',
-              height: '38px',
-              borderRadius: '8px',
-              backgroundColor: '#0284c7',
+              width: '36px',
+              height: '36px',
+              borderRadius: '10px',
+              background: '#2563EB',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              color: '#FFFFFF',
+              fontWeight: 700,
+              fontSize: '16px',
               flexShrink: 0,
             }}
           >
-            <Building2 size={22} color="#ffffff" />
+            N
           </div>
-          <div>
-            <h1 style={{ fontSize: '1.05rem', fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>
-              North Hospital
-            </h1>
-            <p style={{ fontSize: '0.75rem', color: '#94a3b8', margin: 0 }}>
-              Department Engine
-            </p>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span style={{ fontSize: '15px', fontWeight: 600, color: '#111827' }}>North Hospital</span>
+            <span style={{ fontSize: '12px', color: '#6B7280' }}>Department workspace</span>
           </div>
         </div>
 
-        {/* Active Department Identifier */}
+        {/* Department Card */}
         <div
           style={{
-            padding: '1rem 1.25rem',
-            backgroundColor: 'rgba(2, 132, 199, 0.12)',
-            borderBottom: '1px solid rgba(2, 132, 199, 0.25)',
+            border: '1px solid #E5E7EB',
+            borderRadius: '12px',
+            padding: '12px 14px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '3px',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
-            <span style={{ fontSize: '0.6875rem', fontWeight: 800, color: '#38bdf8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Active Workspace
-            </span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '12px', color: '#6B7280' }}>Current department</span>
             <span
               style={{
-                fontSize: '0.6875rem',
-                fontWeight: 700,
-                padding: '0.1rem 0.35rem',
-                borderRadius: '4px',
-                backgroundColor: '#0284c7',
-                color: '#ffffff',
+                fontSize: '11px',
+                fontWeight: 600,
                 fontFamily: 'monospace',
+                color: '#1D4ED8',
+                background: '#EFF6FF',
+                borderRadius: '4px',
+                padding: '1px 6px',
               }}
             >
-              {workspace.departmentCode}
+              {workspace.departmentCode?.replace('DEPT-', '') || 'LAB'}
             </span>
           </div>
+          <span style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>{workspace.departmentName}</span>
+          <span style={{ fontSize: '12px', color: '#6B7280' }}>{workspace.operatingHours || '24/7 Diagnostics'}</span>
 
-          <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#ffffff', lineHeight: 1.3 }}>
-            {workspace.departmentName}
-          </div>
-
-          {/* Department Switcher (for Hospital Admin only) */}
           {isHospitalAdmin && onSwitchDepartment && (
-            <div style={{ marginTop: '0.625rem' }}>
-              <label style={{ fontSize: '0.6875rem', color: '#94a3b8', display: 'block', marginBottom: '0.25rem' }}>
-                Switch Department Workspace:
+            <div style={{ marginTop: '8px' }}>
+              <label style={{ fontSize: '11px', color: '#6B7280', display: 'block', marginBottom: '4px' }}>
+                Switch workspace:
               </label>
               <select
-                className="form-select"
                 style={{
                   width: '100%',
-                  padding: '0.3rem 0.5rem',
-                  fontSize: '0.75rem',
-                  backgroundColor: '#1e293b',
-                  color: '#ffffff',
-                  borderColor: '#334155',
+                  padding: '5px 8px',
+                  fontSize: '12px',
+                  borderRadius: '8px',
+                  border: '1px solid #E5E7EB',
+                  background: '#FFFFFF',
+                  color: '#111827',
+                  cursor: 'pointer',
+                  outline: 'none',
                 }}
                 value={workspace.departmentId}
                 onChange={(e) => onSwitchDepartment(e.target.value)}
               >
                 {allWorkspaces.map((w) => (
                   <option key={w.id} value={w.departmentId}>
-                    {w.departmentName} ({w.departmentCode})
+                    {w.departmentName}
                   </option>
                 ))}
               </select>
             </div>
           )}
-
-          {!isHospitalAdmin && (
-            <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10b981' }} />
-              Dedicated Department Session
-            </div>
-          )}
         </div>
 
-        {/* Navigation Items */}
-        <nav style={{ flex: 1, padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.35rem', overflowY: 'auto' }}>
-          {navItems.map((item) => {
+        {/* Navigation */}
+        <nav style={{ display: 'flex', flexDirection: 'column', gap: '2px', flex: 1 }}>
+          <span
+            style={{
+              fontSize: '11px',
+              fontWeight: 600,
+              color: '#6B7280',
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              padding: '0 12px 6px',
+            }}
+          >
+            DEPARTMENT
+          </span>
+
+          {itemsToRender.map((item) => {
             const isActive = activeTab === item.id;
             return (
               <button
@@ -180,33 +193,37 @@ export const DepartmentWorkspaceLayout: React.FC<Props> = ({
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '0.75rem',
-                  padding: '0.75rem 1rem',
+                  gap: '10px',
+                  height: '40px',
+                  padding: '0 12px',
                   borderRadius: '10px',
-                  fontSize: '0.875rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
+                  background: isActive ? '#EFF6FF' : 'transparent',
+                  color: isActive ? '#1D4ED8' : '#374151',
+                  fontSize: '14px',
+                  fontWeight: isActive ? 600 : 500,
                   border: 'none',
+                  cursor: 'pointer',
                   textAlign: 'left',
                   width: '100%',
-                  backgroundColor: isActive ? '#0284c7' : 'transparent',
-                  color: isActive ? '#ffffff' : '#94a3b8',
-                  transition: 'all 0.15s ease',
+                  transition: 'background 0.12s ease',
                 }}
               >
-                {item.icon}
+                <span
+                  style={{
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '2px',
+                    background: isActive ? '#2563EB' : '#D1D5DB',
+                    flexShrink: 0,
+                  }}
+                />
                 <span style={{ flex: 1 }}>{item.label}</span>
                 {item.badge && (
                   <span
                     style={{
-                      fontSize: '0.625rem',
-                      fontWeight: 800,
-                      padding: '0.15rem 0.45rem',
-                      borderRadius: '4px',
-                      backgroundColor: isActive ? '#ffffff' : '#0284c7',
-                      color: isActive ? '#0284c7' : '#ffffff',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.04em',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      color: isActive ? '#1D4ED8' : '#6B7280',
                     }}
                   >
                     {item.badge}
@@ -217,115 +234,167 @@ export const DepartmentWorkspaceLayout: React.FC<Props> = ({
           })}
         </nav>
 
-        {/* Bottom Profile & Return to Hospital Admin */}
-        <div style={{ padding: '1rem', borderTop: '1px solid #1e293b' }}>
-          {isHospitalAdmin && (
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => navigate('/admin')}
+        {/* User card */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            padding: '12px',
+            borderTop: '1px solid #E5E7EB',
+          }}
+        >
+          <div
+            style={{
+              width: '36px',
+              height: '36px',
+              borderRadius: '50%',
+              background: '#F3F4F6',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '13px',
+              fontWeight: 600,
+              color: '#374151',
+              flexShrink: 0,
+            }}
+          >
+            {initials}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+            <span
               style={{
-                width: '100%',
-                marginBottom: '0.75rem',
-                backgroundColor: '#1e293b',
-                color: '#ffffff',
-                borderColor: '#334155',
-                fontSize: '0.75rem',
-                justifyContent: 'center',
+                fontSize: '14px',
+                fontWeight: 600,
+                color: '#111827',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
               }}
             >
-              <ArrowLeft size={13} /> Return to Hospital Admin
-            </button>
-          )}
-
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <div
-                style={{
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '50%',
-                  backgroundColor: '#0284c7',
-                  color: '#ffffff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 800,
-                  fontSize: '0.75rem',
-                }}
-              >
-                {user?.firstName?.charAt(0) || 'U'}
-              </div>
-              <div>
-                <div style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#ffffff' }}>
-                  {user?.firstName} {user?.lastName}
-                </div>
-                <div style={{ fontSize: '0.6875rem', color: '#94a3b8' }}>
-                  {role === RoleType.DEPARTMENT_ADMIN ? 'Department Admin' : 'Hospital Admin'}
-                </div>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              className="action-btn"
-              onClick={() => logout()}
-              title="Sign Out"
-              style={{ color: '#94a3b8' }}
-            >
-              <LogOut size={16} />
-            </button>
+              {displayName}
+            </span>
+            <span style={{ fontSize: '12px', color: '#6B7280' }}>
+              {role === RoleType.DEPARTMENT_ADMIN ? 'Lab Manager · Dept Admin' : 'Hospital Admin'}
+            </span>
           </div>
+          <button
+            type="button"
+            onClick={() => logout()}
+            title="Sign out"
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: '#6B7280',
+              padding: '4px',
+              borderRadius: '6px',
+              display: 'flex',
+              alignItems: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <LogOut size={16} />
+          </button>
         </div>
       </aside>
 
-      {/* Main Content Area */}
-      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflowY: 'auto' }}>
-        {/* Top Header Bar */}
-        <header
+      {/* MAIN CONTENT */}
+      <main style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+        {/* Top bar */}
+        <div
           style={{
-            backgroundColor: '#ffffff',
-            borderBottom: '1px solid var(--border-color)',
-            padding: '1rem 2rem',
+            minHeight: '60px',
+            background: '#FFFFFF',
+            borderBottom: '1px solid #E5E7EB',
             display: 'flex',
-            justifyContent: 'space-between',
             alignItems: 'center',
+            gap: '12px',
+            padding: '12px 24px',
+            flexWrap: 'wrap',
             position: 'sticky',
             top: 0,
             zIndex: 10,
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '13px',
+              color: '#6B7280',
+              flex: 1,
+              minWidth: '200px',
+              flexWrap: 'wrap',
+              whiteSpace: 'nowrap',
+            }}
+          >
             <span>Departments</span>
-            <ChevronRight size={14} />
-            <strong style={{ color: 'var(--secondary)' }}>{workspace.departmentName}</strong>
-            <ChevronRight size={14} />
-            <span style={{ textTransform: 'capitalize' }}>{activeTab}</span>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <span>/</span>
+            <span>{workspace.departmentName}</span>
+            <span>/</span>
+            <span style={{ color: '#111827', fontWeight: 500, textTransform: 'capitalize' }}>
+              {itemsToRender.find((i) => i.id === activeTab)?.label || activeTab}
+            </span>
             <span
               style={{
-                fontSize: '0.75rem',
-                fontWeight: 700,
-                padding: '0.25rem 0.6rem',
-                borderRadius: '6px',
-                backgroundColor: '#f0fdf4',
-                color: '#15803d',
-                border: '1px solid #bbf7d0',
-                display: 'inline-flex',
+                display: 'flex',
                 alignItems: 'center',
-                gap: '0.35rem',
+                gap: '5px',
+                fontSize: '12px',
+                fontWeight: 600,
+                color: '#15803D',
+                background: '#F0FDF4',
+                borderRadius: '999px',
+                padding: '2px 8px',
               }}
             >
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#16a34a' }} />
-              Workspace Live & Operational
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#16A34A' }} />
+              Live
             </span>
           </div>
-        </header>
 
-        {/* Tab Content Body */}
-        <div style={{ padding: '2rem', flex: 1 }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              height: '36px',
+              padding: '0 12px',
+              border: '1px solid #E5E7EB',
+              borderRadius: '10px',
+              width: '280px',
+              maxWidth: '100%',
+              color: '#6B7280',
+              fontSize: '13px',
+              background: '#FFFFFF',
+            }}
+          >
+            <Search size={14} />
+            <span>Search staff, equipment or test</span>
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              height: '36px',
+              padding: '0 12px',
+              border: '1px solid #E5E7EB',
+              borderRadius: '10px',
+              fontSize: '13px',
+              color: '#374151',
+              whiteSpace: 'nowrap',
+              background: '#FFFFFF',
+            }}
+          >
+            Today · {today} ▾
+          </div>
+        </div>
+
+        {/* Page body */}
+        <div style={{ padding: '24px', flex: 1 }}>
           {children}
         </div>
       </main>

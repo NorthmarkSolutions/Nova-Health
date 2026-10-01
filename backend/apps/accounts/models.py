@@ -5,9 +5,11 @@ from django.contrib.auth.models import AbstractUser
 class RoleType(models.TextChoices):
     SUPER_ADMIN = 'SUPER_ADMIN', 'Super Admin'
     HOSPITAL_ADMIN = 'HOSPITAL_ADMIN', 'Hospital Admin'
+    DEPARTMENT_ADMIN = 'DEPARTMENT_ADMIN', 'Department Admin'
     RECEPTIONIST = 'RECEPTIONIST', 'Receptionist'
     RECEPTION_SUPERVISOR = 'RECEPTION_SUPERVISOR', 'Reception Supervisor'
     DOCTOR = 'DOCTOR', 'Doctor'
+    DOCTOR_ASSISTANT = 'DOCTOR_ASSISTANT', 'Doctor Assistant'
     NURSE = 'NURSE', 'Nurse'
     LAB_TECH = 'LAB_TECH', 'Lab Technician'
     PATHOLOGIST = 'PATHOLOGIST', 'Pathologist'

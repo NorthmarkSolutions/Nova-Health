@@ -37,8 +37,10 @@ import {
   resetDefaultHospitalShifts,
   calculateShiftDuration,
 } from './hospitalStaffStore';
+import { useCurrency, CurrencyCode } from '../../../../config/currency';
 
 export const ProfileSection: React.FC = () => {
+  const { currency: globalCurrency, setCurrency } = useCurrency();
   const [activeSubSection, setActiveSubSection] = useState<
     'general' | 'contact' | 'address' | 'branding' | 'regulatory' | 'operational' | 'shifts'
   >('general');
@@ -133,7 +135,7 @@ export const ProfileSection: React.FC = () => {
   // Operational Settings State
   const [operational, setOperational] = useState({
     timezone: 'America/New_York (EST / UTC-5)',
-    currency: 'USD ($)',
+    currency: globalCurrency === 'USD' ? 'USD ($)' : 'INR (Rs.)',
     language: 'English (US)',
     financialYear: 'April - March (Standard Fiscal)',
     weekStartDay: 'Monday',
@@ -176,7 +178,16 @@ export const ProfileSection: React.FC = () => {
             country: data.country || prev.country,
           }));
           if (data.branding) setBranding(prev => ({ ...prev, ...data.branding }));
-          if (data.operationalSettings) setOperational(prev => ({ ...prev, ...data.operationalSettings }));
+          if (data.operationalSettings) {
+            const rawCur = data.operationalSettings.currency || '';
+            const normalizedCur: CurrencyCode = rawCur.includes('USD') ? 'USD' : 'INR';
+            setOperational(prev => ({
+              ...prev,
+              ...data.operationalSettings,
+              currency: normalizedCur === 'USD' ? 'USD ($)' : 'INR (Rs.)',
+            }));
+            setCurrency(normalizedCur);
+          }
           setIsBackendConnected(true);
         }
       })
@@ -189,6 +200,9 @@ export const ProfileSection: React.FC = () => {
     e.preventDefault();
     setSaveAlert(true);
     setTimeout(() => setSaveAlert(false), 3000);
+
+    const activeCode: CurrencyCode = operational.currency.includes('USD') ? 'USD' : 'INR';
+    setCurrency(activeCode);
 
     const payload = {
       ...generalInfo,
@@ -491,7 +505,18 @@ export const ProfileSection: React.FC = () => {
           </div>
           <div className="form-group">
             <label className="form-label">Base Currency</label>
-            <input className="form-input" value={operational.currency} onChange={(e) => setOperational({ ...operational, currency: e.target.value })} required />
+            <select
+              className="form-select"
+              value={operational.currency.includes('USD') ? 'USD' : 'INR'}
+              onChange={(e) => {
+                const selected = e.target.value as CurrencyCode;
+                setOperational({ ...operational, currency: selected === 'USD' ? 'USD ($)' : 'INR (Rs.)' });
+                setCurrency(selected);
+              }}
+            >
+              <option value="INR">INR (Rs.)</option>
+              <option value="USD">USD ($)</option>
+            </select>
           </div>
           <div className="form-group">
             <label className="form-label">Primary Language</label>

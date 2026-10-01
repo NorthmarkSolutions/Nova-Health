@@ -8,6 +8,7 @@ urlpatterns = [
     re_path(r'^api/v1/patients', include('apps.patients.urls')),
     re_path(r'^api/v1/appointments', include('apps.appointments.urls')),
     re_path(r'^api/v1/clinical', include('apps.clinical.urls')),
+    re_path(r'^api/v1/lab/', include('apps.lab.urls')),
     re_path(r'^api/v1/lab', include('apps.lab.urls')),
     re_path(r'^api/v1/ot', include('apps.ot.urls')),
     re_path(r'^api/v1/ipd', include('apps.ipd.urls')),

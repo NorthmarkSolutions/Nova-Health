@@ -23,6 +23,7 @@ import {
   InpatientCareDetails,
 } from '../../../pages/admin/setup/organization/CampusInfrastructureSection';
 import { FlatCampusBed, patientJourneyService } from '../../../services/patientJourneyService';
+import { useCurrency } from '../../../config/currency';
 
 interface Props {
   isOpen: boolean;
@@ -41,6 +42,7 @@ export const BedOccupancyDossierModal: React.FC<Props> = ({
 }) => {
   if (!isOpen || !bedItem || !bedItem.bed.inpatientDetails) return null;
 
+  const { format: formatMoney } = useCurrency();
   const { bed, wardName, roomNumber, buildingName, floorName, wardId, buildingId, floorId } = bedItem;
   const pt: InpatientCareDetails = bed.inpatientDetails;
 
@@ -353,10 +355,10 @@ export const BedOccupancyDossierModal: React.FC<Props> = ({
                 <DollarSign size={14} color="#16a34a" /> ACCRUED DAYCARE CHARGE
               </div>
               <div style={{ fontWeight: 900, fontSize: '1.125rem', color: '#15803d', marginTop: '0.25rem' }}>
-                ${stayInfo.accrued}.00
+                {formatMoney(stayInfo.accrued)}
               </div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                ${stayInfo.hourlyRate}/hr • {stayInfo.elapsedHours} hr(s) elapsed
+                {formatMoney(stayInfo.hourlyRate)}/hr • {stayInfo.elapsedHours} hr(s) elapsed
               </div>
             </div>
           </div>
@@ -430,7 +432,7 @@ export const BedOccupancyDossierModal: React.FC<Props> = ({
                     <option value="">— Select Target Vacant Bed —</option>
                     {availableBeds.map((ab) => (
                       <option key={ab.bed.id} value={ab.bed.id}>
-                        {ab.bed.bedNumber} ({ab.wardName} • {ab.roomNumber}) — ${ab.bed.dailyTariff}/24h
+                        {ab.bed.bedNumber} ({ab.wardName} • {ab.roomNumber}) — {formatMoney(ab.bed.dailyTariff)}/24h
                       </option>
                     ))}
                   </select>
