@@ -575,6 +575,21 @@ export const DEPARTMENT_LOGIN_NODES: DepartmentNode[] = [
     defaultRoute: '/lab',
     demoAccounts: [
       {
+        id: 'demo-lab-adm',
+        employeeId: 'EMP-LAB-ADM',
+        name: 'Dr. Marcus Vance',
+        designation: 'Laboratory Director & Department Admin',
+        role: RoleType.DEPARTMENT_ADMIN,
+        cadre: 'admin',
+        email: 'lab.admin@northhospital.com',
+        targetRoute: '/department/lab',
+        badge: 'Lab Admin',
+        departmentId: 'lab',
+        departmentCode: 'LAB',
+        departmentName: 'Diagnostic Laboratory',
+        avatarInitials: 'MV',
+      },
+      {
         id: 'demo-lab-doc',
         employeeId: 'EMP-PATH-01',
         name: 'Dr. Anita Roy',

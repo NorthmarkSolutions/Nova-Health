@@ -17,8 +17,10 @@ import {
 } from 'lucide-react';
 import { OrganizationSetup } from './setup/OrganizationSetup';
 import { SystemSetup } from './setup/SystemSetup';
+import { useCurrency } from '../../config/currency';
 
 export const AdminDashboard: React.FC = () => {
+  const { format: formatMoney } = useCurrency();
   const [activeMainTab, setActiveMainTab] = useState<
     'overview' | 'organization' | 'system'
   >('overview');
@@ -115,7 +117,7 @@ export const AdminDashboard: React.FC = () => {
                   <DollarSign size={24} />
                 </div>
                 <div>
-                  <div className="stat-value">$14,850</div>
+                  <div className="stat-value">{formatMoney(14850)}</div>
                   <div className="stat-label">Today's Revenue</div>
                 </div>
               </div>
@@ -209,12 +211,12 @@ export const AdminDashboard: React.FC = () => {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
                   <div style={{ padding: '0.75rem', backgroundColor: 'var(--bg-subtle)', borderRadius: '8px', fontSize: '0.8125rem' }}>
                     <div style={{ fontWeight: 600, color: 'var(--secondary)' }}>Doctor Profile Updated</div>
-                    <div style={{ color: 'var(--text-muted)' }}>Dr. Sarah Jenkins consultation fee adjusted to $75.00</div>
+                    <div style={{ color: 'var(--text-muted)' }}>Dr. Sarah Jenkins consultation fee adjusted to {formatMoney(75)}</div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-light)', marginTop: '0.25rem' }}>10 mins ago • Hospital Admin</div>
                   </div>
                   <div style={{ padding: '0.75rem', backgroundColor: 'var(--bg-subtle)', borderRadius: '8px', fontSize: '0.8125rem' }}>
                     <div style={{ fontWeight: 600, color: 'var(--secondary)' }}>Invoice Refund Settled</div>
-                    <div style={{ color: 'var(--text-muted)' }}>INV-202609-00041 refunded $50.00</div>
+                    <div style={{ color: 'var(--text-muted)' }}>INV-202609-00041 refunded {formatMoney(50)}</div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-light)', marginTop: '0.25rem' }}>32 mins ago • Cashier</div>
                   </div>
                   <div style={{ padding: '0.75rem', backgroundColor: 'var(--bg-subtle)', borderRadius: '8px', fontSize: '0.8125rem' }}>

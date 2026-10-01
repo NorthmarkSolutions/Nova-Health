@@ -1,5 +1,6 @@
 import React from 'react';
 import { X, Printer, Download, CheckCircle, FileText, QrCode } from 'lucide-react';
+import { useCurrency } from '../../../../config/currency';
 
 interface DocumentPreviewModalProps {
   isOpen: boolean;
@@ -24,6 +25,7 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
   logoText,
   printFormat = 'A4',
 }) => {
+  const { format: formatMoney, symbol } = useCurrency();
   if (!isOpen) return null;
 
   const handlePrint = () => {
@@ -314,28 +316,28 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
                     <tr style={{ backgroundColor: '#f1f5f9', borderBottom: '1px solid #cbd5e1' }}>
                       <th style={{ padding: '0.5rem', textAlign: 'left' }}>Item Description</th>
                       <th style={{ padding: '0.5rem', textAlign: 'center' }}>Qty</th>
-                      <th style={{ padding: '0.5rem', textAlign: 'right' }}>Rate ($)</th>
-                      <th style={{ padding: '0.5rem', textAlign: 'right' }}>Total ($)</th>
+                      <th style={{ padding: '0.5rem', textAlign: 'right' }}>Rate ({symbol})</th>
+                      <th style={{ padding: '0.5rem', textAlign: 'right' }}>Total ({symbol})</th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
                       <td style={{ padding: '0.5rem' }}>Cardiology Specialist Consultation</td>
                       <td style={{ padding: '0.5rem', textAlign: 'center' }}>1</td>
-                      <td style={{ padding: '0.5rem', textAlign: 'right' }}>150.00</td>
-                      <td style={{ padding: '0.5rem', textAlign: 'right' }}>150.00</td>
+                      <td style={{ padding: '0.5rem', textAlign: 'right' }}>{formatMoney(150)}</td>
+                      <td style={{ padding: '0.5rem', textAlign: 'right' }}>{formatMoney(150)}</td>
                     </tr>
                     <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
                       <td style={{ padding: '0.5rem' }}>12-Lead Electrocardiogram (ECG)</td>
                       <td style={{ padding: '0.5rem', textAlign: 'center' }}>1</td>
-                      <td style={{ padding: '0.5rem', textAlign: 'right' }}>45.00</td>
-                      <td style={{ padding: '0.5rem', textAlign: 'right' }}>45.00</td>
+                      <td style={{ padding: '0.5rem', textAlign: 'right' }}>{formatMoney(45)}</td>
+                      <td style={{ padding: '0.5rem', textAlign: 'right' }}>{formatMoney(45)}</td>
                     </tr>
                     <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
                       <td style={{ padding: '0.5rem' }}>Complete Blood Count (CBC) Panel</td>
                       <td style={{ padding: '0.5rem', textAlign: 'center' }}>1</td>
-                      <td style={{ padding: '0.5rem', textAlign: 'right' }}>35.00</td>
-                      <td style={{ padding: '0.5rem', textAlign: 'right' }}>35.00</td>
+                      <td style={{ padding: '0.5rem', textAlign: 'right' }}>{formatMoney(35)}</td>
+                      <td style={{ padding: '0.5rem', textAlign: 'right' }}>{formatMoney(35)}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -344,11 +346,11 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
                   <div style={{ width: '220px', fontSize: '0.8125rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.25rem 0' }}>
                       <span>Subtotal:</span>
-                      <strong>$230.00</strong>
+                      <strong>{formatMoney(230)}</strong>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.25rem 0' }}>
                       <span>GST / Tax (5%):</span>
-                      <span>$11.50</span>
+                      <span>{formatMoney(11.5)}</span>
                     </div>
                     <div
                       style={{
@@ -361,7 +363,7 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
                       }}
                     >
                       <strong>Total Amount:</strong>
-                      <strong>$241.50</strong>
+                      <strong>{formatMoney(241.5)}</strong>
                     </div>
                   </div>
                 </div>

@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "test:opd": "npx tsx scripts/opdJourney.test.ts",
     "test:admin": "npx tsx scripts/adminProvisioning.test.ts",
-    "test:auth": "npx tsx scripts/authScalability.test.ts"
+    "test:auth": "npx tsx scripts/authScalability.test.ts",
+    "test:nurse": "npx tsx scripts/nurseTriageBible.test.ts",
+    "test:assistant": "npx tsx scripts/assistantBible.test.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.102.8",

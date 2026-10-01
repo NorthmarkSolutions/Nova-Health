@@ -12,6 +12,7 @@ import { DepartmentScheduling } from './DepartmentScheduling';
 import { DepartmentSettings } from './DepartmentSettings';
 import { DepartmentReports } from './DepartmentReports';
 import { DepartmentOpdOperations } from './DepartmentOpdOperations';
+import { LabAdminWorkspace } from '../lab/admin/LabAdminWorkspace';
 
 export const DepartmentWorkspaceContainer: React.FC = () => {
   const { deptId } = useParams<{ deptId?: string }>();
@@ -29,7 +30,14 @@ export const DepartmentWorkspaceContainer: React.FC = () => {
 
   // Security & Scope Protection: If Department Admin tries to access a different dept URL, redirect immediately!
   useEffect(() => {
-    if (isDeptAdmin && deptId && deptId !== userAssignedDeptId && deptId !== 'opd') {
+    if (
+      isDeptAdmin &&
+      deptId &&
+      deptId !== userAssignedDeptId &&
+      deptId !== 'opd' &&
+      !(userAssignedDeptId === '9' && deptId === 'lab') &&
+      !(userAssignedDeptId === 'lab' && deptId === '9')
+    ) {
       navigate(`/department/${userAssignedDeptId}`, { replace: true });
     }
   }, [isDeptAdmin, deptId, userAssignedDeptId, navigate]);
@@ -72,6 +80,19 @@ export const DepartmentWorkspaceContainer: React.FC = () => {
     }
   };
 
+  const isLabWorkspace =
+    deptId === 'lab' ||
+    deptId === 'ws-lab' ||
+    effectiveDeptId === 'lab' ||
+    effectiveDeptId === 'ws-lab' ||
+    effectiveDeptId === '9' ||
+    workspace?.departmentCode === 'DEPT-LAB' ||
+    (user as any)?.departmentCode === 'LAB';
+
+  if (isLabWorkspace) {
+    return <LabAdminWorkspace />;
+  }
+
   return (
     <DepartmentWorkspaceLayout
       workspace={workspace}
@@ -83,3 +104,4 @@ export const DepartmentWorkspaceContainer: React.FC = () => {
     </DepartmentWorkspaceLayout>
   );
 };
+

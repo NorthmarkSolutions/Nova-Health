@@ -37,6 +37,7 @@ import {
   History,
   FileText,
 } from 'lucide-react';
+import { useCurrency } from '../../../../config/currency';
 
 // ============================================================================
 // DATA MODELS
@@ -1723,6 +1724,7 @@ export const syncDepartmentToCampus = (
 };
 
 export const CampusInfrastructureSection: React.FC = () => {
+  const { format: formatMoney, symbol } = useCurrency();
   const [buildings, setBuildings] = useState<BuildingNode[]>(() => getCampusBuildings());
 
   useEffect(() => {
@@ -3019,7 +3021,7 @@ export const CampusInfrastructureSection: React.FC = () => {
                                                           // AVAILABLE OR MAINTENANCE BED
                                                           <>
                                                             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                                              {bed.bedType} • <strong style={{ color: '#047857' }}>${bed.dailyTariff}/day</strong>
+                                                              {bed.bedType} • <strong style={{ color: '#047857' }}>{formatMoney(bed.dailyTariff)}/day</strong>
                                                             </div>
 
                                                             <div style={{ fontSize: '0.7rem', color: bed.cleanlinessStatus === 'NEEDS_CLEANING' ? '#b45309' : '#059669', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
@@ -3507,7 +3509,7 @@ export const CampusInfrastructureSection: React.FC = () => {
                 </select>
               </div>
               <div className="form-group" style={{ marginBottom: '1.25rem' }}>
-                <label className="form-label">Daily Tariff ($)</label>
+                <label className="form-label">Daily Tariff ({symbol})</label>
                 <input
                   type="number"
                   className="form-input"
@@ -6232,6 +6234,7 @@ interface AdmitModalProps {
 }
 
 const AdmitPatientModal: React.FC<AdmitModalProps> = ({ bedNumber, dailyTariff, onClose, onSubmit }) => {
+  const { format: formatMoney } = useCurrency();
   const [formData, setFormData] = useState({
     patientName: '',
     uhid: `UHID-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -6256,7 +6259,7 @@ const AdmitPatientModal: React.FC<AdmitModalProps> = ({ bedNumber, dailyTariff, 
               Admit IPD Patient to {bedNumber}
             </h4>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              Standard Tariff: ${dailyTariff}/day • Immediate Multi-Disciplinary Staff Assignment
+              Standard Tariff: {formatMoney(dailyTariff)}/day • Immediate Multi-Disciplinary Staff Assignment
             </span>
           </div>
           <button onClick={onClose} style={{ border: 'none', background: 'none', cursor: 'pointer' }}><X size={18} /></button>

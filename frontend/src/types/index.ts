@@ -296,6 +296,9 @@ export interface User {
   departmentName?: string;
   departmentCode?: string;
   doctorProfile?: DoctorProfile;
+  designation?: string;
+  employeeId?: string;
+  station?: string;
 }
 
 export interface DoctorProfile {

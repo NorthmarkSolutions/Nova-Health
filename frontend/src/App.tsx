@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { CurrencyProvider } from './config/currency';
 import { AppLayout } from './components/layout/AppLayout';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
 
@@ -24,15 +25,20 @@ import { RoleType } from './types';
 const queryClient = new QueryClient();
 
 const RoleHomeRedirect: React.FC = () => {
-  const { role, isAuthenticated } = useAuth();
+  const { role, user, isAuthenticated } = useAuth();
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  // For DEPARTMENT_ADMIN, route to their actual assigned department workspace
+  if (role === RoleType.DEPARTMENT_ADMIN) {
+    const deptId = user?.departmentId || 'opd';
+    return <Navigate to={`/department/${deptId}`} replace />;
   }
 
   const roleRoutes: Record<string, string> = {
     [RoleType.SUPER_ADMIN]: '/admin',
     [RoleType.HOSPITAL_ADMIN]: '/admin',
-    [RoleType.DEPARTMENT_ADMIN]: '/department/opd',
     [RoleType.RECEPTION_SUPERVISOR]: '/reception',
     [RoleType.RECEPTIONIST]: '/reception',
     [RoleType.DOCTOR]: '/doctor',
@@ -58,7 +64,8 @@ export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <BrowserRouter>
+        <CurrencyProvider>
+          <BrowserRouter>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/logout" element={<LogoutPage />} />
@@ -166,7 +173,8 @@ export function App() {
             />
           </Routes>
         </BrowserRouter>
-      </AuthProvider>
+      </CurrencyProvider>
+    </AuthProvider>
     </QueryClientProvider>
   );
 }

@@ -42,6 +42,7 @@ import {
   saveDepartmentTariffMaster,
   updateDoctorConsultationFee,
 } from './departmentWorkspaceStore';
+import { useCurrency } from '../../config/currency';
 
 interface Props {
   workspace: DepartmentWorkspace;
@@ -49,6 +50,7 @@ interface Props {
 }
 
 export const DepartmentSettings: React.FC<Props> = ({ workspace, onWorkspaceUpdated }) => {
+  const { format: formatMoney, symbol } = useCurrency();
   // Navigation Subtab State
   const [activeTab, setActiveTab] = useState<'capabilities' | 'tariffs'>('tariffs');
 
@@ -461,7 +463,7 @@ export const DepartmentSettings: React.FC<Props> = ({ workspace, onWorkspaceUpda
                 {totalDoctors} Doctors
               </div>
               <div style={{ fontSize: '0.75rem', color: '#0284c7', fontWeight: 600, marginTop: '0.2rem' }}>
-                Avg Standard Fee: ${avgDoctorFee}.00
+                Avg Standard Fee: {formatMoney(avgDoctorFee)}
               </div>
             </div>
 
@@ -476,7 +478,7 @@ export const DepartmentSettings: React.FC<Props> = ({ workspace, onWorkspaceUpda
                 {totalWards} Wards • {totalBeds} Beds
               </div>
               <div style={{ fontSize: '0.75rem', color: '#16a34a', fontWeight: 600, marginTop: '0.2rem' }}>
-                From ${tariffMaster.wardTariffs[0]?.dailyRate || 120}.00 / 24h
+                From {formatMoney(tariffMaster.wardTariffs[0]?.dailyRate || 120)} / 24h
               </div>
             </div>
 
@@ -503,10 +505,10 @@ export const DepartmentSettings: React.FC<Props> = ({ workspace, onWorkspaceUpda
                 <Ticket size={16} color="#9333ea" />
               </div>
               <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#7e22ce', marginTop: '0.25rem' }}>
-                ${tariffMaster.intakeRegistrationFee + tariffMaster.triageVitalsFee}.00
+                {formatMoney(tariffMaster.intakeRegistrationFee + tariffMaster.triageVitalsFee)}
               </div>
               <div style={{ fontSize: '0.75rem', color: '#9333ea', fontWeight: 600, marginTop: '0.2rem' }}>
-                Reg: ${tariffMaster.intakeRegistrationFee} • Triage: ${tariffMaster.triageVitalsFee}
+                Reg: {formatMoney(tariffMaster.intakeRegistrationFee)} • Triage: {formatMoney(tariffMaster.triageVitalsFee)}
               </div>
             </div>
           </div>
@@ -645,7 +647,7 @@ export const DepartmentSettings: React.FC<Props> = ({ workspace, onWorkspaceUpda
                           </td>
                           <td>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                              <span style={{ fontWeight: 800, color: '#0284c7' }}>$</span>
+                              <span style={{ fontWeight: 800, color: '#0284c7' }}>{symbol}</span>
                               <input
                                 type="number"
                                 min="0"
@@ -655,14 +657,14 @@ export const DepartmentSettings: React.FC<Props> = ({ workspace, onWorkspaceUpda
                                 style={{ fontWeight: 800, color: '#0284c7', fontSize: '0.875rem', width: '80px', padding: '0.35rem 0.5rem' }}
                                 value={doc.standardFee}
                                 onChange={(e) =>
-                                  handleDoctorFeeChange(doc.doctorId, 'standardFee', Number(e.target.value))
+                                 handleDoctorFeeChange(doc.doctorId, 'standardFee', Number(e.target.value))
                                 }
                               />
                             </div>
                           </td>
                           <td>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                              <span style={{ fontWeight: 700, color: 'var(--text-muted)' }}>$</span>
+                              <span style={{ fontWeight: 700, color: 'var(--text-muted)' }}>{symbol}</span>
                               <input
                                 type="number"
                                 min="0"
@@ -672,14 +674,14 @@ export const DepartmentSettings: React.FC<Props> = ({ workspace, onWorkspaceUpda
                                 style={{ fontSize: '0.8125rem', width: '75px', padding: '0.35rem 0.5rem' }}
                                 value={doc.followUpFee || Math.round(doc.standardFee * 0.6)}
                                 onChange={(e) =>
-                                  handleDoctorFeeChange(doc.doctorId, 'followUpFee', Number(e.target.value))
+                                 handleDoctorFeeChange(doc.doctorId, 'followUpFee', Number(e.target.value))
                                 }
                               />
                             </div>
                           </td>
                           <td>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                              <span style={{ fontWeight: 700, color: '#dc2626' }}>$</span>
+                              <span style={{ fontWeight: 700, color: '#dc2626' }}>{symbol}</span>
                               <input
                                 type="number"
                                 min="0"
@@ -689,7 +691,7 @@ export const DepartmentSettings: React.FC<Props> = ({ workspace, onWorkspaceUpda
                                 style={{ fontSize: '0.8125rem', width: '75px', padding: '0.35rem 0.5rem', color: '#b91c1c' }}
                                 value={doc.emergencyFee || Math.round(doc.standardFee * 1.5)}
                                 onChange={(e) =>
-                                  handleDoctorFeeChange(doc.doctorId, 'emergencyFee', Number(e.target.value))
+                                 handleDoctorFeeChange(doc.doctorId, 'emergencyFee', Number(e.target.value))
                                 }
                               />
                             </div>
@@ -711,9 +713,9 @@ export const DepartmentSettings: React.FC<Props> = ({ workspace, onWorkspaceUpda
                                     fontWeight: doc.standardFee === preset ? 800 : 500,
                                     cursor: 'pointer',
                                   }}
-                                  title={`Apply $${preset} fee`}
+                                  title={`Apply ${formatMoney(preset)} fee`}
                                 >
-                                  ${preset}
+                                  {formatMoney(preset)}
                                 </button>
                               ))}
                             </div>
@@ -776,7 +778,7 @@ export const DepartmentSettings: React.FC<Props> = ({ workspace, onWorkspaceUpda
                         </td>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                            <span style={{ fontWeight: 800, color: '#15803d' }}>$</span>
+                            <span style={{ fontWeight: 800, color: '#15803d' }}>{symbol}</span>
                             <input
                               type="number"
                               min="0"
@@ -794,7 +796,7 @@ export const DepartmentSettings: React.FC<Props> = ({ workspace, onWorkspaceUpda
                         </td>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                            <span style={{ fontWeight: 700, color: 'var(--secondary)' }}>$</span>
+                            <span style={{ fontWeight: 700, color: 'var(--secondary)' }}>{symbol}</span>
                             <input
                               type="number"
                               min="0"
@@ -812,7 +814,7 @@ export const DepartmentSettings: React.FC<Props> = ({ workspace, onWorkspaceUpda
                         </td>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                            <span style={{ fontWeight: 700, color: 'var(--secondary)' }}>$</span>
+                            <span style={{ fontWeight: 700, color: 'var(--secondary)' }}>{symbol}</span>
                             <input
                               type="number"
                               min="0"
@@ -830,10 +832,10 @@ export const DepartmentSettings: React.FC<Props> = ({ workspace, onWorkspaceUpda
                         </td>
                         <td>
                           <div style={{ fontWeight: 900, fontSize: '0.9375rem', color: 'var(--secondary)' }}>
-                            ${(ward.dailyRate || 0) + (ward.nursingChargePerDay || 0)}.00
+                            {formatMoney((ward.dailyRate || 0) + (ward.nursingChargePerDay || 0))}
                           </div>
                           <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
-                            Bed (${ward.dailyRate}) + Nurse (${ward.nursingChargePerDay})
+                            Bed ({formatMoney(ward.dailyRate)}) + Nurse ({formatMoney(ward.nursingChargePerDay)})
                           </div>
                         </td>
                       </tr>
@@ -905,7 +907,7 @@ export const DepartmentSettings: React.FC<Props> = ({ workspace, onWorkspaceUpda
                         </td>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                            <span style={{ fontWeight: 700, color: 'var(--secondary)' }}>$</span>
+                            <span style={{ fontWeight: 700, color: 'var(--secondary)' }}>{symbol}</span>
                             <input
                               type="number"
                               min="0"
@@ -923,7 +925,7 @@ export const DepartmentSettings: React.FC<Props> = ({ workspace, onWorkspaceUpda
                         </td>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                            <span style={{ fontWeight: 700, color: '#ea580c' }}>$</span>
+                            <span style={{ fontWeight: 700, color: '#ea580c' }}>{symbol}</span>
                             <input
                               type="number"
                               min="0"
@@ -969,10 +971,10 @@ export const DepartmentSettings: React.FC<Props> = ({ workspace, onWorkspaceUpda
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <div style={{ padding: '1rem', borderRadius: '10px', backgroundColor: '#f8fafc', border: '1px solid var(--border-color)' }}>
                   <label className="form-label" style={{ fontWeight: 700, fontSize: '0.8125rem' }}>
-                    Department Patient Registration Fee ($)
+                    Department Patient Registration Fee ({symbol})
                   </label>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.35rem' }}>
-                    <span style={{ fontWeight: 800, fontSize: '1.125rem', color: '#7e22ce' }}>$</span>
+                    <span style={{ fontWeight: 800, fontSize: '1.125rem', color: '#7e22ce' }}>{symbol}</span>
                     <input
                       type="number"
                       min="0"
@@ -993,10 +995,10 @@ export const DepartmentSettings: React.FC<Props> = ({ workspace, onWorkspaceUpda
 
                 <div style={{ padding: '1rem', borderRadius: '10px', backgroundColor: '#f8fafc', border: '1px solid var(--border-color)' }}>
                   <label className="form-label" style={{ fontWeight: 700, fontSize: '0.8125rem' }}>
-                    Nurse Triage & Vitals Assessment Fee ($)
+                    Nurse Triage & Vitals Assessment Fee ({symbol})
                   </label>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.35rem' }}>
-                    <span style={{ fontWeight: 800, fontSize: '1.125rem', color: '#0284c7' }}>$</span>
+                    <span style={{ fontWeight: 800, fontSize: '1.125rem', color: '#0284c7' }}>{symbol}</span>
                     <input
                       type="number"
                       min="0"
@@ -1080,7 +1082,7 @@ export const DepartmentSettings: React.FC<Props> = ({ workspace, onWorkspaceUpda
                     Consultant Fee
                   </span>
                   <div style={{ fontSize: '1.375rem', fontWeight: 900, color: '#38bdf8', marginTop: '0.2rem' }}>
-                    ${simulatedDoctor.standardFee}.00
+                    {formatMoney(simulatedDoctor.standardFee)}
                   </div>
                   <div style={{ fontSize: '0.6875rem', color: '#cbd5e1' }}>
                     Standard OPD Consultation
@@ -1092,7 +1094,7 @@ export const DepartmentSettings: React.FC<Props> = ({ workspace, onWorkspaceUpda
                     Follow-Up Fee
                   </span>
                   <div style={{ fontSize: '1.375rem', fontWeight: 900, color: '#a78bfa', marginTop: '0.2rem' }}>
-                    ${simulatedDoctor.followUpFee || Math.round(simulatedDoctor.standardFee * 0.6)}.00
+                    {formatMoney(simulatedDoctor.followUpFee || Math.round(simulatedDoctor.standardFee * 0.6))}
                   </div>
                   <div style={{ fontSize: '0.6875rem', color: '#cbd5e1' }}>
                     Within 14 days of visit
@@ -1104,7 +1106,7 @@ export const DepartmentSettings: React.FC<Props> = ({ workspace, onWorkspaceUpda
                     Chamber Facility
                   </span>
                   <div style={{ fontSize: '1.375rem', fontWeight: 900, color: '#fb923c', marginTop: '0.2rem' }}>
-                    ${tariffMaster.roomTariffs[0]?.facilityFee || 15}.00
+                    {formatMoney(tariffMaster.roomTariffs[0]?.facilityFee || 15)}
                   </div>
                   <div style={{ fontSize: '0.6875rem', color: '#cbd5e1' }}>
                     Room 101 Maintenance
@@ -1116,7 +1118,7 @@ export const DepartmentSettings: React.FC<Props> = ({ workspace, onWorkspaceUpda
                     Reg + Triage Fee
                   </span>
                   <div style={{ fontSize: '1.375rem', fontWeight: 900, color: '#4ade80', marginTop: '0.2rem' }}>
-                    ${tariffMaster.intakeRegistrationFee + tariffMaster.triageVitalsFee}.00
+                    {formatMoney(tariffMaster.intakeRegistrationFee + tariffMaster.triageVitalsFee)}
                   </div>
                   <div style={{ fontSize: '0.6875rem', color: '#cbd5e1' }}>
                     One-time intake charges
@@ -1128,12 +1130,12 @@ export const DepartmentSettings: React.FC<Props> = ({ workspace, onWorkspaceUpda
                     Total Estimated Bill
                   </span>
                   <div style={{ fontSize: '1.625rem', fontWeight: 900, color: '#facc15', marginTop: '0.2rem' }}>
-                    $
-                    {simulatedDoctor.standardFee +
-                      (tariffMaster.roomTariffs[0]?.facilityFee || 15) +
-                      tariffMaster.intakeRegistrationFee +
-                      tariffMaster.triageVitalsFee}
-                    .00
+                    {formatMoney(
+                      simulatedDoctor.standardFee +
+                        (tariffMaster.roomTariffs[0]?.facilityFee || 15) +
+                        tariffMaster.intakeRegistrationFee +
+                        tariffMaster.triageVitalsFee
+                    )}
                   </div>
                   <div style={{ fontSize: '0.6875rem', color: '#94a3b8' }}>
                     Cashier Invoice Summary

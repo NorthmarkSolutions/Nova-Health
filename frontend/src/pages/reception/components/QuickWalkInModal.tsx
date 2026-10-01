@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { SharedQueueToken, SharedPatient, patientJourneyService } from '../../../services/patientJourneyService';
 import { DepartmentTariffMaster } from '../../../types';
+import { useCurrency } from '../../../config/currency';
 
 interface Props {
   isOpen: boolean;
@@ -45,6 +46,8 @@ export const QuickWalkInModal: React.FC<Props> = ({
   onTokenGenerated,
 }) => {
   if (!isOpen) return null;
+
+  const { format: formatMoney } = useCurrency();
 
   // Form State
   const [patientMode, setPatientMode] = useState<'existing' | 'new'>('existing');
@@ -381,7 +384,7 @@ export const QuickWalkInModal: React.FC<Props> = ({
               >
                 {doctorsRoster.map((doc, idx) => (
                   <option key={idx} value={doc.name}>
-                    {doc.name} — {doc.dept} (${doc.fee})
+                    {doc.name} — {doc.dept} ({formatMoney(doc.fee)})
                   </option>
                 ))}
               </select>
@@ -475,21 +478,21 @@ export const QuickWalkInModal: React.FC<Props> = ({
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem', fontSize: '0.75rem', borderTop: '1px solid #1e293b', paddingTop: '0.5rem' }}>
               <div>
                 <span style={{ color: '#94a3b8' }}>Consultation Fee</span>
-                <div style={{ fontWeight: 800, fontSize: '1rem', color: '#38bdf8' }}>${consultationFee}.00</div>
+                <div style={{ fontWeight: 800, fontSize: '1rem', color: '#38bdf8' }}>{formatMoney(consultationFee)}</div>
               </div>
               <div>
                 <span style={{ color: '#94a3b8' }}>Nurse Triage</span>
-                <div style={{ fontWeight: 800, fontSize: '1rem', color: '#a78bfa' }}>${triageFee}.00</div>
+                <div style={{ fontWeight: 800, fontSize: '1rem', color: '#a78bfa' }}>{formatMoney(triageFee)}</div>
               </div>
               <div>
                 <span style={{ color: '#94a3b8' }}>Registration UHID</span>
                 <div style={{ fontWeight: 800, fontSize: '1rem', color: '#4ade80' }}>
-                  {patientMode === 'new' ? `$${regFee}.00` : '$0.00 (Exempt)'}
+                  {patientMode === 'new' ? formatMoney(regFee) : `${formatMoney(0)} (Exempt)`}
                 </div>
               </div>
               <div style={{ borderLeft: '1px solid #334155', paddingLeft: '0.75rem' }}>
                 <span style={{ color: '#facc15', fontWeight: 800 }}>Total Counter Bill</span>
-                <div style={{ fontWeight: 900, fontSize: '1.25rem', color: '#facc15' }}>${totalFee}.00</div>
+                <div style={{ fontWeight: 900, fontSize: '1.25rem', color: '#facc15' }}>{formatMoney(totalFee)}</div>
               </div>
             </div>
 

@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F9FAFB;font-family:Inter,sans-serif;color:#111827;-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}
+a{color:#2563EB;text-decoration:none}a:hover{color:#1D4ED8;text-decoration:underline}
+input,textarea,button{font-family:inherit}
+</style>
+</helmet>
+<div style="display:flex;min-height:100vh;background:#F9FAFB">
+  <aside style="width:260px;flex-shrink:0;background:#FFFFFF;border-right:1px solid #E5E7EB;display:flex;flex-direction:column;padding:20px 16px;gap:20px;position:sticky;top:0;height:100vh">
+    <div style="display:flex;align-items:center;gap:10px;padding:0 4px">
+      <div style="width:36px;height:36px;border-radius:10px;background:#2563EB;display:flex;align-items:center;justify-content:center;color:#FFFFFF;font-weight:700;font-size:16px">N</div>
+      <div style="display:flex;flex-direction:column">
+        <span style="font-size:15px;font-weight:600">North Hospital</span>
+        <span style="font-size:12px;color:#6B7280">Clinical Enterprise HMS</span>
+      </div>
+    </div>
+    <div style="border:1px solid #E5E7EB;border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:2px">
+      <span style="font-size:12px;color:#6B7280">Current department</span>
+      <span style="font-size:14px;font-weight:600">Diagnostic Lab</span>
+      <span style="font-size:12px;color:#6B7280">Bench 2 · Hematology &amp; Chemistry</span>
+    </div>
+    <nav style="display:flex;flex-direction:column;gap:4px">
+      <span style="font-size:12px;font-weight:600;color:#6B7280;letter-spacing:0.04em;padding:0 12px 6px">WORKSPACE</span>
+      <div style="display:flex;align-items:center;gap:10px;height:40px;padding:0 12px;border-radius:10px;background:#EFF6FF;color:#1D4ED8;font-size:14px;font-weight:600">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 3h6"></path><path d="M10 3v6L4.5 19.5A1 1 0 0 0 5.4 21h13.2a1 1 0 0 0 .9-1.5L14 9V3"></path></svg>
+        <span style="flex:1">Test Queue</span>
+        <span style="font-size:12px;font-weight:600;color:#1D4ED8">24</span>
+      </div>
+      <a href="Lab Technician Equipment.dc.html" style="display:flex;align-items:center;gap:10px;height:40px;padding:0 12px;border-radius:10px;color:#374151;font-size:14px;font-weight:500;text-decoration:none">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8M12 16v4"></path></svg>
+        <span style="flex:1">Equipment Status</span>
+        <span style="width:8px;height:8px;border-radius:50%;background:#F59E0B"></span>
+      </a>
+    </nav>
+    <div style="margin-top:auto;display:flex;align-items:center;gap:10px;padding:12px;border-top:1px solid #E5E7EB">
+      <div style="width:36px;height:36px;border-radius:50%;background:#F3F4F6;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:#374151">AV</div>
+      <div style="display:flex;flex-direction:column;flex:1;min-width:0">
+        <span style="font-size:14px;font-weight:600">Anjali Verma</span>
+        <span style="font-size:12px;color:#6B7280">Senior Lab Technologist</span>
+      </div>
+      <span style="font-size:13px;color:#6B7280">Log out</span>
+    </div>
+  </aside>
+
+  <main style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <div style="min-height:60px;background:#FFFFFF;border-bottom:1px solid #E5E7EB;display:flex;align-items:center;gap:12px;padding:12px 24px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:#6B7280;flex:1;min-width:200px;flex-wrap:wrap;white-space:nowrap">
+        <span>North Hospital</span><span>/</span><span style="color:#111827;font-weight:500">Laboratory</span>
+        <span style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:#15803D;background:#F0FDF4;border-radius:999px;padding:2px 8px"><span style="width:6px;height:6px;border-radius:50%;background:#16A34A"></span>Live</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;height:36px;padding:0 12px;border:1px solid #E5E7EB;border-radius:10px;width:280px;max-width:100%;color:#6B7280;font-size:13px">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+        Search patient, UHID or order
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;height:36px;padding:0 12px;border:1px solid #E5E7EB;border-radius:10px;font-size:13px;color:#374151;white-space:nowrap">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
+        Morning shift · 07:00–15:00
+      </div>
+    </div>
+
+    <div style="padding:24px;display:flex;flex-direction:column;gap:24px">
+      <header style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <h1 style="margin:0;font-size:32px;font-weight:700;letter-spacing:-0.02em">Lab Technician Workspace</h1>
+          <p style="margin:0;font-size:14px;color:#6B7280">Collect, process and enter results for orders assigned to you. Results go to pathologist review before release.</p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button style="white-space:nowrap;flex-shrink:0;height:40px;padding:0 16px;border-radius:10px;border:1px solid #E5E7EB;background:#FFFFFF;font-size:14px;font-weight:500;color:#111827">Print labels</button>
+          <button style="white-space:nowrap;flex-shrink:0;height:40px;padding:0 16px;border-radius:10px;border:1px solid #2563EB;background:#2563EB;font-size:14px;font-weight:600;color:#FFFFFF">Scan specimen barcode</button>
+        </div>
+      </header>
+
+      <section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
+        <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:20px;min-height:120px;display:flex;flex-direction:column;justify-content:space-between;gap:12px;box-shadow:0 1px 2px rgba(17,24,39,0.04)">
+          <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;color:#6B7280;font-weight:500">Waiting for collection</span><span style="font-size:12px;color:#6B7280">2 STAT</span></div>
+          <div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:30px;font-weight:700;letter-spacing:-0.02em">8</span><span style="font-size:13px;color:#6B7280">orders</span></div>
+        </div>
+        <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:20px;min-height:120px;display:flex;flex-direction:column;justify-content:space-between;gap:12px;box-shadow:0 1px 2px rgba(17,24,39,0.04)">
+          <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;color:#6B7280;font-weight:500">In progress</span><span style="font-size:12px;color:#6B7280">collected, not resulted</span></div>
+          <div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:30px;font-weight:700;letter-spacing:-0.02em">11</span><span style="font-size:13px;color:#6B7280">orders</span></div>
+        </div>
+        <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:20px;min-height:120px;display:flex;flex-direction:column;justify-content:space-between;gap:12px;box-shadow:0 1px 2px rgba(17,24,39,0.04)">
+          <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;color:#6B7280;font-weight:500">Entered today</span><span style="font-size:12px;font-weight:600;color:#15803D">+6 vs yesterday</span></div>
+          <div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:30px;font-weight:700;letter-spacing:-0.02em">37</span><span style="font-size:13px;color:#6B7280">results</span></div>
+        </div>
+        <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:20px;min-height:120px;display:flex;flex-direction:column;justify-content:space-between;gap:12px;box-shadow:0 1px 2px rgba(17,24,39,0.04)">
+          <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;color:#6B7280;font-weight:500">Critical flags raised</span><span style="font-size:12px;font-weight:600;color:#B91C1C">today</span></div>
+          <div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:30px;font-weight:700;letter-spacing:-0.02em;color:#B91C1C">2</span><span style="font-size:13px;color:#6B7280">sent to pathologist</span></div>
+        </div>
+      </section>
+
+      <section style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start">
+        <div style="flex:999 1 620px;min-width:0;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;box-shadow:0 1px 2px rgba(17,24,39,0.04);overflow:hidden">
+          <div style="padding:20px 20px 16px;display:flex;flex-direction:column;gap:16px;border-bottom:1px solid #E5E7EB">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+              <div style="display:flex;flex-direction:column;gap:2px">
+                <h2 style="margin:0;font-size:18px;font-weight:600">Test queue</h2>
+                <span style="font-size:13px;color:#6B7280">Orders update live as doctors, wards and OT place them</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;height:36px;padding:0 12px;border:1px solid #E5E7EB;border-radius:10px;min-width:220px;color:#6B7280;font-size:13px">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+                Filter by patient or test
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <span style="white-space:nowrap;height:32px;display:flex;align-items:center;padding:0 12px;border-radius:999px;background:#2563EB;color:#FFFFFF;font-size:13px;font-weight:600">All · 24</span>
+              <span style="white-space:nowrap;height:32px;display:flex;align-items:center;padding:0 12px;border-radius:999px;border:1px solid #E5E7EB;color:#374151;font-size:13px;font-weight:500">Ordered · 8</span>
+              <span style="white-space:nowrap;height:32px;display:flex;align-items:center;padding:0 12px;border-radius:999px;border:1px solid #E5E7EB;color:#374151;font-size:13px;font-weight:500">Collected · 6</span>
+              <span style="white-space:nowrap;height:32px;display:flex;align-items:center;padding:0 12px;border-radius:999px;border:1px solid #E5E7EB;color:#374151;font-size:13px;font-weight:500">Processing · 5</span>
+              <span style="white-space:nowrap;height:32px;display:flex;align-items:center;gap:6px;padding:0 12px;border-radius:999px;border:1px solid #FDE68A;background:#FFFBEB;color:#92400E;font-size:13px;font-weight:600">Returned for re-test · 1</span>
+              <span style="white-space:nowrap;height:32px;display:flex;align-items:center;padding:0 12px;border-radius:999px;border:1px solid #E5E7EB;color:#B91C1C;font-size:13px;font-weight:600">STAT only</span>
+            </div>
+          </div>
+          <div style="overflow-x:auto">
+            <div style="min-width:680px">
+              <div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1.3fr) 84px 124px 176px;gap:12px;align-items:center;height:44px;padding:0 20px;background:#F9FAFB;border-bottom:1px solid #E5E7EB;font-size:12px;font-weight:600;color:#6B7280;letter-spacing:0.02em">
+                <span>PATIENT · ORDER</span><span>TEST · ORDERED BY</span><span>PRIORITY</span><span>STATUS</span><span style="text-align:right">ACTION</span>
+              </div>
+              <sc-for list="{{ rows }}" as="r" hint-placeholder-count="7">
+                <div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1.3fr) 84px 124px 176px;gap:12px;align-items:center;min-height:64px;padding:10px 20px;border-bottom:1px solid #F3F4F6;background:{{ r.rowBg }}">
+                  <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
+                    <span style="font-size:14px;font-weight:600">{{ r.name }}</span>
+                    <span style="font-size:12px;color:#6B7280;font-family:'JetBrains Mono',monospace">{{ r.meta }}</span>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
+                    <span style="font-size:14px;font-weight:500">{{ r.test }}</span>
+                    <span style="font-size:12px;color:#6B7280">{{ r.doctor }}</span>
+                  </div>
+                  <span style="justify-self:start;white-space:nowrap;font-size:12px;font-weight:600;padding:3px 8px;border-radius:6px;background:{{ r.pBg }};color:{{ r.pFg }}">{{ r.priority }}</span>
+                  <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start">
+                    <span style="white-space:nowrap;font-size:12px;font-weight:600;padding:3px 8px;border-radius:999px;background:{{ r.sBg }};color:{{ r.sFg }}">{{ r.status }}</span>
+                    <sc-if value="{{ r.returned }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px;font-weight:600;color:#92400E">↺ Returned by Dr. Menon</span></sc-if>
+                  </div>
+                  <div style="display:flex;gap:8px;justify-content:flex-end">
+                    <button style="white-space:nowrap;flex-shrink:0;height:36px;padding:0 12px;border-radius:10px;font-size:13px;font-weight:600;border:1px solid {{ r.bBorder }};background:{{ r.bBg }};color:{{ r.bFg }};min-width:132px">{{ r.action }}</button>
+                    <button style="white-space:nowrap;flex-shrink:0;width:36px;height:36px;border-radius:10px;border:1px solid #E5E7EB;background:#FFFFFF;color:#6B7280;font-size:16px;line-height:1">⋯</button>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 20px;font-size:13px;color:#6B7280">
+            <span>Showing 7 of 24 orders · sorted by priority, then wait time</span>
+            <span>1 / 4</span>
+          </div>
+        </div>
+
+        <div style="flex:1 1 420px;min-width:0;display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:12px;font-weight:600;color:#6B7280;letter-spacing:0.04em">ACTIVE ORDER</span>
+            <span style="font-size:12px;font-weight:600;color:#1D4ED8;background:#EFF6FF;border-radius:6px;padding:3px 8px">{{ variantLabel }}</span>
+          </div>
+
+          <sc-if value="{{ isA }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;box-shadow:0 1px 3px rgba(17,24,39,0.06);display:flex;flex-direction:column">
+              <div style="padding:20px;display:flex;flex-direction:column;gap:16px;border-bottom:1px solid #E5E7EB">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+                  <div style="display:flex;flex-direction:column;gap:4px">
+                    <h3 style="margin:0;font-size:20px;font-weight:600">Enter result · Complete blood count</h3>
+                    <span style="font-size:13px;color:#6B7280;font-family:'JetBrains Mono',monospace">LAB-2609-0142 · SPM-88213</span>
+                  </div>
+                  <span style="white-space:nowrap;font-size:12px;font-weight:600;padding:3px 8px;border-radius:6px;background:#FEF2F2;color:#B91C1C">STAT</span>
+                </div>
+                <div style="display:flex;gap:12px;align-items:center;padding:12px;border-radius:10px;background:#F9FAFB">
+                  <div style="width:40px;height:40px;border-radius:50%;background:#FFFFFF;border:1px solid #E5E7EB;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600">AS</div>
+                  <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0">
+                    <span style="font-size:14px;font-weight:600">Aarav Sharma · 34 y · Male</span>
+                    <span style="font-size:12px;color:#6B7280">UHID-202609-00031 · Dr. Sarah Jenkins, OPD Room 101</span>
+                  </div>
+                  <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+                    <span style="font-size:12px;color:#6B7280">EDTA whole blood</span>
+                    <span style="font-size:12px;color:#6B7280">Collected 09:52</span>
+                  </div>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px">
+                  <sc-for list="{{ steps }}" as="s" hint-placeholder-count="8">
+                    <div style="display:flex;flex-direction:column;gap:6px">
+                      <div style="height:4px;border-radius:2px;background:{{ s.bar }}"></div>
+                      <span style="font-size:11px;line-height:1.25;color:{{ s.fg }};font-weight:{{ s.weight }}">{{ s.label }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column">
+                <div style="display:grid;grid-template-columns:minmax(0,1.3fr) 92px minmax(0,0.9fr) 64px;gap:10px;align-items:center;height:40px;padding:0 20px;background:#F9FAFB;border-bottom:1px solid #E5E7EB;font-size:12px;font-weight:600;color:#6B7280">
+                  <span>PARAMETER</span><span>RESULT</span><span>REFERENCE</span><span style="text-align:right">FLAG</span>
+                </div>
+                <sc-for list="{{ params }}" as="p" hint-placeholder-count="9">
+                  <div style="display:grid;grid-template-columns:minmax(0,1.3fr) 92px minmax(0,0.9fr) 64px;gap:10px;align-items:center;min-height:52px;padding:6px 20px;border-bottom:1px solid #F3F4F6">
+                    <div style="display:flex;flex-direction:column;min-width:0">
+                      <span style="font-size:14px;font-weight:500">{{ p.name }}</span>
+                      <span style="font-size:12px;color:#6B7280">{{ p.unit }}</span>
+                    </div>
+                    <div style="height:40px;border-radius:8px;border:1px solid {{ p.inBorder }};background:{{ p.inBg }};display:flex;align-items:center;padding:0 10px;font-size:14px;font-weight:600;color:{{ p.inFg }};font-variant-numeric:tabular-nums">{{ p.display }}</div>
+                    <span style="font-size:13px;color:#6B7280;font-variant-numeric:tabular-nums">{{ p.ref }}</span>
+                    <span style="justify-self:end;white-space:nowrap;font-size:12px;font-weight:600;padding:3px 8px;border-radius:6px;background:{{ p.fBg }};color:{{ p.fFg }}">{{ p.flag }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">
+                <div style="display:flex;gap:16px;font-size:13px;color:#374151;flex-wrap:wrap">
+                  <span><b style="color:#B45309">4</b> out of range</span><span><b>0</b> critical</span><span><b>2</b> pending</span>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:6px">
+                  <label style="font-size:13px;font-weight:600">Technician note</label>
+                  <div style="min-height:72px;border:1px solid #E5E7EB;border-radius:10px;padding:10px 12px;font-size:14px;color:#374151;line-height:1.5">Run on Sysmex XN-1000. No clots, sample adequate. Smear to follow for differential.</div>
+                </div>
+              </div>
+              <div style="padding:16px 20px;border-top:1px solid #E5E7EB;display:flex;flex-direction:column;gap:10px;background:#FFFFFF;border-radius:0 0 12px 12px">
+                <div style="display:flex;gap:8px">
+                  <button style="white-space:nowrap;flex-shrink:0;height:40px;padding:0 16px;border-radius:10px;border:1px solid #E5E7EB;background:#FFFFFF;font-size:14px;font-weight:500">Save draft</button>
+                  <button style="white-space:nowrap;flex-shrink:0;flex:1;height:40px;padding:0 16px;border-radius:10px;border:1px solid #2563EB;background:#2563EB;color:#FFFFFF;font-size:14px;font-weight:600">Submit for pathologist review</button>
+                </div>
+                <span style="font-size:12px;color:#6B7280;text-wrap:pretty">Moves to the pathologist's review queue only. Doctor, billing and the patient record update after sign-off.</span>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isB }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;box-shadow:0 1px 3px rgba(17,24,39,0.06);display:flex;flex-direction:column">
+              <div style="padding:20px;display:flex;flex-direction:column;gap:14px;border-bottom:1px solid #E5E7EB">
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+                  <div style="display:flex;align-items:center;gap:12px;min-width:0">
+                    <div style="width:40px;height:40px;border-radius:50%;background:#F3F4F6;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;flex-shrink:0">AS</div>
+                    <div style="display:flex;flex-direction:column;min-width:0">
+                      <span style="font-size:16px;font-weight:600">Aarav Sharma</span>
+                      <span style="font-size:12px;color:#6B7280">34 y · M · UHID-202609-00031</span>
+                    </div>
+                  </div>
+                  <span style="white-space:nowrap;font-size:12px;font-weight:600;padding:3px 8px;border-radius:6px;background:#FEF2F2;color:#B91C1C">STAT</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap">
+                  <h3 style="margin:0;font-size:20px;font-weight:600">Complete blood count</h3>
+                  <span style="font-size:13px;color:#6B7280">Step 6 of 8 · Result entry</span>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                  <sc-for list="{{ abnormal }}" as="a" hint-placeholder-count="4">
+                    <span style="font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;background:#FFFBEB;color:#92400E;border:1px solid #FDE68A">{{ a }}</span>
+                  </sc-for>
+                </div>
+              </div>
+              <sc-for list="{{ groups }}" as="g" hint-placeholder-count="3">
+                <div style="display:flex;flex-direction:column">
+                  <div style="padding:14px 20px 6px;font-size:12px;font-weight:600;color:#6B7280;letter-spacing:0.04em">{{ g.title }}</div>
+                  <sc-for list="{{ g.items }}" as="p" hint-placeholder-count="3">
+                    <div style="display:grid;grid-template-columns:minmax(0,1fr) 96px minmax(0,1fr);gap:14px;align-items:center;min-height:56px;padding:6px 20px">
+                      <div style="display:flex;flex-direction:column;min-width:0">
+                        <span style="font-size:14px;font-weight:500">{{ p.name }}</span>
+                        <span style="font-size:12px;color:#6B7280">{{ p.ref }} {{ p.unit }}</span>
+                      </div>
+                      <div style="height:40px;border-radius:8px;border:1px solid {{ p.inBorder }};background:{{ p.inBg }};display:flex;align-items:center;justify-content:flex-end;padding:0 10px;font-size:15px;font-weight:600;color:{{ p.inFg }};font-variant-numeric:tabular-nums">{{ p.display }}</div>
+                      <div style="display:flex;flex-direction:column;gap:6px">
+                        <div style="position:relative;height:6px;border-radius:3px;background:#F3F4F6">
+                          <div style="position:absolute;left:25%;width:50%;top:0;bottom:0;border-radius:3px;background:#DCFCE7"></div>
+                          <sc-if value="{{ p.hasVal }}" hint-placeholder-val="{{ true }}"><div style="position:absolute;top:-4px;width:4px;height:14px;border-radius:2px;margin-left:-2px;left:{{ p.pos }};background:{{ p.mark }}"></div></sc-if>
+                        </div>
+                        <span style="font-size:12px;font-weight:600;color:{{ p.fFg }}">{{ p.flagLong }}</span>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-for>
+              <div style="margin:12px 20px 0;padding:14px 16px;border:1px solid #E5E7EB;border-radius:10px;display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <span style="font-size:14px;font-weight:600">Specimen journey</span>
+                  <span style="font-size:12px;color:#6B7280">SPM-88213 · EDTA</span>
+                </div>
+                <sc-for list="{{ steps }}" as="s" hint-placeholder-count="8">
+                  <div style="display:flex;align-items:center;gap:10px;font-size:13px">
+                    <span style="width:10px;height:10px;border-radius:50%;flex-shrink:0;background:{{ s.dot }};border:2px solid {{ s.bar }}"></span>
+                    <span style="flex:1;color:{{ s.fg }};font-weight:{{ s.weight }}">{{ s.label }}</span>
+                    <span style="font-size:12px;color:#6B7280;font-variant-numeric:tabular-nums">{{ s.time }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="padding:16px 20px 0;display:flex;flex-direction:column;gap:6px">
+                <label style="font-size:13px;font-weight:600">Technician note</label>
+                <div style="min-height:64px;border:1px solid #E5E7EB;border-radius:10px;padding:10px 12px;font-size:14px;color:#374151;line-height:1.5">Run on Sysmex XN-1000. No clots, sample adequate.</div>
+              </div>
+              <div style="padding:16px 20px;margin-top:16px;border-top:1px solid #E5E7EB;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                <span style="font-size:12px;color:#6B7280;flex:1 1 160px">2 fields pending · goes to pathologist only</span>
+                <button style="white-space:nowrap;flex-shrink:0;height:40px;padding:0 16px;border-radius:10px;border:1px solid #E5E7EB;background:#FFFFFF;font-size:14px;font-weight:500">Save draft</button>
+                <button style="white-space:nowrap;flex-shrink:0;height:40px;padding:0 16px;border-radius:10px;border:1px solid #2563EB;background:#2563EB;color:#FFFFFF;font-size:14px;font-weight:600">Submit for review</button>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;panel&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;A&quot;,&quot;B&quot;],&quot;default&quot;:&quot;A&quot;,&quot;tsType&quot;:&quot;'A'|'B'&quot;,&quot;section&quot;:&quot;Right panel&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const variant = this.props.panel ?? 'A';
+    const P = { STAT: ['#FEF2F2', '#B91C1C'], Urgent: ['#FFFBEB', '#B45309'], Routine: ['#F3F4F6', '#374151'] };
+    const S = { Ordered: ['#F3F4F6', '#374151', 'Collect sample'], Collected: ['#E0F2FE', '#0369A1', 'Start processing'], Processing: ['#EFF6FF', '#1D4ED8', 'Enter result'] };
+    const raw = [
+      ['Aarav Sharma', 'LAB-0142 · 34/M', 'Complete blood count', 'Dr. Sarah Jenkins · OPD', 'STAT', 'Processing', false, true],
+      ['Meera Iyer', 'LAB-0143 · 70/F', 'Serum electrolytes', 'Dr. R. Kulkarni · ICU Bed 3', 'STAT', 'Ordered'],
+      ['Rohan Mehta', 'LAB-0139 · 61/M', 'Renal function panel', 'Dr. Alisha Patel · IPD 4B', 'Urgent', 'Collected'],
+      ['Salman Khan', 'LAB-0138 · 32/M', 'HbA1c', 'Dr. Sarah Jenkins · OPD', 'Routine', 'Processing', true],
+      ['Kavya Reddy', 'LAB-0136 · 45/F', 'Liver function test', 'Dr. Michael Chang · OPD', 'Urgent', 'Ordered'],
+      ['Rahul C', 'LAB-0135 · 32/M', 'Thyroid profile', 'Dr. Michael Chang · OPD', 'Routine', 'Collected'],
+      ['Priya Nair', 'LAB-0141 · 28/F', 'Lipid profile', 'Dr. Alisha Patel · OPD', 'Routine', 'Ordered'],
+    ];
+    const rows = raw.map(([name, meta, test, doctor, priority, status, returned, sel]) => ({
+      name, meta, test, doctor, priority, status, returned: !!returned,
+      pBg: P[priority][0], pFg: P[priority][1], sBg: S[status][0], sFg: S[status][1], action: S[status][2],
+      rowBg: sel ? '#EFF6FF' : '#FFFFFF',
+      bBg: sel ? '#2563EB' : '#FFFFFF', bFg: sel ? '#FFFFFF' : '#1D4ED8', bBorder: sel ? '#2563EB' : '#BFDBFE',
+    }));
+    const stepNames = [['Ordered', '09:31'], ['Collected', '09:52'], ['Received', '09:58'], ['Accessioned', '10:01'], ['Processing', '10:06'], ['Result entry', 'now'], ['Path. review', '—'], ['Signed off', '—']];
+    const steps = stepNames.map(([label, time], i) => ({
+      label, time,
+      bar: i < 5 ? '#2563EB' : i === 5 ? '#93C5FD' : '#E5E7EB',
+      dot: i < 5 ? '#2563EB' : '#FFFFFF',
+      fg: i <= 5 ? '#111827' : '#9CA3AF', weight: i === 5 ? 600 : 400,
+    }));
+    const def = [
+      ['RED CELLS', 'Hemoglobin', 'g/dL', 13, 17, 11.2],
+      ['RED CELLS', 'RBC count', '×10⁶/µL', 4.5, 5.9, 4.3],
+      ['RED CELLS', 'Hematocrit', '%', 40, 50, 36.1],
+      ['RED CELLS', 'MCV', 'fL', 80, 100, 84.0],
+      ['WHITE CELLS', 'WBC count', '×10³/µL', 4, 11, 14.8],
+      ['WHITE CELLS', 'Neutrophils', '%', 40, 75, 81],
+      ['WHITE CELLS', 'Lymphocytes', '%', 20, 45, null],
+      ['WHITE CELLS', 'Monocytes', '%', 2, 10, null],
+      ['PLATELETS', 'Platelet count', '×10³/µL', 150, 410, 238],
+    ];
+    const params = def.map(([group, name, unit, lo, hi, v]) => {
+      const has = v !== null;
+      const low = has && v < lo, high = has && v > hi, abn = low || high;
+      const pos = has ? Math.max(3, Math.min(97, 25 + ((v - lo) / (hi - lo)) * 50)) : 50;
+      return {
+        group, name, unit, ref: `${lo}–${hi}`, hasVal: has,
+        display: has ? String(v) : '—',
+        inBorder: !has ? '#2563EB' : abn ? '#FCD34D' : '#E5E7EB',
+        inBg: !has ? '#FFFFFF' : abn ? '#FFFBEB' : '#FFFFFF',
+        inFg: !has ? '#9CA3AF' : abn ? '#92400E' : '#111827',
+        flag: !has ? 'Pending' : low ? 'Low' : high ? 'High' : 'Normal',
+        flagLong: !has ? 'Awaiting value' : low ? '↓ Below range' : high ? '↑ Above range' : 'Within range',
+        fBg: !has ? '#F3F4F6' : abn ? '#FFFBEB' : '#F0FDF4',
+        fFg: !has ? '#6B7280' : abn ? '#B45309' : '#15803D',
+        mark: abn ? '#F59E0B' : '#16A34A', pos: pos + '%',
+        abnLabel: abn ? `${name} ${v} ${low ? '↓' : '↑'}` : null,
+      };
+    });
+    const groups = ['RED CELLS', 'WHITE CELLS', 'PLATELETS'].map(t => ({ title: t, items: params.filter(p => p.group === t) }));
+    return {
+      rows, steps, params, groups,
+      abnormal: params.filter(p => p.abnLabel).map(p => p.abnLabel),
+      isA: variant === 'A', isB: variant === 'B',
+      variantLabel: variant === 'A' ? 'Panel option A · Parameter grid' : 'Panel option B · Range bars + journey',
+    };
+  }
+}
+</script>
+</body>
+</html>

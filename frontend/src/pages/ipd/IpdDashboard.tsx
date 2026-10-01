@@ -19,8 +19,10 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import { InpatientAdmission, InpatientStatus, MedicationAdminRecord } from '../../types';
+import { useCurrency } from '../../config/currency';
 
 export const IpdDashboard: React.FC = () => {
+  const { format: formatMoney, symbol } = useCurrency();
   const [activeTab, setActiveTab] = useState<'roster' | 'beds' | 'mar' | 'rounds' | 'discharge'>('roster');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedWard, setSelectedWard] = useState('ALL');
@@ -356,7 +358,7 @@ export const IpdDashboard: React.FC = () => {
                       <td>
                         <div style={{ fontSize: '0.8125rem' }}>{adm.admissionDate}</div>
                         <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
-                          Deposit: ${adm.advanceDeposit.toFixed(2)}
+                          Deposit: {formatMoney(adm.advanceDeposit)}
                         </div>
                       </td>
                       <td>
@@ -681,7 +683,7 @@ export const IpdDashboard: React.FC = () => {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <div className="form-group">
-                  <label className="form-label">Advance Deposit Paid ($) *</label>
+                  <label className="form-label">Advance Deposit Paid ({symbol}) *</label>
                   <input type="number" className="form-input" defaultValue="500" required />
                 </div>
                 <div className="form-group">

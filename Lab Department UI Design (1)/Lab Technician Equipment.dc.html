@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F9FAFB;font-family:Inter,sans-serif;color:#111827;-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}
+a{color:#2563EB;text-decoration:none}a:hover{color:#1D4ED8;text-decoration:underline}
+button{font-family:inherit}
+</style>
+</helmet>
+<div style="display:flex;min-height:100vh;background:#F9FAFB">
+  <aside style="width:260px;flex-shrink:0;background:#FFFFFF;border-right:1px solid #E5E7EB;display:flex;flex-direction:column;padding:20px 16px;gap:20px;position:sticky;top:0;height:100vh">
+    <div style="display:flex;align-items:center;gap:10px;padding:0 4px">
+      <div style="width:36px;height:36px;border-radius:10px;background:#2563EB;display:flex;align-items:center;justify-content:center;color:#FFFFFF;font-weight:700;font-size:16px">N</div>
+      <div style="display:flex;flex-direction:column">
+        <span style="font-size:15px;font-weight:600">North Hospital</span>
+        <span style="font-size:12px;color:#6B7280">Clinical Enterprise HMS</span>
+      </div>
+    </div>
+    <div style="border:1px solid #E5E7EB;border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:2px">
+      <span style="font-size:12px;color:#6B7280">Current department</span>
+      <span style="font-size:14px;font-weight:600">Diagnostic Lab</span>
+      <span style="font-size:12px;color:#6B7280">Bench 2 · Hematology &amp; Chemistry</span>
+    </div>
+    <nav style="display:flex;flex-direction:column;gap:4px">
+      <span style="font-size:12px;font-weight:600;color:#6B7280;letter-spacing:0.04em;padding:0 12px 6px">WORKSPACE</span>
+      <a href="Lab Technician.dc.html" style="display:flex;align-items:center;gap:10px;height:40px;padding:0 12px;border-radius:10px;color:#374151;font-size:14px;font-weight:500;text-decoration:none">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 3h6"></path><path d="M10 3v6L4.5 19.5A1 1 0 0 0 5.4 21h13.2a1 1 0 0 0 .9-1.5L14 9V3"></path></svg>
+        <span style="flex:1">Test Queue</span>
+        <span style="font-size:12px;font-weight:600;color:#6B7280">24</span>
+      </a>
+      <div style="display:flex;align-items:center;gap:10px;height:40px;padding:0 12px;border-radius:10px;background:#EFF6FF;color:#1D4ED8;font-size:14px;font-weight:600">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8M12 16v4"></path></svg>
+        <span style="flex:1">Equipment Status</span>
+        <span style="width:8px;height:8px;border-radius:50%;background:#F59E0B"></span>
+      </div>
+    </nav>
+    <div style="margin-top:auto;display:flex;align-items:center;gap:10px;padding:12px;border-top:1px solid #E5E7EB">
+      <div style="width:36px;height:36px;border-radius:50%;background:#F3F4F6;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:#374151">AV</div>
+      <div style="display:flex;flex-direction:column;flex:1;min-width:0">
+        <span style="font-size:14px;font-weight:600">Anjali Verma</span>
+        <span style="font-size:12px;color:#6B7280">Senior Lab Technologist</span>
+      </div>
+      <span style="font-size:13px;color:#6B7280">Log out</span>
+    </div>
+  </aside>
+
+  <main style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <div style="min-height:60px;background:#FFFFFF;border-bottom:1px solid #E5E7EB;display:flex;align-items:center;gap:12px;padding:12px 24px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:#6B7280;flex:1;min-width:200px;flex-wrap:wrap;white-space:nowrap">
+        <span>North Hospital</span><span>/</span><span>Laboratory</span><span>/</span><span style="color:#111827;font-weight:500">Equipment</span>
+        <span style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:#15803D;background:#F0FDF4;border-radius:999px;padding:2px 8px;white-space:nowrap"><span style="width:6px;height:6px;border-radius:50%;background:#16A34A"></span>Live</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;height:36px;padding:0 12px;border:1px solid #E5E7EB;border-radius:10px;width:280px;max-width:100%;color:#6B7280;font-size:13px">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+        Search analyzer or serial no.
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;height:36px;padding:0 12px;border:1px solid #E5E7EB;border-radius:10px;font-size:13px;color:#374151;white-space:nowrap">Morning shift · 07:00–15:00</div>
+    </div>
+
+    <div style="padding:24px;display:flex;flex-direction:column;gap:24px">
+      <header style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <h1 style="margin:0;font-size:32px;font-weight:700;letter-spacing:-0.02em">Equipment Status</h1>
+          <p style="margin:0;font-size:14px;color:#6B7280">Analyzer availability on your bench. Log QC before running patient samples, and report faults here.</p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button style="white-space:nowrap;height:40px;padding:0 16px;border-radius:10px;border:1px solid #E5E7EB;background:#FFFFFF;font-size:14px;font-weight:500;color:#111827">Log QC run</button>
+          <button style="white-space:nowrap;height:40px;padding:0 16px;border-radius:10px;border:1px solid #2563EB;background:#2563EB;font-size:14px;font-weight:600;color:#FFFFFF">Report an issue</button>
+        </div>
+      </header>
+
+      <section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
+        <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:20px;min-height:120px;display:flex;flex-direction:column;justify-content:space-between;gap:12px;box-shadow:0 1px 2px rgba(17,24,39,0.04)">
+          <div style="display:flex;justify-content:space-between;gap:8px"><span style="font-size:13px;color:#6B7280;font-weight:500">Online</span><span style="font-size:12px;color:#6B7280">running or ready</span></div>
+          <div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:30px;font-weight:700;letter-spacing:-0.02em">5</span><span style="font-size:13px;color:#6B7280">of 7 analyzers</span></div>
+        </div>
+        <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:20px;min-height:120px;display:flex;flex-direction:column;justify-content:space-between;gap:12px;box-shadow:0 1px 2px rgba(17,24,39,0.04)">
+          <div style="display:flex;justify-content:space-between;gap:8px"><span style="font-size:13px;color:#6B7280;font-weight:500">In maintenance</span><span style="font-size:12px;color:#6B7280">until 11:30</span></div>
+          <div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:30px;font-weight:700;letter-spacing:-0.02em;color:#B45309">1</span><span style="font-size:13px;color:#6B7280">scheduled</span></div>
+        </div>
+        <div style="background:#FFFFFF;border:1px solid #FECACA;border-radius:12px;padding:20px;min-height:120px;display:flex;flex-direction:column;justify-content:space-between;gap:12px;box-shadow:0 1px 2px rgba(17,24,39,0.04)">
+          <div style="display:flex;justify-content:space-between;gap:8px"><span style="font-size:13px;color:#6B7280;font-weight:500">Offline</span><span style="font-size:12px;font-weight:600;color:#B91C1C">3 orders blocked</span></div>
+          <div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:30px;font-weight:700;letter-spacing:-0.02em;color:#B91C1C">1</span><span style="font-size:13px;color:#6B7280">fault reported</span></div>
+        </div>
+        <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:20px;min-height:120px;display:flex;flex-direction:column;justify-content:space-between;gap:12px;box-shadow:0 1px 2px rgba(17,24,39,0.04)">
+          <div style="display:flex;justify-content:space-between;gap:8px"><span style="font-size:13px;color:#6B7280;font-weight:500">QC due</span><span style="font-size:12px;font-weight:600;color:#B45309">1 due now</span></div>
+          <div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:30px;font-weight:700;letter-spacing:-0.02em">2</span><span style="font-size:13px;color:#6B7280">before next run</span></div>
+        </div>
+      </section>
+
+      <section style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start">
+        <div style="flex:999 1 620px;min-width:0;display:flex;flex-direction:column;gap:16px">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+            <div style="display:flex;flex-direction:column;gap:2px">
+              <h2 style="margin:0;font-size:18px;font-weight:600">Analyzers</h2>
+              <span style="font-size:13px;color:#6B7280">Status reported by instrument interface · last sync 10:46</span>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <span style="white-space:nowrap;height:32px;display:flex;align-items:center;padding:0 12px;border-radius:999px;background:#2563EB;color:#FFFFFF;font-size:13px;font-weight:600">All · 7</span>
+              <span style="white-space:nowrap;height:32px;display:flex;align-items:center;padding:0 12px;border-radius:999px;border:1px solid #E5E7EB;background:#FFFFFF;color:#374151;font-size:13px;font-weight:500">Running · 4</span>
+              <span style="white-space:nowrap;height:32px;display:flex;align-items:center;padding:0 12px;border-radius:999px;border:1px solid #E5E7EB;background:#FFFFFF;color:#374151;font-size:13px;font-weight:500">Ready · 1</span>
+              <span style="white-space:nowrap;height:32px;display:flex;align-items:center;padding:0 12px;border-radius:999px;border:1px solid #E5E7EB;background:#FFFFFF;color:#374151;font-size:13px;font-weight:500">Maintenance · 1</span>
+              <span style="white-space:nowrap;height:32px;display:flex;align-items:center;padding:0 12px;border-radius:999px;border:1px solid #FECACA;background:#FEF2F2;color:#B91C1C;font-size:13px;font-weight:600">Offline · 1</span>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
+            <sc-for list="{{ analyzers }}" as="a" hint-placeholder-count="6">
+              <div style="background:#FFFFFF;border:1px solid {{ a.border }};border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:16px;box-shadow:0 1px 2px rgba(17,24,39,0.04)">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+                  <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
+                    <span style="font-size:16px;font-weight:600">{{ a.name }}</span>
+                    <span style="font-size:12px;color:#6B7280">{{ a.section }} · <span style="font-family:'JetBrains Mono',monospace;white-space:nowrap">{{ a.serial }}</span></span>
+                  </div>
+                  <span style="white-space:nowrap;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;background:{{ a.sBg }};color:{{ a.sFg }}"><span style="width:6px;height:6px;border-radius:50%;background:{{ a.dot }}"></span>{{ a.status }}</span>
+                </div>
+
+                <sc-if value="{{ a.hasAlert }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding:10px 12px;border-radius:10px;background:{{ a.alertBg }};display:flex;flex-direction:column;gap:2px">
+                    <span style="font-size:13px;font-weight:600;color:{{ a.alertFg }}">{{ a.alertTitle }}</span>
+                    <span style="font-size:12px;color:#374151">{{ a.alertBody }}</span>
+                  </div>
+                </sc-if>
+
+                <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px">
+                  <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:12px;color:#6B7280">Queued</span><span style="font-size:14px;font-weight:600">{{ a.queued }}</span></div>
+                  <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:12px;color:#6B7280">Last QC</span><span style="font-size:14px;font-weight:600;color:{{ a.qcFg }}">{{ a.qc }}</span></div>
+                  <div style="display:flex;flex-direction:column;gap:6px"><span style="font-size:12px;color:#6B7280">Reagent · {{ a.reagentLabel }}</span>
+                    <div style="height:6px;border-radius:3px;background:#F3F4F6;overflow:hidden"><div style="height:100%;border-radius:3px;width:{{ a.reagentW }};background:{{ a.reagentC }}"></div></div>
+                  </div>
+                </div>
+
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding-top:12px;border-top:1px solid #F3F4F6">
+                  <span style="font-size:12px;color:#6B7280;min-width:0">{{ a.tests }}</span>
+                  <button style="white-space:nowrap;flex-shrink:0;height:36px;padding:0 12px;border-radius:10px;font-size:13px;font-weight:600;border:1px solid {{ a.bBorder }};background:{{ a.bBg }};color:{{ a.bFg }}">{{ a.action }}</button>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="flex:1 1 360px;min-width:0;display:flex;flex-direction:column;gap:16px">
+          <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:14px;box-shadow:0 1px 2px rgba(17,24,39,0.04)">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+              <div style="display:flex;flex-direction:column;gap:2px">
+                <h3 style="margin:0;font-size:16px;font-weight:600">Orders blocked by downtime</h3>
+                <span style="font-size:13px;color:#6B7280">Bio-Rad D-10 offline · no backup analyzer</span>
+              </div>
+              <span style="white-space:nowrap;font-size:12px;font-weight:600;padding:3px 8px;border-radius:6px;background:#FEF2F2;color:#B91C1C">3</span>
+            </div>
+            <div style="display:flex;flex-direction:column">
+              <sc-for list="{{ blocked }}" as="b" hint-placeholder-count="3">
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:52px;border-bottom:1px solid #F3F4F6">
+                  <div style="display:flex;flex-direction:column;min-width:0">
+                    <span style="font-size:14px;font-weight:600">{{ b.name }}</span>
+                    <span style="font-size:12px;color:#6B7280">{{ b.meta }}</span>
+                  </div>
+                  <span style="white-space:nowrap;font-size:12px;font-weight:600;padding:3px 8px;border-radius:6px;background:{{ b.pBg }};color:{{ b.pFg }}">{{ b.priority }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <span style="font-size:12px;color:#6B7280;text-wrap:pretty">These stay in your Test Queue on hold and go back to Processing automatically when the D-10 is online again.</span>
+            <button style="white-space:nowrap;height:40px;border-radius:10px;border:1px solid #E5E7EB;background:#FFFFFF;font-size:14px;font-weight:500;color:#111827">Notify ordering doctors of delay</button>
+          </div>
+
+          <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:14px;box-shadow:0 1px 2px rgba(17,24,39,0.04)">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <h3 style="margin:0;font-size:16px;font-weight:600">Activity today</h3>
+              <span style="font-size:12px;color:#6B7280">Bench 2</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:14px">
+              <sc-for list="{{ activity }}" as="e" hint-placeholder-count="6">
+                <div style="display:grid;grid-template-columns:44px 10px minmax(0,1fr);gap:10px;align-items:start">
+                  <span style="font-size:12px;color:#6B7280;font-variant-numeric:tabular-nums;padding-top:1px">{{ e.time }}</span>
+                  <span style="width:8px;height:8px;border-radius:50%;margin-top:5px;background:{{ e.dot }}"></span>
+                  <div style="display:flex;flex-direction:column;gap:1px;min-width:0">
+                    <span style="font-size:13px;font-weight:500">{{ e.title }}</span>
+                    <span style="font-size:12px;color:#6B7280">{{ e.by }}</span>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const S = {
+      Running: ['#F0FDF4', '#15803D', '#16A34A', '#E5E7EB'],
+      Ready: ['#EFF6FF', '#1D4ED8', '#2563EB', '#E5E7EB'],
+      Maintenance: ['#FFFBEB', '#B45309', '#F59E0B', '#FDE68A'],
+      Offline: ['#FEF2F2', '#B91C1C', '#DC2626', '#FECACA'],
+    };
+    const raw = [
+      { name: 'Bio-Rad D-10', section: 'HbA1c', serial: 'BR-D10-0417', status: 'Offline', queued: '3 on hold', qc: '06:55 ✓', reagent: 64, tests: 'HbA1c', action: 'View service ticket',
+        alert: ['Pump pressure fault · E-214', 'Reported 10:38 by you · Ticket SR-3391 · Engineer ETA 13:30'] },
+      { name: 'Radiometer ABL800', section: 'Blood gas', serial: 'RM-ABL-2210', status: 'Maintenance', queued: '—', qc: 'After service', reagent: 55, tests: 'ABG, lactate', action: 'View schedule',
+        alert: ['Scheduled calibration', '09:00 – 11:30 · STAT ABGs go to ICU point-of-care unit'] },
+      { name: 'Sysmex CA-600', section: 'Coagulation', serial: 'SX-CA6-0932', status: 'Running', queued: '4', qc: 'Due now', qcWarn: true, reagent: 47, tests: 'PT/INR, aPTT', action: 'Log QC run', primary: true },
+      { name: 'Sysmex XN-1000', section: 'Hematology', serial: 'SX-XN1-1188', status: 'Running', queued: '6', qc: '07:40 ✓', reagent: 72, tests: 'CBC, retic, diff', action: 'Report issue' },
+      { name: 'Beckman AU680', section: 'Chemistry', serial: 'BC-AU6-3021', status: 'Running', queued: '9', qc: '07:15 ✓', reagent: 41, tests: 'RFT, LFT, lipid, electrolytes', action: 'Report issue' },
+      { name: 'Erba Chem-7', section: 'Chemistry (backup)', serial: 'ER-CH7-0552', status: 'Running', queued: '2', qc: '07:20 ✓', reagent: 16, tests: 'Glucose, urea, creatinine', action: 'Request reagent' },
+      { name: 'Roche Cobas e411', section: 'Immunoassay', serial: 'RC-E41-7730', status: 'Ready', queued: '0', qc: 'Due 11:00', qcWarn: true, reagent: 88, tests: 'Thyroid, troponin, ferritin', action: 'Log QC run' },
+    ];
+    const analyzers = raw.map(a => {
+      const s = S[a.status];
+      const low = a.reagent < 20;
+      return {
+        ...a, sBg: s[0], sFg: s[1], dot: s[2], border: s[3],
+        hasAlert: !!a.alert, alertTitle: a.alert ? a.alert[0] : '', alertBody: a.alert ? a.alert[1] : '',
+        alertBg: a.status === 'Offline' ? '#FEF2F2' : '#FFFBEB', alertFg: a.status === 'Offline' ? '#B91C1C' : '#B45309',
+        qcFg: a.qcWarn ? '#B45309' : '#111827',
+        reagentW: a.reagent + '%', reagentLabel: low ? a.reagent + '% low' : a.reagent + '%',
+        reagentC: low ? '#DC2626' : a.reagent < 50 ? '#F59E0B' : '#16A34A',
+        bBg: a.primary ? '#2563EB' : '#FFFFFF', bFg: a.primary ? '#FFFFFF' : '#1D4ED8', bBorder: a.primary ? '#2563EB' : '#BFDBFE',
+      };
+    });
+    const P = { STAT: ['#FEF2F2', '#B91C1C'], Urgent: ['#FFFBEB', '#B45309'], Routine: ['#F3F4F6', '#374151'] };
+    const blocked = [
+      ['Salman Khan', 'LAB-0138 · HbA1c re-test · Dr. Sarah Jenkins', 'Routine'],
+      ['Sunita Rao', 'LAB-0144 · HbA1c · Dr. Alisha Patel', 'Urgent'],
+      ['Deepak Joshi', 'LAB-0147 · HbA1c · Dr. Michael Chang', 'Routine'],
+    ].map(([name, meta, priority]) => ({ name, meta, priority, pBg: P[priority][0], pFg: P[priority][1] }));
+    const activity = [
+      ['10:40', 'Service ticket SR-3391 raised for D-10', 'Lab Admin · Rajesh Kumar', '#2563EB'],
+      ['10:38', 'Fault reported: D-10 pump pressure E-214', 'You', '#DC2626'],
+      ['09:52', 'Erba Chem-7 reagent below 20%', 'Instrument alert', '#F59E0B'],
+      ['09:00', 'ABL800 calibration started', 'Biomedical engineering', '#F59E0B'],
+      ['07:40', 'XN-1000 QC passed · levels 1–3', 'You', '#16A34A'],
+      ['07:15', 'AU680 QC passed · Westgard rules OK', 'Vikram Rao', '#16A34A'],
+    ].map(([time, title, by, dot]) => ({ time, title, by, dot }));
+    return { analyzers, blocked, activity };
+  }
+}
+</script>
+</body>
+</html>

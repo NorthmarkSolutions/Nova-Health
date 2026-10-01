@@ -45,6 +45,7 @@ import {
   Award,
 } from 'lucide-react';
 import { PrescriptionItem } from '../../types';
+import { WorkspaceHeader } from '../../components/workspace';
 import {
   patientJourneyService,
   SharedPatient,
@@ -53,7 +54,9 @@ import {
   SharedDoctorFollowUp,
   SharedInpatientRound,
   SharedEmergencyAlert,
+  SharedLabOrder,
 } from '../../services/patientJourneyService';
+import { useCurrency } from '../../config/currency';
 
 interface ScheduleDay {
   day: string;
@@ -100,6 +103,7 @@ const COMMON_SYMPTOMS = [
 ];
 
 export const DoctorDashboard: React.FC = () => {
+  const { format: formatMoney, symbol } = useCurrency();
   const [searchParams, setSearchParams] = useSearchParams();
   const rawTab = searchParams.get('tab') || 'dashboard';
 
@@ -134,6 +138,13 @@ export const DoctorDashboard: React.FC = () => {
   const [followUps, setFollowUps] = useState<SharedDoctorFollowUp[]>([]);
   const [inpatientRounds, setInpatientRounds] = useState<SharedInpatientRound[]>([]);
   const [emergencyAlerts, setEmergencyAlerts] = useState<SharedEmergencyAlert[]>([]);
+  const [labOrders, setLabOrders] = useState<SharedLabOrder[]>([]);
+  const [criticalOrderToAcknowledge, setCriticalOrderToAcknowledge] = useState<SharedLabOrder | null>(null);
+  const [showCriticalAckModal, setShowCriticalAckModal] = useState(false);
+  const [criticalAckActionNote, setCriticalAckActionNote] = useState('');
+  const [criticalAckConfirmed, setCriticalAckConfirmed] = useState(false);
+  const [selectedLabReportToView, setSelectedLabReportToView] = useState<SharedLabOrder | null>(null);
+  const [showSignedReportModal, setShowSignedReportModal] = useState(false);
 
   // Queue sub-filter inside Tab 2
   const [queueSubFilter, setQueueSubFilter] = useState<'all' | 'appointments' | 'followups' | 'completed'>('all');
@@ -152,6 +163,7 @@ export const DoctorDashboard: React.FC = () => {
     setFollowUps(patientJourneyService.getFollowUps());
     setInpatientRounds(patientJourneyService.getInpatientRounds());
     setEmergencyAlerts(patientJourneyService.getEmergencyAlerts());
+    setLabOrders(patientJourneyService.getLabOrders());
   };
 
   useEffect(() => {
@@ -289,6 +301,24 @@ export const DoctorDashboard: React.FC = () => {
     }
     return defaultProfile;
   }, [patients, activeToken]);
+
+  // Cross-department Lab telemetry for doctor consultation & alerts
+  const unacknowledgedCriticalOrders = useMemo(() => {
+    return labOrders.filter((o) => o.isFlaggedCritical && !o.criticalAcknowledged);
+  }, [labOrders]);
+
+  const activePatientLabOrders = useMemo(() => {
+    if (!activeToken?.uhid) return [];
+    return labOrders.filter((o) => o.uhid === activeToken.uhid);
+  }, [labOrders, activeToken]);
+
+  const activePatientCriticalOrder = useMemo(() => {
+    return activePatientLabOrders.find((o) => o.isFlaggedCritical && !o.criticalAcknowledged);
+  }, [activePatientLabOrders]);
+
+  const activePatientReadyReport = useMemo(() => {
+    return activePatientLabOrders.find((o) => o.stage === 'REPORT_GENERATED' || o.stage === 'VALIDATED');
+  }, [activePatientLabOrders]);
 
   // Active Consultation Form State
   const [chiefComplaints, setChiefComplaints] = useState('Persistent dry cough for 4 days, mild sore throat, and intermittent fatigue.');
@@ -510,28 +540,78 @@ export const DoctorDashboard: React.FC = () => {
       showToast('Please select at least one lab test or radiology investigation.');
       return;
     }
-    [...orderedLabTests, ...orderedRadiology].forEach((testName, i) => {
-      patientJourneyService.addLabOrder({
+    const allTests = [...orderedLabTests, ...orderedRadiology];
+    allTests.forEach((testName, i) => {
+      const isRadio = orderedRadiology.includes(testName);
+      const isStat = orderPriority === 'STAT';
+      const testPrice = patientJourneyService.getLabTestPrice(testName, isStat);
+
+      const newOrder = patientJourneyService.addLabOrder({
         id: `lab-${Date.now()}-${i}`,
-        orderNo: `LAB-202609-${Math.floor(100 + Math.random() * 900)}`,
+        orderNo: `LAB-202609-${Math.floor(1000 + Math.random() * 9000)}`,
         patientName: activeToken.patient,
         uhid: activeToken.uhid,
         age: activeToken.age,
         gender: activeToken.gender,
         testName,
-        category: orderedRadiology.includes(testName) ? 'Radiology' : 'Clinical Pathology',
-        sampleType: orderedRadiology.includes(testName) ? 'Imaging Scan' : 'Venous Blood',
-        container: orderedRadiology.includes(testName) ? 'N/A' : 'EDTA / Serum Tube',
+        category: isRadio ? 'Radiology' : (testName.includes('CBC') ? 'Hematology' : 'Clinical Pathology'),
+        sampleType: isRadio ? 'Imaging Scan' : (testName.includes('Urine') ? 'Midstream Urine' : 'Venous Blood'),
+        container: isRadio ? 'N/A' : (testName.includes('CBC') ? 'EDTA Vacutainer (Lavender Cap)' : 'SST Vacutainer (Gold Cap)'),
+        containerColor: isRadio ? undefined : (testName.includes('CBC') ? '#8b5cf6' : '#eab308'),
         doctor: doctorName,
         barcode: `8902026${Math.floor(1000 + Math.random() * 9000)}`,
-        stage: 'COLLECTED',
-        price: orderedRadiology.includes(testName) ? 75.0 : 35.0,
+        priority: orderPriority,
+        stage: 'ORDERED',
+        price: testPrice,
         isFlaggedAbnormal: false,
         parameters: [],
         technicianNote: `${orderPriority} Order dispatched directly from ${doctorName}'s chamber`,
       });
+
+      // Automatically append billable item to patient's invoice in Billing
+      patientJourneyService.appendLabOrderToBilling(newOrder);
+
+      // Async sync to Django backend
+      fetch('/api/v1/lab/orders/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uhid: activeToken.uhid,
+          patientName: activeToken.patient,
+          testName,
+          priority: orderPriority,
+          clinicalNotes: doctorNotes || `Dispatched from ${doctorName}'s chamber`,
+          status: 'ORDERED',
+        }),
+      }).catch(() => {});
     });
-    showToast(`✓ ${orderedLabTests.length + orderedRadiology.length} Diagnostic Orders dispatched to Laboratory.`);
+
+    setLabOrders(patientJourneyService.getLabOrders());
+    showToast(`✓ ${allTests.length} Diagnostic Orders dispatched to Laboratory & auto-billed.`);
+  };
+
+  const handleConfirmCriticalAcknowledgment = () => {
+    if (!criticalOrderToAcknowledge || !criticalAckConfirmed) return;
+
+    patientJourneyService.acknowledgeCriticalLabOrder(
+      criticalOrderToAcknowledge.id,
+      doctorName,
+      criticalAckActionNote || 'Attending physician acknowledged critical value; appropriate clinical measures initiated.'
+    );
+
+    // Backend sync
+    fetch(`/api/v1/lab/orders/${criticalOrderToAcknowledge.id}/acknowledge-critical/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notes: criticalAckActionNote }),
+    }).catch(() => {});
+
+    setLabOrders(patientJourneyService.getLabOrders());
+    setShowCriticalAckModal(false);
+    setCriticalOrderToAcknowledge(null);
+    setCriticalAckActionNote('');
+    setCriticalAckConfirmed(false);
+    showToast(`✓ Critical alert acknowledged & logged in audit trail for ${criticalOrderToAcknowledge.patientName}.`);
   };
 
   const handleCompleteConsultation = () => {
@@ -578,26 +658,48 @@ export const DoctorDashboard: React.FC = () => {
 
     // 3. Dispatch Investigation Orders
     if (orderedLabTests.length > 0 || orderedRadiology.length > 0) {
-      [...orderedLabTests, ...orderedRadiology].forEach((testName, i) => {
-        patientJourneyService.addLabOrder({
+      const allTests = [...orderedLabTests, ...orderedRadiology];
+      allTests.forEach((testName, i) => {
+        const isRadio = orderedRadiology.includes(testName);
+        const isStat = orderPriority === 'STAT';
+        const testPrice = patientJourneyService.getLabTestPrice(testName, isStat);
+
+        const newOrder = patientJourneyService.addLabOrder({
           id: `lab-${Date.now()}-${i}`,
-          orderNo: `LAB-202609-${Math.floor(100 + Math.random() * 900)}`,
+          orderNo: `LAB-202609-${Math.floor(1000 + Math.random() * 9000)}`,
           patientName: activeToken.patient,
           uhid: activeToken.uhid,
           age: activeToken.age,
           gender: activeToken.gender,
           testName,
-          category: orderedRadiology.includes(testName) ? 'Radiology' : 'Pathology',
-          sampleType: orderedRadiology.includes(testName) ? 'Scan' : 'Venous Blood',
-          container: 'Standard',
+          category: isRadio ? 'Radiology' : (testName.includes('CBC') ? 'Hematology' : 'Clinical Pathology'),
+          sampleType: isRadio ? 'Imaging Scan' : (testName.includes('Urine') ? 'Midstream Urine' : 'Venous Blood'),
+          container: isRadio ? 'N/A' : (testName.includes('CBC') ? 'EDTA Vacutainer (Lavender Cap)' : 'SST Vacutainer (Gold Cap)'),
+          containerColor: isRadio ? undefined : (testName.includes('CBC') ? '#8b5cf6' : '#eab308'),
           doctor: doctorName,
           barcode: `8902026${Math.floor(1000 + Math.random() * 9000)}`,
-          stage: 'COLLECTED',
-          price: 45.0,
+          priority: orderPriority,
+          stage: 'ORDERED',
+          price: testPrice,
           isFlaggedAbnormal: false,
           parameters: [],
         });
+
+        patientJourneyService.appendLabOrderToBilling(newOrder);
+
+        fetch('/api/v1/lab/orders/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            uhid: activeToken.uhid,
+            patientName: activeToken.patient,
+            testName,
+            priority: orderPriority,
+            status: 'ORDERED',
+          }),
+        }).catch(() => {});
       });
+      setLabOrders(patientJourneyService.getLabOrders());
     }
 
     // 4. Record Follow-Up in System
@@ -694,175 +796,141 @@ export const DoctorDashboard: React.FC = () => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
       {/* ========================================================================= */}
-      {/* 1. TOP EXECUTIVE DOCTOR CONTROL STRIP                                     */}
+      {/* 1. TOP EXECUTIVE DOCTOR WORKSPACE HEADER (§ 5 Design Bible)               */}
       {/* ========================================================================= */}
       <div
         style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '1rem 2rem',
-          backgroundColor: '#0f172a',
-          color: '#ffffff',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-          flexWrap: 'wrap',
-          gap: '1rem',
+          backgroundColor: '#ffffff',
+          borderBottom: '1px solid var(--border-color)',
+          padding: '20px 32px',
         }}
       >
-        {/* Left: Doctor Station Telemetry */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div
-            style={{
-              width: '46px',
-              height: '46px',
-              borderRadius: '12px',
-              backgroundColor: '#0284c7',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#ffffff',
-              boxShadow: '0 4px 12px rgba(2, 132, 199, 0.4)',
-            }}
-          >
-            <Stethoscope size={24} />
-          </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
-              <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, letterSpacing: '-0.02em', color: '#ffffff' }}>
-                {doctorName}
-              </h2>
-              <span
+        <WorkspaceHeader
+          title={doctorName}
+          description="MD (Cardiology / Internal Medicine) • Morning Shift (08:30 - 15:00)"
+          icon={<Stethoscope size={20} />}
+          actions={
+            <>
+              {/* Presence Status Dropdown (Secondary button style with colored dot) */}
+              <div
                 style={{
-                  fontSize: '0.75rem',
-                  fontWeight: 700,
-                  backgroundColor: 'rgba(2, 132, 199, 0.25)',
-                  color: '#38bdf8',
-                  padding: '0.2rem 0.6rem',
-                  borderRadius: '6px',
-                  border: '1px solid rgba(56, 189, 248, 0.3)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  backgroundColor: '#ffffff',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '8px',
+                  padding: '6px 12px',
                 }}
               >
-                Lead Consultant
-              </span>
-            </div>
-            <div style={{ fontSize: '0.875rem', color: '#94a3b8', marginTop: '0.2rem' }}>
-              {doctorSpecialization} • <span style={{ color: '#e2e8f0', fontWeight: 600 }}>{doctorChamber}</span> • Morning Shift (08:30 - 15:00)
-            </div>
-          </div>
-        </div>
+                <span
+                  style={{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    backgroundColor:
+                      doctorStatus === 'AVAILABLE'
+                        ? 'var(--success)'
+                        : doctorStatus === 'IN_CONSULTATION'
+                        ? 'var(--primary)'
+                        : doctorStatus === 'BREAK'
+                        ? 'var(--warning)'
+                        : 'var(--text-muted)',
+                    display: 'inline-block',
+                    flexShrink: 0,
+                  }}
+                />
+                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>Status:</span>
+                <select
+                  value={doctorStatus}
+                  onChange={(e) => setDoctorStatus(e.target.value as any)}
+                  style={{
+                    border: 'none',
+                    backgroundColor: 'transparent',
+                    color: 'var(--secondary)',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    outline: 'none',
+                  }}
+                >
+                  <option value="AVAILABLE">Available for Next</option>
+                  <option value="IN_CONSULTATION">In Consultation</option>
+                  <option value="BREAK">Break / Ward Rounds</option>
+                  <option value="OFFLINE">Offline / Off Duty</option>
+                </select>
+              </div>
 
-        {/* Right: Presence Status, Queue Scope, & Quick Call */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem', flexWrap: 'wrap' }}>
-          {/* Status Dropdown */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: 'rgba(255, 255, 255, 0.08)', padding: '0.35rem 0.75rem', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.15)' }}>
-            <span style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>Status:</span>
-            <select
-              value={doctorStatus}
-              onChange={(e) => setDoctorStatus(e.target.value as any)}
-              style={{
-                backgroundColor: doctorStatus === 'AVAILABLE' ? '#10b981' : doctorStatus === 'IN_CONSULTATION' ? '#0284c7' : doctorStatus === 'BREAK' ? '#f59e0b' : '#64748b',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: '6px',
-                padding: '0.35rem 0.75rem',
-                fontSize: '0.85rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                outline: 'none',
-              }}
-            >
-              <option value="AVAILABLE">🟢 Available for Next</option>
-              <option value="IN_CONSULTATION">🔵 In Consultation</option>
-              <option value="BREAK">🟡 Break / Ward Rounds</option>
-              <option value="OFFLINE">⚪ Offline / Off Duty</option>
-            </select>
-          </div>
+              {/* Queue Scope Selector (Secondary buttons: white & bordered) */}
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setDoctorFilter('my')}
+                  style={{
+                    border: '1px solid var(--border-color)',
+                    backgroundColor: doctorFilter === 'my' ? 'var(--gray-100)' : '#ffffff',
+                    color: doctorFilter === 'my' ? 'var(--secondary)' : 'var(--text-muted)',
+                    fontWeight: doctorFilter === 'my' ? 700 : 500,
+                    fontSize: '13px',
+                    padding: '6px 14px',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  My Queue ({displayedQueue.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDoctorFilter('all')}
+                  style={{
+                    border: '1px solid var(--border-color)',
+                    backgroundColor: doctorFilter === 'all' ? 'var(--gray-100)' : '#ffffff',
+                    color: doctorFilter === 'all' ? 'var(--secondary)' : 'var(--text-muted)',
+                    fontWeight: doctorFilter === 'all' ? 700 : 500,
+                    fontSize: '13px',
+                    padding: '6px 14px',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  All OPD ({queue.length})
+                </button>
+              </div>
 
-          {/* Queue Filter: My Queue vs All OPD */}
-          <div
-            style={{
-              display: 'flex',
-              backgroundColor: 'rgba(255, 255, 255, 0.08)',
-              borderRadius: '8px',
-              padding: '0.25rem',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
-            }}
-          >
-            <button
-              onClick={() => setDoctorFilter('my')}
-              style={{
-                border: 'none',
-                backgroundColor: doctorFilter === 'my' ? '#0284c7' : 'transparent',
-                color: '#ffffff',
-                padding: '0.4rem 0.85rem',
-                borderRadius: '6px',
-                fontSize: '0.8125rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-              }}
-            >
-              My Queue ({displayedQueue.length})
-            </button>
-            <button
-              onClick={() => setDoctorFilter('all')}
-              style={{
-                border: 'none',
-                backgroundColor: doctorFilter === 'all' ? '#0284c7' : 'transparent',
-                color: '#ffffff',
-                padding: '0.4rem 0.85rem',
-                borderRadius: '6px',
-                fontSize: '0.8125rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-              }}
-            >
-              All OPD ({queue.length})
-            </button>
-          </div>
-
-          {/* Action Buttons */}
-          <button
-            onClick={handleCallNext}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              backgroundColor: '#f59e0b',
-              color: '#0f172a',
-              border: 'none',
-              padding: '0.6rem 1.25rem',
-              borderRadius: '8px',
-              fontWeight: 800,
-              fontSize: '0.875rem',
-              cursor: 'pointer',
-              boxShadow: '0 2px 6px rgba(245, 158, 11, 0.3)',
-            }}
-          >
-            <Users size={18} />
-            Call Next
-          </button>
-
-          <button
-            onClick={refreshAllData}
-            title="Sync Data from Reception"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-              backgroundColor: 'rgba(255, 255, 255, 0.15)',
-              color: '#ffffff',
-              border: '1px solid rgba(255, 255, 255, 0.25)',
-              padding: '0.6rem 0.95rem',
-              borderRadius: '8px',
-              fontSize: '0.85rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-            }}
-          >
-            <RefreshCw size={16} />
-            Sync
-          </button>
-        </div>
+              {/* Primary Action Button: Call Next (var(--primary) blue, not orange) */}
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleCallNext}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '7px 16px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  backgroundColor: 'var(--primary)',
+                  color: '#ffffff',
+                  border: 'none',
+                  cursor: 'pointer',
+                  boxShadow: 'var(--shadow-sm)',
+                }}
+              >
+                <Users size={16} />
+                <span>Call Next</span>
+              </button>
+            </>
+          }
+        />
       </div>
 
       {/* Emergency Casualty Red Alert Banner if active */}
@@ -904,70 +972,76 @@ export const DoctorDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* 2. STREAMLINED TOP NAVIGATION BAR (6 Focused Clinical Pillars)            */}
-      {/* ========================================================================= */}
-      <div
-        style={{
-          padding: '0.75rem 2rem',
-          backgroundColor: '#ffffff',
-          borderBottom: '1px solid #e2e8f0',
-          display: 'flex',
-          gap: '0.75rem',
-          overflowX: 'auto',
-          alignItems: 'center',
-        }}
-      >
-        {[
-          { id: 'dashboard', label: '1. Dashboard', icon: <LayoutDashboard size={18} /> },
-          { id: 'queue', label: '2. Queue & Appointments', icon: <Users size={18} />, count: displayedQueue.length },
-          { id: 'consultation', label: '3. Patient Consultation & Rx', icon: <Stethoscope size={18} /> },
-          { id: 'schedule', label: '4. My Schedule', icon: <Clock size={18} /> },
-          { id: 'reports', label: '5. Reports & Analytics', icon: <BarChart2 size={18} /> },
-          { id: 'inpatient', label: '6. Inpatient Rounds', icon: <BedDouble size={18} />, count: inpatientRounds.length },
-        ].map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
+      {/* High-Priority Critical Lab Value Alert Banner (NABL / NABH Patient Safety Standard) */}
+      {unacknowledgedCriticalOrders.length > 0 && (
+        <div
+          style={{
+            backgroundColor: '#fef2f2',
+            borderBottom: '2px solid #ef4444',
+            padding: '0.85rem 2rem',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            fontSize: '0.875rem',
+            color: '#991b1b',
+            boxShadow: '0 4px 12px rgba(239, 68, 68, 0.15)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.55rem',
-                padding: '0.625rem 1.15rem',
+                width: '36px',
+                height: '36px',
                 borderRadius: '8px',
-                border: 'none',
-                backgroundColor: isActive ? '#0284c7' : 'transparent',
-                color: isActive ? '#ffffff' : '#475569',
-                fontWeight: isActive ? 800 : 600,
-                fontSize: '0.875rem',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                transition: 'all 0.15s ease',
+                backgroundColor: '#fee2e2',
+                color: '#dc2626',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
               }}
             >
-              {tab.icon}
-              <span>{tab.label}</span>
-              {tab.count !== undefined && (
-                <span
-                  style={{
-                    backgroundColor: isActive ? 'rgba(255, 255, 255, 0.25)' : '#e2e8f0',
-                    color: isActive ? '#ffffff' : '#334155',
-                    fontSize: '0.75rem',
-                    fontWeight: 800,
-                    padding: '0.15rem 0.5rem',
-                    borderRadius: '999px',
-                  }}
-                >
-                  {tab.count}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+              <AlertTriangle size={20} />
+            </div>
+            <div>
+              <strong style={{ display: 'block', color: '#991b1b', fontSize: '0.9375rem' }}>
+                🚨 MANDATORY CRITICAL VALUE ALERT: {unacknowledgedCriticalOrders.length} Unacknowledged Critical Lab Result{unacknowledgedCriticalOrders.length > 1 ? 's' : ''}
+              </strong>
+              <span style={{ fontSize: '0.8125rem', color: '#7f1d1d' }}>
+                {unacknowledgedCriticalOrders
+                  .map((o) => `${o.patientName} (${o.testName})`)
+                  .join(' • ')}{' '}
+                — Immediate physician acknowledgment & clinical intervention required.
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setCriticalOrderToAcknowledge(unacknowledgedCriticalOrders[0]);
+              setShowCriticalAckModal(true);
+            }}
+            style={{
+              backgroundColor: '#dc2626',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '0.5rem 1.15rem',
+              fontSize: '0.8125rem',
+              fontWeight: 800,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.45rem',
+              boxShadow: '0 2px 6px rgba(220, 38, 38, 0.3)',
+            }}
+          >
+            <ShieldAlert size={16} /> Review & Acknowledge Now
+          </button>
+        </div>
+      )}
+
+
 
       {/* ========================================================================= */}
       {/* 3. MAIN BODY CONTAINER                                                   */}
@@ -1515,9 +1589,71 @@ export const DoctorDashboard: React.FC = () => {
                       <strong style={{ fontSize: '1.05rem', color: 'var(--secondary)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {activePatientProfile?.firstName || 'Patient'} {activePatientProfile?.lastName || ''}
                       </strong>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.2rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.2rem', flexWrap: 'wrap' }}>
                         <span className="badge badge-info" style={{ fontSize: '0.75rem', padding: '0.15rem 0.45rem' }}>Token #{activeToken?.token || 1}</span>
                         <span className="badge badge-secondary" style={{ fontSize: '0.75rem', padding: '0.15rem 0.45rem' }}>{activeToken?.type || 'OPD'}</span>
+                        {activePatientCriticalOrder && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCriticalOrderToAcknowledge(activePatientCriticalOrder);
+                              setShowCriticalAckModal(true);
+                            }}
+                            className="badge badge-danger"
+                            style={{
+                              fontSize: '0.75rem',
+                              padding: '0.15rem 0.5rem',
+                              cursor: 'pointer',
+                              fontWeight: 800,
+                              border: 'none',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.25rem',
+                              backgroundColor: '#dc2626',
+                              color: '#ffffff',
+                            }}
+                            title="Click to review and acknowledge critical lab value"
+                          >
+                            <AlertTriangle size={12} /> Critical Lab Alert
+                          </button>
+                        )}
+                        {!activePatientCriticalOrder && activePatientReadyReport && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedLabReportToView(activePatientReadyReport);
+                              setShowSignedReportModal(true);
+                            }}
+                            className="badge badge-success"
+                            style={{
+                              fontSize: '0.75rem',
+                              padding: '0.15rem 0.5rem',
+                              cursor: 'pointer',
+                              fontWeight: 700,
+                              border: 'none',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.25rem',
+                              backgroundColor: '#16a34a',
+                              color: '#ffffff',
+                            }}
+                            title="Click to view signed NABL laboratory report"
+                          >
+                            <CheckCircle2 size={12} /> Report Ready
+                          </button>
+                        )}
+                        {!activePatientCriticalOrder && !activePatientReadyReport && activePatientLabOrders.length > 0 && (
+                          <span
+                            className={`badge ${
+                              activePatientLabOrders.some((o) => o.stage === 'COLLECTED' || o.stage === 'SAMPLE_COLLECTED')
+                                ? 'badge-warning'
+                                : 'badge-info'
+                            }`}
+                            style={{ fontSize: '0.75rem', padding: '0.15rem 0.45rem' }}
+                          >
+                            🧪 Lab: {activePatientLabOrders[0].stage.replace('_', ' ')}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -2399,40 +2535,125 @@ export const DoctorDashboard: React.FC = () => {
                   {rightHistoryTab === 'labs' && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '550px', overflowY: 'auto' }}>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                        Recent pathology investigation findings (2026-08-14):
+                        {activePatientLabOrders.length > 0
+                          ? `Live diagnostic investigations for ${activePatientProfile.firstName}:`
+                          : 'Recent pathology investigation findings (2026-08-14):'}
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        {[
-                          { test: 'Hemoglobin (Hb)', value: '14.2 g/dL', range: '13.5 - 17.5', status: 'NORMAL' },
-                          { test: 'Total WBC Count', value: '8,400 /µL', range: '4,000 - 11,000', status: 'NORMAL' },
-                          { test: 'Platelet Count', value: '280,000 /µL', range: '150,000 - 450,000', status: 'NORMAL' },
-                          { test: 'ESR (Westergren)', value: '12 mm/hr', range: '0 - 15', status: 'NORMAL' },
-                          { test: 'Fasting Blood Sugar', value: '98 mg/dL', range: '70 - 100', status: 'NORMAL' },
-                          { test: 'Serum Creatinine', value: '0.9 mg/dL', range: '0.7 - 1.3', status: 'NORMAL' },
-                          { test: 'Serum Potassium', value: '4.2 mEq/L', range: '3.5 - 5.0', status: 'NORMAL' },
-                        ].map((lab, i) => (
-                          <div
-                            key={i}
-                            style={{
-                              padding: '0.55rem 0.75rem',
-                              backgroundColor: '#ffffff',
-                              borderRadius: '6px',
-                              border: '1px solid #e2e8f0',
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
-                            }}
-                          >
-                            <div>
-                              <strong style={{ fontSize: '0.8125rem', color: '#0f172a' }}>{lab.test}</strong>
-                              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Ref: {lab.range}</div>
+
+                      {activePatientLabOrders.length > 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                          {activePatientLabOrders.map((order) => {
+                            const isReady = order.stage === 'REPORT_GENERATED' || order.stage === 'VALIDATED';
+                            const isCritical = order.isFlaggedCritical && !order.criticalAcknowledged;
+                            return (
+                              <div
+                                key={order.id}
+                                style={{
+                                  padding: '0.75rem',
+                                  backgroundColor: isCritical ? '#fef2f2' : isReady ? '#f0fdf4' : '#f8fafc',
+                                  borderRadius: '8px',
+                                  border: `1px solid ${isCritical ? '#fca5a5' : isReady ? '#86efac' : '#e2e8f0'}`,
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: '0.4rem',
+                                }}
+                              >
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <strong style={{ fontSize: '0.8125rem', color: '#0f172a' }}>{order.testName}</strong>
+                                  <span
+                                    className={`badge ${
+                                      isCritical ? 'badge-danger' : isReady ? 'badge-success' : 'badge-warning'
+                                    }`}
+                                    style={{ fontSize: '0.7rem' }}
+                                  >
+                                    {isCritical ? '🚨 Critical' : isReady ? '✓ Ready' : order.stage.replace('_', ' ')}
+                                  </span>
+                                </div>
+                                <div style={{ fontSize: '0.7188rem', color: 'var(--text-muted)' }}>
+                                  Barcode: <code>{order.barcode}</code> • Sample: {order.sampleType}
+                                </div>
+
+                                {order.parameters && order.parameters.length > 0 && (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginTop: '0.25rem', borderTop: '1px solid #e2e8f0', paddingTop: '0.35rem' }}>
+                                    {order.parameters.map((p, idx) => (
+                                      <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem' }}>
+                                        <span style={{ color: p.isCritical ? '#dc2626' : p.isAbnormal ? '#d97706' : '#334155', fontWeight: p.isAbnormal ? 700 : 500 }}>
+                                          {p.paramName}
+                                        </span>
+                                        <span style={{ fontWeight: 800, color: p.isCritical ? '#dc2626' : p.isAbnormal ? '#d97706' : '#0284c7' }}>
+                                          {p.observedValue} {p.unit}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.35rem' }}>
+                                  {isCritical && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setCriticalOrderToAcknowledge(order);
+                                        setShowCriticalAckModal(true);
+                                      }}
+                                      className="btn btn-danger btn-sm"
+                                      style={{ fontSize: '0.7rem', fontWeight: 800, padding: '0.25rem 0.5rem' }}
+                                    >
+                                      <ShieldAlert size={12} /> Acknowledge Alert
+                                    </button>
+                                  )}
+                                  {isReady && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedLabReportToView(order);
+                                        setShowSignedReportModal(true);
+                                      }}
+                                      className="btn btn-primary btn-sm"
+                                      style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.25rem 0.5rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                                    >
+                                      <FileCheck size={12} /> View Signed Report
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          {[
+                            { test: 'Hemoglobin (Hb)', value: '14.2 g/dL', range: '13.5 - 17.5', status: 'NORMAL' },
+                            { test: 'Total WBC Count', value: '8,400 /µL', range: '4,000 - 11,000', status: 'NORMAL' },
+                            { test: 'Platelet Count', value: '280,000 /µL', range: '150,000 - 450,000', status: 'NORMAL' },
+                            { test: 'ESR (Westergren)', value: '12 mm/hr', range: '0 - 15', status: 'NORMAL' },
+                            { test: 'Fasting Blood Sugar', value: '98 mg/dL', range: '70 - 100', status: 'NORMAL' },
+                            { test: 'Serum Creatinine', value: '0.9 mg/dL', range: '0.7 - 1.3', status: 'NORMAL' },
+                            { test: 'Serum Potassium', value: '4.2 mEq/L', range: '3.5 - 5.0', status: 'NORMAL' },
+                          ].map((lab, i) => (
+                            <div
+                              key={i}
+                              style={{
+                                padding: '0.55rem 0.75rem',
+                                backgroundColor: '#ffffff',
+                                borderRadius: '6px',
+                                border: '1px solid #e2e8f0',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                              }}
+                            >
+                              <div>
+                                <strong style={{ fontSize: '0.8125rem', color: '#0f172a' }}>{lab.test}</strong>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Ref: {lab.range}</div>
+                              </div>
+                              <div style={{ textAlign: 'right' }}>
+                                <strong style={{ fontSize: '0.875rem', color: '#0284c7' }}>{lab.value}</strong>
+                              </div>
                             </div>
-                            <div style={{ textAlign: 'right' }}>
-                              <strong style={{ fontSize: '0.875rem', color: '#0284c7' }}>{lab.value}</strong>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -2687,7 +2908,7 @@ export const DoctorDashboard: React.FC = () => {
 
                 <div className="form-group" style={{ margin: 0 }}>
                   <label className="form-label" style={{ fontWeight: 800, fontSize: '0.875rem' }}>
-                    Standard OPD Consultation Tariff ($)
+                    Standard OPD Consultation Tariff ({symbol})
                   </label>
                   <input
                     className="form-input"
@@ -2699,7 +2920,7 @@ export const DoctorDashboard: React.FC = () => {
 
                 <div className="form-group" style={{ margin: 0 }}>
                   <label className="form-label" style={{ fontWeight: 800, fontSize: '0.875rem' }}>
-                    Follow-Up Review Tariff ($)
+                    Follow-Up Review Tariff ({symbol})
                   </label>
                   <input
                     className="form-input"
@@ -2755,7 +2976,7 @@ export const DoctorDashboard: React.FC = () => {
               </div>
               <div className="card" style={{ padding: '1.5rem' }}>
                 <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', fontWeight: 700 }}>OPD REVENUE GENERATED</div>
-                <div style={{ fontSize: '2rem', fontWeight: 900, color: '#d97706', marginTop: '0.35rem' }}>$4,250.00</div>
+                <div style={{ fontSize: '2rem', fontWeight: 900, color: '#d97706', marginTop: '0.35rem' }}>{formatMoney(4250)}</div>
                 <div style={{ fontSize: '0.8125rem', color: '#d97706', marginTop: '0.35rem' }}>Consultations & Diagnostics</div>
               </div>
             </div>
@@ -3405,6 +3626,396 @@ export const DoctorDashboard: React.FC = () => {
                 style={{ fontSize: '0.875rem' }}
               >
                 Close History
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 9. DOCTOR CRITICAL LAB VALUE ACKNOWLEDGMENT MODAL (NABH / NABL MANDATE) */}
+      {/* ========================================================================= */}
+      {showCriticalAckModal && criticalOrderToAcknowledge && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.75)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 200,
+            padding: '1.5rem',
+            backdropFilter: 'blur(3px)',
+          }}
+        >
+          <div
+            className="card"
+            style={{
+              maxWidth: '680px',
+              width: '100%',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              padding: '1.75rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1.25rem',
+              border: '2px solid #ef4444',
+              boxShadow: '0 20px 40px rgba(239, 68, 68, 0.25)',
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #fee2e2', paddingBottom: '0.85rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <div style={{ width: '42px', height: '42px', borderRadius: '10px', backgroundColor: '#fee2e2', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <ShieldAlert size={24} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: '#991b1b' }}>
+                    Mandatory Critical Value Acknowledgment
+                  </h3>
+                  <div style={{ fontSize: '0.8125rem', color: '#7f1d1d' }}>
+                    NABH & NABL Clinical Safety Requirement • Order #{criticalOrderToAcknowledge.orderNo}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCriticalAckModal(false)}
+                style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#64748b' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Patient & Test Identity Strip */}
+            <div style={{ padding: '0.85rem 1rem', backgroundColor: '#fef2f2', borderRadius: '8px', border: '1px solid #fca5a5', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem', fontSize: '0.8125rem' }}>
+              <div>
+                <span style={{ color: '#7f1d1d', fontWeight: 600 }}>Patient:</span>
+                <strong style={{ display: 'block', color: '#0f172a', fontSize: '0.875rem' }}>{criticalOrderToAcknowledge.patientName}</strong>
+              </div>
+              <div>
+                <span style={{ color: '#7f1d1d', fontWeight: 600 }}>UHID:</span>
+                <strong style={{ display: 'block', color: '#0f172a' }}>{criticalOrderToAcknowledge.uhid}</strong>
+              </div>
+              <div>
+                <span style={{ color: '#7f1d1d', fontWeight: 600 }}>Investigation:</span>
+                <strong style={{ display: 'block', color: '#dc2626' }}>{criticalOrderToAcknowledge.testName}</strong>
+              </div>
+            </div>
+
+            {/* Critical Findings Table */}
+            <div>
+              <div style={{ fontSize: '0.875rem', fontWeight: 800, color: '#991b1b', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <AlertTriangle size={16} /> Observed Critical Parameter(s)
+              </div>
+              <div style={{ border: '1px solid #fca5a5', borderRadius: '8px', overflow: 'hidden' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#fee2e2', borderBottom: '1px solid #fca5a5' }}>
+                      <th style={{ padding: '0.6rem 0.85rem', textAlign: 'left', color: '#991b1b', fontWeight: 800 }}>Parameter</th>
+                      <th style={{ padding: '0.6rem 0.85rem', textAlign: 'center', color: '#991b1b', fontWeight: 800 }}>Observed Value</th>
+                      <th style={{ padding: '0.6rem 0.85rem', textAlign: 'center', color: '#991b1b', fontWeight: 800 }}>Reference Range</th>
+                      <th style={{ padding: '0.6rem 0.85rem', textAlign: 'right', color: '#991b1b', fontWeight: 800 }}>Clinical Flag</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {criticalOrderToAcknowledge.parameters.map((param, i) => (
+                      <tr key={i} style={{ borderBottom: '1px solid #f1f5f9', backgroundColor: param.isCritical ? '#fff1f2' : '#ffffff' }}>
+                        <td style={{ padding: '0.6rem 0.85rem', fontWeight: param.isCritical ? 800 : 500, color: param.isCritical ? '#991b1b' : '#1e293b' }}>
+                          {param.paramName}
+                        </td>
+                        <td style={{ padding: '0.6rem 0.85rem', textAlign: 'center', fontWeight: 900, color: param.isCritical ? '#dc2626' : '#0f172a', fontSize: '0.9375rem' }}>
+                          {param.observedValue} {param.unit}
+                        </td>
+                        <td style={{ padding: '0.6rem 0.85rem', textAlign: 'center', color: '#64748b' }}>
+                          {param.referenceRange} {param.unit}
+                        </td>
+                        <td style={{ padding: '0.6rem 0.85rem', textAlign: 'right' }}>
+                          <span className={`badge ${param.isCritical ? 'badge-danger' : param.isAbnormal ? 'badge-warning' : 'badge-success'}`} style={{ fontSize: '0.75rem' }}>
+                            {param.flag || (param.isCritical ? 'CRITICAL HIGH' : 'NORMAL')}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Pathologist Remark Alert */}
+            {criticalOrderToAcknowledge.pathologistRemarks && (
+              <div style={{ padding: '0.75rem 1rem', backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px', fontSize: '0.8125rem', color: '#92400e' }}>
+                <strong>Pathologist Alert Note:</strong> {criticalOrderToAcknowledge.pathologistRemarks}
+              </div>
+            )}
+
+            {/* Physician Action & Mandatory Confirmation */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <label className="form-label" style={{ fontWeight: 800, fontSize: '0.875rem', margin: 0, color: '#0f172a' }}>
+                Clinical Therapeutic Action Initiated <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <textarea
+                className="form-textarea"
+                rows={3}
+                placeholder="E.g., IV Calcium Gluconate administered, telemetry monitor connected, repeat K+ ordered in 2 hours..."
+                value={criticalAckActionNote}
+                onChange={(e) => setCriticalAckActionNote(e.target.value)}
+                style={{ fontSize: '0.875rem' }}
+              />
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.8125rem', color: '#0f172a', fontWeight: 600 }}>
+                <input
+                  type="checkbox"
+                  checked={criticalAckConfirmed}
+                  onChange={(e) => setCriticalAckConfirmed(e.target.checked)}
+                  style={{ width: '16px', height: '16px', accentColor: '#dc2626' }}
+                />
+                <span>I confirm that I have reviewed this critical value, evaluated the patient's condition, and initiated clinical intervention.</span>
+              </label>
+            </div>
+
+            {/* Modal Actions */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
+              <button
+                type="button"
+                onClick={() => setShowCriticalAckModal(false)}
+                className="btn btn-secondary"
+                style={{ fontSize: '0.875rem' }}
+              >
+                Review Later
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmCriticalAcknowledgment}
+                disabled={!criticalAckConfirmed}
+                className="btn btn-danger"
+                style={{
+                  fontSize: '0.875rem',
+                  fontWeight: 800,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  opacity: criticalAckConfirmed ? 1 : 0.5,
+                  cursor: criticalAckConfirmed ? 'pointer' : 'not-allowed',
+                }}
+              >
+                <CheckCircle2 size={16} /> Sign & Acknowledge Critical Alert
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 10. SIGNED NABL LABORATORY REPORT VIEWER MODAL                          */}
+      {/* ========================================================================= */}
+      {showSignedReportModal && selectedLabReportToView && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.75)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 200,
+            padding: '1.5rem',
+            backdropFilter: 'blur(3px)',
+          }}
+        >
+          <div
+            className="card"
+            style={{
+              maxWidth: '750px',
+              width: '100%',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              padding: '2rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1.5rem',
+              backgroundColor: '#ffffff',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              borderRadius: '14px',
+            }}
+          >
+            {/* Report Hospital Header */}
+            <div style={{ borderBottom: '2px solid #0284c7', paddingBottom: '1rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <Building2 size={24} color="#0284c7" />
+                    <h2 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 900, color: '#0f172a', letterSpacing: '-0.02em' }}>
+                      NORTHMARK MEMORIAL HOSPITAL
+                    </h2>
+                  </div>
+                  <div style={{ fontSize: '0.8125rem', color: '#64748b', marginTop: '0.2rem' }}>
+                    Department of Laboratory Medicine • NABL Accredited (ISO 15189:2022) • Cert # MC-88124
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                    Sector 42, Health City • Tel: +91 11-4000-8000 • Email: lab@northmark.health
+                  </div>
+                </div>
+
+                <div style={{ textAlign: 'right' }}>
+                  <span className="badge badge-success" style={{ fontSize: '0.8125rem', padding: '0.35rem 0.75rem' }}>
+                    ✓ OFFICIAL SIGNED REPORT
+                  </span>
+                  <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.35rem' }}>
+                    Report ID: <strong>{selectedLabReportToView.reportId || 'REP-202609-001'}</strong>
+                  </div>
+                  <div style={{ fontSize: '0.7188rem', color: '#94a3b8' }}>
+                    Barcode: <code>{selectedLabReportToView.barcode}</code>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Patient Demographics & Sample Metadata */}
+            <div style={{ backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '10px', border: '1px solid #e2e8f0', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem', fontSize: '0.8125rem' }}>
+              <div>
+                <span style={{ color: 'var(--text-muted)' }}>Patient Name:</span>
+                <strong style={{ display: 'block', color: '#0f172a', fontSize: '0.875rem' }}>{selectedLabReportToView.patientName}</strong>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-muted)' }}>UHID:</span>
+                <strong style={{ display: 'block', color: '#0f172a' }}>{selectedLabReportToView.uhid}</strong>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-muted)' }}>Age / Gender:</span>
+                <strong style={{ display: 'block', color: '#0f172a' }}>{selectedLabReportToView.age}Y / {selectedLabReportToView.gender}</strong>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-muted)' }}>Ordering Doctor:</span>
+                <strong style={{ display: 'block', color: '#0284c7' }}>{selectedLabReportToView.doctor}</strong>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-muted)' }}>Sample Type:</span>
+                <strong style={{ display: 'block', color: '#0f172a' }}>{selectedLabReportToView.sampleType}</strong>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-muted)' }}>Container:</span>
+                <strong style={{ display: 'block', color: '#0f172a' }}>{selectedLabReportToView.container}</strong>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-muted)' }}>Order Priority:</span>
+                <span className={`badge ${selectedLabReportToView.priority === 'STAT' ? 'badge-danger' : 'badge-secondary'}`} style={{ fontSize: '0.75rem' }}>
+                  {selectedLabReportToView.priority || 'ROUTINE'}
+                </span>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-muted)' }}>Released At:</span>
+                <strong style={{ display: 'block', color: '#047857' }}>{selectedLabReportToView.approvedAt || '2026-09-20 14:30'}</strong>
+              </div>
+            </div>
+
+            {/* Test Investigation Title */}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <h4 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: 'var(--secondary)' }}>
+                  Investigation: {selectedLabReportToView.testName}
+                </h4>
+                <span className="badge badge-info" style={{ fontSize: '0.75rem' }}>
+                  {selectedLabReportToView.category}
+                </span>
+              </div>
+
+              {/* Parameters Table */}
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f1f5f9', borderBottom: '1px solid #e2e8f0' }}>
+                      <th style={{ padding: '0.65rem 1rem', textAlign: 'left', fontWeight: 800, color: '#334155' }}>Investigation Parameter</th>
+                      <th style={{ padding: '0.65rem 1rem', textAlign: 'center', fontWeight: 800, color: '#334155' }}>Observed Result</th>
+                      <th style={{ padding: '0.65rem 1rem', textAlign: 'center', fontWeight: 800, color: '#334155' }}>Units</th>
+                      <th style={{ padding: '0.65rem 1rem', textAlign: 'center', fontWeight: 800, color: '#334155' }}>Biological Reference Interval</th>
+                      <th style={{ padding: '0.65rem 1rem', textAlign: 'right', fontWeight: 800, color: '#334155' }}>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedLabReportToView.parameters && selectedLabReportToView.parameters.length > 0 ? (
+                      selectedLabReportToView.parameters.map((param, idx) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9', backgroundColor: param.isAbnormal ? '#fffbeb' : '#ffffff' }}>
+                          <td style={{ padding: '0.65rem 1rem', fontWeight: param.isAbnormal ? 700 : 500, color: '#0f172a' }}>
+                            {param.paramName}
+                          </td>
+                          <td style={{ padding: '0.65rem 1rem', textAlign: 'center', fontWeight: 800, color: param.isAbnormal ? '#d97706' : '#0284c7' }}>
+                            {param.observedValue}
+                          </td>
+                          <td style={{ padding: '0.65rem 1rem', textAlign: 'center', color: '#64748b' }}>
+                            {param.unit}
+                          </td>
+                          <td style={{ padding: '0.65rem 1rem', textAlign: 'center', color: '#64748b' }}>
+                            {param.referenceRange}
+                          </td>
+                          <td style={{ padding: '0.65rem 1rem', textAlign: 'right' }}>
+                            <span className={`badge ${param.isAbnormal ? 'badge-warning' : 'badge-success'}`} style={{ fontSize: '0.72rem' }}>
+                              {param.isAbnormal ? 'ABNORMAL' : 'NORMAL'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={5} style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                          Standard normal parameters verified by automated analyzer.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Pathologist Clinical Interpretation */}
+            {selectedLabReportToView.pathologistRemarks && (
+              <div style={{ padding: '0.85rem 1rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.8125rem' }}>
+                <strong style={{ color: '#0f172a' }}>Pathologist Clinical Impression:</strong>
+                <p style={{ margin: '0.25rem 0 0', color: '#475569', lineHeight: 1.5 }}>
+                  {selectedLabReportToView.pathologistRemarks}
+                </p>
+              </div>
+            )}
+
+            {/* Digital Signature & Certification Block */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '2px solid #e2e8f0', paddingTop: '1rem' }}>
+              <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                <div>QR Verification Token: <code>{selectedLabReportToView.barcode}</code></div>
+                <div>This report is authenticated under NABL digital signature guidelines.</div>
+              </div>
+
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '0.9375rem', fontWeight: 900, color: '#0f172a' }}>
+                  {selectedLabReportToView.approvedBy || 'Dr. Ananya Iyer, MD (Pathology)'}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#0284c7', fontWeight: 700 }}>
+                  Consultant Pathologist & Laboratory Director
+                </div>
+                <div style={{ fontSize: '0.7188rem', color: '#94a3b8' }}>
+                  Reg. #MC-2024-8841 • Released: {selectedLabReportToView.approvedAt || '2026-09-20 14:30'}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="btn btn-secondary"
+                style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.875rem' }}
+              >
+                <Printer size={16} /> Print Official Report
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowSignedReportModal(false)}
+                className="btn btn-primary"
+                style={{ fontSize: '0.875rem', fontWeight: 700 }}
+              >
+                Close Report
               </button>
             </div>
           </div>

@@ -266,24 +266,30 @@ export const LoginPage: React.FC = () => {
     } catch {
       // 2. Seamless Mock / Dev Mode Fallback
       const effectiveRole = resolvedStaff?.role || activeDepartment.defaultRole;
-      const effectiveName = resolvedStaff?.name || credentialId.split('@')[0];
+      const rawName = resolvedStaff?.name || credentialId.split('@')[0];
+      const cleanName = rawName.replace(/^(Nurse|Dr\.)\s+/i, '').trim();
       const effectiveEmail =
         resolvedStaff?.email ||
         (credentialId.includes('@') ? credentialId : `${credentialId.toLowerCase()}@northhospital.com`);
 
       const demoUser = {
         id: resolvedStaff ? resolvedStaff.id : `usr-${Date.now()}`,
+        employeeId: resolvedStaff?.employeeId,
+        designation: resolvedStaff?.designation || (effectiveRole === RoleType.NURSE ? 'Staff Nurse' : undefined),
+        station: effectiveRole === RoleType.NURSE ? 'Station 01 • OPD Ground Floor' : undefined,
         username: credentialId,
         email: effectiveEmail,
-        firstName: effectiveName.split(' ')[0],
-        lastName: effectiveName.split(' ').slice(1).join(' ') || 'Staff',
+        firstName: cleanName.split(' ')[0],
+        lastName: cleanName.split(' ').slice(1).join(' ') || 'Staff',
         role: effectiveRole,
         departmentId:
           activeDepartment.id === 'dept-admin'
             ? undefined
             : activeDepartment.id === 'dept-cardiology'
             ? 'dept-cardiology'
-            : '1',
+            : activeDepartment.id === 'dept-lab'
+            ? 'lab'
+            : resolvedStaff?.departmentId || '1',
         departmentName: activeDepartment.name,
         departmentCode: activeDepartment.code,
       };

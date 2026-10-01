@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { SharedQueueToken, patientJourneyService } from '../../../services/patientJourneyService';
 import { DepartmentTariffMaster } from '../../../types';
+import { useCurrency } from '../../../config/currency';
 
 interface Props {
   isOpen: boolean;
@@ -32,6 +33,7 @@ export const CounterBillingModal: React.FC<Props> = ({
 }) => {
   if (!isOpen || !token) return null;
 
+  const { format: formatMoney, symbol } = useCurrency();
   const [paymentMode, setPaymentMode] = useState<'CASH' | 'CARD' | 'UPI' | 'INSURANCE'>('CASH');
   const [cashTendered, setCashTendered] = useState<number>(100);
   const [discountPercent, setDiscountPercent] = useState<number>(0);
@@ -170,36 +172,36 @@ export const CounterBillingModal: React.FC<Props> = ({
               <div style={{ padding: '0.75rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.8125rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>{token.doctor} (Standard Consultation)</span>
-                  <strong>${baseConsultFee}.00</strong>
+                  <strong>{formatMoney(baseConsultFee)}</strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>Hospital OPD Registration Charge</span>
-                  <strong>${regFee}.00</strong>
+                  <strong>{formatMoney(regFee)}</strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>Nurse Triage & Vital Signs Recording</span>
-                  <strong>${triageFee}.00</strong>
+                  <strong>{formatMoney(triageFee)}</strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>Chamber Facility & Consumables ({token.room})</span>
-                  <strong>${chamberFee}.00</strong>
+                  <strong>{formatMoney(chamberFee)}</strong>
                 </div>
 
                 <div style={{ borderTop: '1px dashed var(--border-color)', paddingTop: '0.5rem', display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)' }}>
                   <span>Subtotal:</span>
-                  <span>${subtotal}.00</span>
+                  <span>{formatMoney(subtotal)}</span>
                 </div>
 
                 {discountPercent > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', color: '#16a34a' }}>
                     <span>Special Discount ({discountPercent}%):</span>
-                    <span>-${discountAmount}.00</span>
+                    <span>-{formatMoney(discountAmount)}</span>
                   </div>
                 )}
 
                 <div style={{ borderTop: '1.5px solid var(--border-color)', paddingTop: '0.5rem', display: 'flex', justifyContent: 'space-between', fontSize: '1.1rem', fontWeight: 900, color: 'var(--secondary)' }}>
                   <span>Total Payable:</span>
-                  <span style={{ color: '#0284c7' }}>${finalTotal}.00</span>
+                  <span style={{ color: '#0284c7' }}>{formatMoney(finalTotal)}</span>
                 </div>
               </div>
             </div>
@@ -268,7 +270,7 @@ export const CounterBillingModal: React.FC<Props> = ({
             {paymentMode === 'CASH' && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', padding: '0.85rem', backgroundColor: '#fffbeb', borderRadius: '10px', border: '1px solid #fde68a' }}>
                 <div>
-                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#92400e' }}>Cash Tendered by Patient ($)</label>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#92400e' }}>Cash Tendered by Patient ({symbol})</label>
                   <input
                     type="number"
                     min={finalTotal}
@@ -282,7 +284,7 @@ export const CounterBillingModal: React.FC<Props> = ({
                 <div>
                   <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#92400e' }}>Change to Return:</span>
                   <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#b45309', marginTop: '0.2rem' }}>
-                    ${cashChange}.00
+                    {formatMoney(cashChange)}
                   </div>
                 </div>
               </div>
@@ -299,7 +301,7 @@ export const CounterBillingModal: React.FC<Props> = ({
                     Scan with UPI / PhonePe / GooglePay
                   </div>
                   <div style={{ fontSize: '0.75rem', color: '#166534', marginTop: '0.2rem' }}>
-                    UPI ID: <code>northhospital.opd@icici</code> • Amount: <strong>${finalTotal}.00</strong>
+                    UPI ID: <code>northhospital.opd@icici</code> • Amount: <strong>{formatMoney(finalTotal)}</strong>
                   </div>
                 </div>
               </div>
@@ -316,7 +318,7 @@ export const CounterBillingModal: React.FC<Props> = ({
                 onClick={handleProcessPayment}
                 style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontWeight: 800, backgroundColor: '#16a34a', borderColor: '#16a34a' }}
               >
-                <Check size={16} /> Mark Paid & Print Official Receipt (${finalTotal})
+                <Check size={16} /> Mark Paid & Print Official Receipt ({formatMoney(finalTotal)})
               </button>
             </div>
           </div>
@@ -365,25 +367,25 @@ export const CounterBillingModal: React.FC<Props> = ({
               <div style={{ borderTop: '1px dashed #cbd5e1', paddingTop: '0.5rem', marginBottom: '0.5rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>1x OPD Consultation ({token.doctor.split('(')[0]})</span>
-                  <span>${baseConsultFee}.00</span>
+                  <span>{formatMoney(baseConsultFee)}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>1x Registration Fee</span>
-                  <span>${regFee}.00</span>
+                  <span>{formatMoney(regFee)}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>1x Vitals Recording</span>
-                  <span>${triageFee}.00</span>
+                  <span>{formatMoney(triageFee)}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>1x Chamber Sanitation ({token.room})</span>
-                  <span>${chamberFee}.00</span>
+                  <span>{formatMoney(chamberFee)}</span>
                 </div>
               </div>
 
               <div style={{ borderTop: '1px dashed #cbd5e1', paddingTop: '0.5rem', display: 'flex', justifyContent: 'space-between', fontWeight: 900, fontSize: '0.9375rem' }}>
                 <span>TOTAL PAID:</span>
-                <span>${finalTotal}.00</span>
+                <span>{formatMoney(finalTotal)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', color: '#16a34a', marginTop: '0.2rem' }}>
                 <span>Payment Mode:</span>

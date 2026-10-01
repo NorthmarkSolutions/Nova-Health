@@ -35,6 +35,7 @@ import {
   getStaffReportingManagers,
 } from './hospitalStaffStore';
 import { adminResetStaffPassword } from '../../../../services/authResetService';
+import { useCurrency } from '../../../../config/currency';
 
 interface StaffProfileDrawerProps {
   staff: StaffMember | null;
@@ -53,6 +54,7 @@ export const StaffProfileDrawer: React.FC<StaffProfileDrawerProps> = ({
   availableDepartments = [],
   availableShifts = [],
 }) => {
+  const { symbol } = useCurrency();
   const [activeTab, setActiveTab] = useState<
     'personal' | 'emergency' | 'employment' | 'bank' | 'documents' | 'shifts'
   >('personal');
@@ -924,7 +926,7 @@ export const StaffProfileDrawer: React.FC<StaffProfileDrawerProps> = ({
                       />
                     </div>
                     <div>
-                      <label style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block', marginBottom: '0.25rem' }}>Consultation Fee ($)</label>
+                      <label style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block', marginBottom: '0.25rem' }}>Consultation Fee ({symbol})</label>
                       <input
                         type="number"
                         value={formData.consultationFee || 100}

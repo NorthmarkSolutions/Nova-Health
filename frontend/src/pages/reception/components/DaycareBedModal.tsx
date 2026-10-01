@@ -16,6 +16,7 @@ import {
 import { SharedPatient, SharedQueueToken, FlatCampusBed, patientJourneyService } from '../../../services/patientJourneyService';
 import { DepartmentTariffMaster } from '../../../types';
 import { InpatientCareDetails } from '../../../pages/admin/setup/organization/CampusInfrastructureSection';
+import { useCurrency } from '../../../config/currency';
 
 interface Props {
   isOpen: boolean;
@@ -37,6 +38,8 @@ export const DaycareBedModal: React.FC<Props> = ({
   onBedAllocated,
 }) => {
   if (!isOpen) return null;
+
+  const { format: formatMoney } = useCurrency();
 
   const allFlatBeds = patientJourneyService.getFlatBedsList();
   const availableBeds = allFlatBeds.filter((b) => b.bed.status === 'AVAILABLE');
@@ -200,7 +203,7 @@ export const DaycareBedModal: React.FC<Props> = ({
                     🟢 Ready to Allocate
                   </span>
                   <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#15803d', marginTop: '0.2rem' }}>
-                    ${hourlyRate}/hr • ${activeTargetBed.bed.dailyTariff}/24h
+                    {formatMoney(hourlyRate)}/hr • {formatMoney(activeTargetBed.bed.dailyTariff)}/24h
                   </div>
                 </div>
               </div>
@@ -237,7 +240,7 @@ export const DaycareBedModal: React.FC<Props> = ({
                 >
                   {availableBeds.map((b) => (
                     <option key={b.bed.id} value={b.bed.id}>
-                      {b.bed.bedNumber} ({b.wardName} • {b.roomNumber}) — ${b.bed.dailyTariff}/day
+                      {b.bed.bedNumber} ({b.wardName} • {b.roomNumber}) — {formatMoney(b.bed.dailyTariff)}/day
                     </option>
                   ))}
                 </select>
@@ -303,10 +306,10 @@ export const DaycareBedModal: React.FC<Props> = ({
               <div style={{ padding: '0.75rem', backgroundColor: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Estimated Observation Tariff</span>
                 <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#0284c7', marginTop: '0.2rem' }}>
-                  ${estimatedCharge}.00
+                  {formatMoney(estimatedCharge)}
                 </div>
                 <div style={{ fontSize: '0.6875rem', color: '#64748b' }}>
-                  Rate: ${hourlyRate}/hr in {activeTargetBed?.wardName}
+                  Rate: {formatMoney(hourlyRate)}/hr in {activeTargetBed?.wardName}
                 </div>
               </div>
             </div>
@@ -394,7 +397,7 @@ export const DaycareBedModal: React.FC<Props> = ({
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed #cbd5e1', paddingTop: '0.5rem', fontWeight: 800 }}>
                 <span>Total Estimated Charge:</span>
-                <span style={{ color: '#0284c7' }}>${estimatedCharge}.00</span>
+                <span style={{ color: '#0284c7' }}>{formatMoney(estimatedCharge)}</span>
               </div>
             </div>
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Receipt,
   DollarSign,
@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { PaymentMethod, InvoiceStatus } from '../../types';
 import { patientJourneyService } from '../../services/patientJourneyService';
+import { useCurrency } from '../../config/currency';
 
 interface DetailedInvoice {
   id: string;
@@ -46,6 +47,7 @@ interface DetailedInvoice {
 }
 
 export const BillingDashboard: React.FC = () => {
+  const { format: formatMoney, symbol } = useCurrency();
   const [activeTab, setActiveTab] = useState<'invoices' | 'advance' | 'insurance' | 'settlement'>('invoices');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
@@ -61,6 +63,18 @@ export const BillingDashboard: React.FC = () => {
 
   // Invoices synchronized with patientJourneyService
   const [invoices, setInvoices] = useState<DetailedInvoice[]>(() => patientJourneyService.getInvoices() as any);
+
+  useEffect(() => {
+    const handleSync = () => {
+      setInvoices(patientJourneyService.getInvoices() as any);
+    };
+    window.addEventListener('storage', handleSync);
+    window.addEventListener('nh_data_sync', handleSync);
+    return () => {
+      window.removeEventListener('storage', handleSync);
+      window.removeEventListener('nh_data_sync', handleSync);
+    };
+  }, []);
 
   const openPaymentModal = (inv: DetailedInvoice) => {
     setActiveInvoice(inv);
@@ -165,7 +179,7 @@ export const BillingDashboard: React.FC = () => {
               <Receipt size={24} />
             </div>
             <div>
-              <div className="stat-value">${totalBilled.toFixed(2)}</div>
+              <div className="stat-value">{formatMoney(totalBilled)}</div>
               <div className="stat-label">Total Invoiced Today</div>
             </div>
           </div>
@@ -175,7 +189,7 @@ export const BillingDashboard: React.FC = () => {
               <DollarSign size={24} />
             </div>
             <div>
-              <div className="stat-value">${totalCollected.toFixed(2)}</div>
+              <div className="stat-value">{formatMoney(totalCollected)}</div>
               <div className="stat-label">Cash & Digital Receipts</div>
             </div>
           </div>
@@ -185,7 +199,7 @@ export const BillingDashboard: React.FC = () => {
               <AlertCircle size={24} />
             </div>
             <div>
-              <div className="stat-value">${totalOutstanding.toFixed(2)}</div>
+              <div className="stat-value">{formatMoney(totalOutstanding)}</div>
               <div className="stat-label">Outstanding Receivables</div>
             </div>
           </div>
@@ -195,7 +209,7 @@ export const BillingDashboard: React.FC = () => {
               <Building2 size={24} />
             </div>
             <div>
-              <div className="stat-value">$800.00</div>
+              <div className="stat-value">{formatMoney(800)}</div>
               <div className="stat-label">Inpatient Advance Deposits</div>
             </div>
           </div>
@@ -303,19 +317,19 @@ export const BillingDashboard: React.FC = () => {
                         </span>
                       </td>
 
-                      <td>${inv.subtotal.toFixed(2)}</td>
+                      <td>{formatMoney(inv.subtotal)}</td>
 
                       <td>
                         <span style={{ color: 'var(--primary)', fontWeight: 600 }}>
-                          -${inv.advanceDeducted.toFixed(2)}
+                          -{formatMoney(inv.advanceDeducted)}
                         </span>
                       </td>
 
-                      <td><strong>${inv.total.toFixed(2)}</strong></td>
+                      <td><strong>{formatMoney(inv.total)}</strong></td>
 
                       <td>
                         <strong style={{ color: inv.balance > 0 ? 'var(--danger)' : 'var(--success)' }}>
-                          ${inv.balance.toFixed(2)}
+                          {formatMoney(inv.balance)}
                         </strong>
                       </td>
 
@@ -387,7 +401,7 @@ export const BillingDashboard: React.FC = () => {
                     <td><code>DEP-202609-01</code></td>
                     <td><strong>Robert Fox (UHID-202609-00001)</strong></td>
                     <td>Male Surgical Ward (Bed B-04)</td>
-                    <td><strong>$500.00</strong></td>
+                    <td><strong>{formatMoney(500)}</strong></td>
                     <td>UPI Transfer</td>
                     <td><span className="badge badge-info">Deducted on Final Bill</span></td>
                   </tr>
@@ -395,7 +409,7 @@ export const BillingDashboard: React.FC = () => {
                     <td><code>DEP-202609-02</code></td>
                     <td><strong>Eleanor Vance (UHID-202609-00002)</strong></td>
                     <td>Intensive Care Unit (ICU-02)</td>
-                    <td><strong>$1,000.00</strong></td>
+                    <td><strong>{formatMoney(1000)}</strong></td>
                     <td>Credit Card POS</td>
                     <td><span className="badge badge-success">Active Holding</span></td>
                   </tr>
@@ -403,7 +417,7 @@ export const BillingDashboard: React.FC = () => {
                     <td><code>DEP-202609-03</code></td>
                     <td><strong>Marcus Brody (UHID-202609-00003)</strong></td>
                     <td>Medical Ward A (Bed B-01)</td>
-                    <td><strong>$300.00</strong></td>
+                    <td><strong>{formatMoney(300)}</strong></td>
                     <td>Cash Desk</td>
                     <td><span className="badge badge-info">Deducted on Final Bill</span></td>
                   </tr>
@@ -446,8 +460,8 @@ export const BillingDashboard: React.FC = () => {
                     <td><strong>Marcus Brody</strong></td>
                     <td>United HealthCare TPA</td>
                     <td>UHM-782190</td>
-                    <td>$1,500.00</td>
-                    <td>10% ($150.00)</td>
+                    <td>{formatMoney(1500)}</td>
+                    <td>10% ({formatMoney(150)})</td>
                     <td><span className="badge badge-success">Pre-Auth Approved</span></td>
                   </tr>
                   <tr>
@@ -455,7 +469,7 @@ export const BillingDashboard: React.FC = () => {
                     <td><strong>Eleanor Vance</strong></td>
                     <td>Aetna Senior Health</td>
                     <td>AET-449102</td>
-                    <td>$3,200.00</td>
+                    <td>{formatMoney(3200)}</td>
                     <td>Nil (Full Cashless)</td>
                     <td><span className="badge badge-warning">Under Review</span></td>
                   </tr>
@@ -483,22 +497,22 @@ export const BillingDashboard: React.FC = () => {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.25rem' }}>
               <div style={{ padding: '1rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--bg-subtle)' }}>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>PHYSICAL CASH IN DRAWER</div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--secondary)', marginTop: '0.25rem' }}>$480.00</div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--secondary)', marginTop: '0.25rem' }}>{formatMoney(480)}</div>
               </div>
 
               <div style={{ padding: '1rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--bg-subtle)' }}>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>CARD POS TERMINAL</div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--secondary)', marginTop: '0.25rem' }}>$1,000.00</div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--secondary)', marginTop: '0.25rem' }}>{formatMoney(1000)}</div>
               </div>
 
               <div style={{ padding: '1rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--bg-subtle)' }}>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>UPI / DIGITAL QR</div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--secondary)', marginTop: '0.25rem' }}>$655.00</div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--secondary)', marginTop: '0.25rem' }}>{formatMoney(655)}</div>
               </div>
 
               <div style={{ padding: '1rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--bg-subtle)' }}>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>TOTAL REVENUE COLLECTED</div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--primary)', marginTop: '0.25rem' }}>$2,135.00</div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--primary)', marginTop: '0.25rem' }}>{formatMoney(2135)}</div>
               </div>
             </div>
 
@@ -542,12 +556,12 @@ export const BillingDashboard: React.FC = () => {
                 <div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Outstanding Balance Due</div>
                   <div style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--primary-hover)' }}>
-                    ${activeInvoice.balance.toFixed(2)}
+                    {formatMoney(activeInvoice.balance)}
                   </div>
                 </div>
                 {activeInvoice.advanceDeducted > 0 && (
                   <span className="badge badge-success">
-                    Advance Deducted: ${activeInvoice.advanceDeducted.toFixed(2)}
+                    Advance Deducted: {formatMoney(activeInvoice.advanceDeducted)}
                   </span>
                 )}
               </div>
@@ -567,7 +581,7 @@ export const BillingDashboard: React.FC = () => {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Amount Collecting ($) *</label>
+                <label className="form-label">Amount Collecting ({symbol}) *</label>
                 <input
                   type="number"
                   step="0.01"
@@ -591,7 +605,7 @@ export const BillingDashboard: React.FC = () => {
                       fontWeight: 600,
                     }}
                   >
-                    ⚠️ Partial Payment: ${(activeInvoice.balance - collectAmount).toFixed(2)} will remain due. Status will become <strong>Partial Paid</strong>.
+                    ⚠️ Partial Payment: {formatMoney(activeInvoice.balance - collectAmount)} will remain due. Status will become <strong>Partial Paid</strong>.
                   </div>
                 )}
               </div>
@@ -648,7 +662,7 @@ export const BillingDashboard: React.FC = () => {
                     <th>Service Description</th>
                     <th>Qty</th>
                     <th>Rate</th>
-                    <th>Total ($)</th>
+                    <th>Total ({symbol})</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -657,8 +671,8 @@ export const BillingDashboard: React.FC = () => {
                       <td><span className="badge badge-secondary" style={{ fontSize: '0.6875rem' }}>{item.source}</span></td>
                       <td><strong>{item.description}</strong></td>
                       <td>{item.qty}</td>
-                      <td>${item.unitPrice.toFixed(2)}</td>
-                      <td><strong>${item.total.toFixed(2)}</strong></td>
+                      <td>{formatMoney(item.unitPrice)}</td>
+                      <td><strong>{formatMoney(item.total)}</strong></td>
                     </tr>
                   ))}
                 </tbody>
@@ -670,38 +684,38 @@ export const BillingDashboard: React.FC = () => {
               <div style={{ width: '300px', display: 'flex', flexDirection: 'column', gap: '0.375rem', fontSize: '0.875rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: 'var(--text-muted)' }}>Gross Subtotal:</span>
-                  <span>${activeInvoice.subtotal.toFixed(2)}</span>
+                  <span>{formatMoney(activeInvoice.subtotal)}</span>
                 </div>
                 {activeInvoice.discount > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--success)' }}>
                     <span>Hospital Discount:</span>
-                    <span>-${activeInvoice.discount.toFixed(2)}</span>
+                    <span>-{formatMoney(activeInvoice.discount)}</span>
                   </div>
                 )}
                 {activeInvoice.advanceDeducted > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--primary)', fontWeight: 600 }}>
                     <span>Less Advance Deposit:</span>
-                    <span>-${activeInvoice.advanceDeducted.toFixed(2)}</span>
+                    <span>-{formatMoney(activeInvoice.advanceDeducted)}</span>
                   </div>
                 )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '0.5rem', borderTop: '2px solid var(--border-color)', fontWeight: 800, fontSize: '1.125rem' }}>
                   <span>Net Amount Payable:</span>
-                  <span style={{ color: 'var(--secondary)' }}>${activeInvoice.total.toFixed(2)}</span>
+                  <span style={{ color: 'var(--secondary)' }}>{formatMoney(activeInvoice.total)}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
                   <span>Amount Paid:</span>
-                  <span>${activeInvoice.paid.toFixed(2)}</span>
+                  <span>{formatMoney(activeInvoice.paid)}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', fontWeight: 700, color: activeInvoice.balance > 0 ? 'var(--danger)' : 'var(--success)' }}>
                   <span>Balance Due:</span>
-                  <span>${activeInvoice.balance.toFixed(2)}</span>
+                  <span>{formatMoney(activeInvoice.balance)}</span>
                 </div>
                 <div style={{ textAlign: 'right', marginTop: '0.5rem' }}>
                   {activeInvoice.balance === 0 ? (
                     <span className="badge badge-success" style={{ fontSize: '0.8125rem', padding: '0.35rem 0.75rem', fontWeight: 800 }}>✓ PAID IN FULL</span>
                   ) : (
                     <span className="badge badge-warning" style={{ fontSize: '0.8125rem', padding: '0.35rem 0.75rem', fontWeight: 800, backgroundColor: '#fef3c7', color: '#b45309' }}>
-                      ⚠️ PARTIAL PAYMENT (${activeInvoice.balance.toFixed(2)} REMAINING)
+                      ⚠️ PARTIAL PAYMENT ({formatMoney(activeInvoice.balance)} REMAINING)
                     </span>
                   )}
                 </div>

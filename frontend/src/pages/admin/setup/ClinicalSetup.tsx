@@ -12,8 +12,10 @@ import {
   X,
   BookOpen,
 } from 'lucide-react';
+import { useCurrency } from '../../../config/currency';
 
 export const ClinicalSetup: React.FC = () => {
+  const { format: formatMoney, symbol } = useCurrency();
   const [activeSubTab, setActiveSubTab] = useState<
     'specialties' | 'procedures' | 'icdCodes' | 'templates' | 'consentForms'
   >('specialties');
@@ -34,12 +36,12 @@ export const ClinicalSetup: React.FC = () => {
   ]);
 
   // Procedures
-  const [procedures, setProcedures] = useState([
-    { id: '1', code: 'PROC-93000', name: '12-Lead Electrocardiogram (ECG)', dept: 'Cardiology', duration: '15 mins', fee: '$45.00', status: 'ACTIVE' },
-    { id: '2', code: 'PROC-93306', name: '2D Echocardiography with Doppler', dept: 'Cardiology', duration: '30 mins', fee: '$220.00', status: 'ACTIVE' },
-    { id: '3', code: 'PROC-12001', name: 'Minor Wound Debridement & Suturing', dept: 'Emergency', duration: '25 mins', fee: '$95.00', status: 'ACTIVE' },
-    { id: '4', code: 'PROC-47562', name: 'Laparoscopic Cholecystectomy', dept: 'Surgery', duration: '90 mins', fee: '$2,400.00', status: 'ACTIVE' },
-    { id: '5', code: 'PROC-27447', name: 'Total Knee Arthroplasty (Replacement)', dept: 'Orthopedics', duration: '120 mins', fee: '$4,800.00', status: 'ACTIVE' },
+  const [procedures, setProcedures] = useState<Array<{ id: string; code: string; name: string; dept: string; duration: string; fee: number | string; status: string }>>([
+    { id: '1', code: 'PROC-93000', name: '12-Lead Electrocardiogram (ECG)', dept: 'Cardiology', duration: '15 mins', fee: 45, status: 'ACTIVE' },
+    { id: '2', code: 'PROC-93306', name: '2D Echocardiography with Doppler', dept: 'Cardiology', duration: '30 mins', fee: 220, status: 'ACTIVE' },
+    { id: '3', code: 'PROC-12001', name: 'Minor Wound Debridement & Suturing', dept: 'Emergency', duration: '25 mins', fee: 95, status: 'ACTIVE' },
+    { id: '4', code: 'PROC-47562', name: 'Laparoscopic Cholecystectomy', dept: 'Surgery', duration: '90 mins', fee: 2400, status: 'ACTIVE' },
+    { id: '5', code: 'PROC-27447', name: 'Total Knee Arthroplasty (Replacement)', dept: 'Orthopedics', duration: '120 mins', fee: 4800, status: 'ACTIVE' },
   ]);
 
   // ICD-10 Codes
@@ -227,7 +229,7 @@ export const ClinicalSetup: React.FC = () => {
                       <td><strong>{proc.name}</strong></td>
                       <td>{proc.dept}</td>
                       <td>{proc.duration}</td>
-                      <td><span style={{ fontWeight: 700, color: 'var(--teal)' }}>{proc.fee}</span></td>
+                      <td><span style={{ fontWeight: 700, color: 'var(--teal)' }}>{typeof proc.fee === 'number' ? formatMoney(proc.fee) : (isNaN(Number(proc.fee)) ? proc.fee : formatMoney(Number(proc.fee)))}</span></td>
                       <td><span className="badge badge-success">{proc.status}</span></td>
                       <td style={{ textAlign: 'right' }}>
                         <div style={{ display: 'inline-flex', gap: '0.375rem' }}>
@@ -443,8 +445,8 @@ export const ClinicalSetup: React.FC = () => {
                     <input className="form-input" placeholder="e.g. 20 mins" onChange={(e) => setFormData({ ...formData, duration: e.target.value })} required />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Base Fee</label>
-                    <input className="form-input" placeholder="e.g. $150.00" onChange={(e) => setFormData({ ...formData, fee: e.target.value })} required />
+                    <label className="form-label">Base Fee ({symbol})</label>
+                    <input className="form-input" placeholder={`e.g. ${formatMoney(150)}`} onChange={(e) => setFormData({ ...formData, fee: Number(e.target.value) || e.target.value })} required />
                   </div>
                 </>
               )}

@@ -16,8 +16,10 @@ import {
   User,
 } from 'lucide-react';
 import api from '../../../../services/api';
+import { useCurrency } from '../../../../config/currency';
 
 export const BedsSection: React.FC = () => {
+  const { format: formatMoney, symbol } = useCurrency();
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -38,7 +40,7 @@ export const BedsSection: React.FC = () => {
       patientName: 'James Sullivan',
       uhid: 'UHID-1049',
       admittedOn: '2026-09-12 14:30',
-      dailyTariff: '$1,200',
+      dailyTariff: 1200,
     },
     {
       id: '2',
@@ -49,7 +51,7 @@ export const BedsSection: React.FC = () => {
       patientName: '-',
       uhid: '-',
       admittedOn: '-',
-      dailyTariff: '$1,200',
+      dailyTariff: 1200,
     },
     {
       id: '3',
@@ -60,7 +62,7 @@ export const BedsSection: React.FC = () => {
       patientName: 'Robert Langdon (OT Post-Op)',
       uhid: 'UHID-2831',
       admittedOn: 'ETA: 16:30 Today',
-      dailyTariff: '$1,200',
+      dailyTariff: 1200,
     },
     {
       id: '4',
@@ -71,7 +73,7 @@ export const BedsSection: React.FC = () => {
       patientName: 'David Miller',
       uhid: 'UHID-1102',
       admittedOn: '2026-09-10 09:00',
-      dailyTariff: '$250',
+      dailyTariff: 250,
     },
     {
       id: '5',
@@ -82,7 +84,7 @@ export const BedsSection: React.FC = () => {
       patientName: '-',
       uhid: '-',
       admittedOn: '-',
-      dailyTariff: '$250',
+      dailyTariff: 250,
     },
     {
       id: '6',
@@ -93,7 +95,7 @@ export const BedsSection: React.FC = () => {
       patientName: '-',
       uhid: '-',
       admittedOn: '-',
-      dailyTariff: '$250',
+      dailyTariff: 250,
     },
     {
       id: '7',
@@ -104,7 +106,7 @@ export const BedsSection: React.FC = () => {
       patientName: 'Lady Eleanor Vance',
       uhid: 'UHID-0092',
       admittedOn: '2026-09-14 11:15',
-      dailyTariff: '$650',
+      dailyTariff: 650,
     },
     {
       id: '8',
@@ -115,7 +117,7 @@ export const BedsSection: React.FC = () => {
       patientName: 'Baby of Clara Oswald',
       uhid: 'UHID-3310',
       admittedOn: '2026-09-15 02:40',
-      dailyTariff: '$800',
+      dailyTariff: 800,
     },
     {
       id: '9',
@@ -126,7 +128,7 @@ export const BedsSection: React.FC = () => {
       patientName: 'Under UV Sterilization & Calibration',
       uhid: '-',
       admittedOn: '-',
-      dailyTariff: '$500',
+      dailyTariff: 500,
     },
   ]);
 
@@ -197,7 +199,7 @@ export const BedsSection: React.FC = () => {
       patientName: '-',
       uhid: '-',
       admittedOn: '-',
-      dailyTariff: '$300',
+      dailyTariff: 300,
     });
     setIsModalOpen(true);
   };
@@ -376,7 +378,7 @@ export const BedsSection: React.FC = () => {
                   <td><strong>{bed.bedNumber}</strong></td>
                   <td>{bed.ward}</td>
                   <td><span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>{bed.category}</span></td>
-                  <td><span style={{ fontWeight: 700, color: 'var(--primary)' }}>{bed.dailyTariff}/day</span></td>
+                  <td><span style={{ fontWeight: 700, color: 'var(--primary)' }}>{typeof bed.dailyTariff === 'number' ? formatMoney(bed.dailyTariff) : (isNaN(Number(String(bed.dailyTariff).replace(/[^0-9.]/g, ''))) ? bed.dailyTariff : formatMoney(Number(String(bed.dailyTariff).replace(/[^0-9.]/g, ''))))}/day</span></td>
                   <td>
                     <span
                       className={`badge ${
@@ -564,8 +566,8 @@ export const BedsSection: React.FC = () => {
                 <input className="form-input" placeholder="e.g. Motorized ICU Ventilator Bed" onChange={(e) => setFormData({ ...formData, category: e.target.value })} required />
               </div>
               <div className="form-group">
-                <label className="form-label">Daily Tariff Rate</label>
-                <input className="form-input" placeholder="e.g. $1,200" onChange={(e) => setFormData({ ...formData, dailyTariff: e.target.value })} required />
+                <label className="form-label">Daily Tariff Rate ({symbol})</label>
+                <input className="form-input" placeholder={`e.g. ${formatMoney(1200)}`} onChange={(e) => setFormData({ ...formData, dailyTariff: Number(e.target.value) || e.target.value })} required />
               </div>
 
               <div style={{ gridColumn: 'span 2', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
