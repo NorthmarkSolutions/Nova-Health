@@ -1,51 +1,127 @@
-import React from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../../components/shared';
+import { LabDataStore, LabQueueOrder } from '../data/labDataStore';
+import {
+  FlaskConical,
+  Clock,
+  AlertTriangle,
+  CheckCircle2,
+  ArrowRight,
+  ExternalLink,
+  Activity,
+  Filter,
+  Check,
+  Search,
+} from 'lucide-react';
 
 interface Props {
   onNavigateTab: (tab: string) => void;
 }
 
 export const LabAdminOverviewView: React.FC<Props> = ({ onNavigateTab }) => {
+  const navigate = useNavigate();
+  const [orders, setOrders] = useState<LabQueueOrder[]>(() => LabDataStore.getOrders());
+  const [orderSearchQuery, setOrderSearchQuery] = useState('');
+  const [orderFilter, setOrderFilter] = useState<'all' | 'opd' | 'stat' | 'pending'>('all');
+
+  useEffect(() => {
+    const handleSync = () => {
+      setOrders(LabDataStore.getOrders());
+    };
+    window.addEventListener('nh_lab_sync', handleSync);
+    window.addEventListener('nh_data_sync', handleSync);
+    window.addEventListener('storage', handleSync);
+    return () => {
+      window.removeEventListener('nh_lab_sync', handleSync);
+      window.removeEventListener('nh_data_sync', handleSync);
+      window.removeEventListener('storage', handleSync);
+    };
+  }, []);
+
+  // Filtered orders for live stream
+  const filteredOrders = useMemo(() => {
+    return orders.filter((o) => {
+      const matchSearch =
+        !orderSearchQuery ||
+        o.patientName.toLowerCase().includes(orderSearchQuery.toLowerCase()) ||
+        o.uhid.toLowerCase().includes(orderSearchQuery.toLowerCase()) ||
+        o.orderNumber.toLowerCase().includes(orderSearchQuery.toLowerCase()) ||
+        o.testName.toLowerCase().includes(orderSearchQuery.toLowerCase());
+
+      if (!matchSearch) return false;
+
+      if (orderFilter === 'opd') {
+        return (
+          o.location.toLowerCase().includes('opd') ||
+          (o.relevantHistory && o.relevantHistory.some((h) => h.toLowerCase().includes('opd')))
+        );
+      }
+      if (orderFilter === 'stat') {
+        return o.priority === 'STAT' || o.isCritical;
+      }
+      if (orderFilter === 'pending') {
+        return o.stage === 'ORDERED' || o.stage === 'COLLECTED';
+      }
+      return true;
+    });
+  }, [orders, orderSearchQuery, orderFilter]);
+
+  // Dynamic KPIs
+  const totalOrdersToday = 410 + orders.length;
+  const pendingIntakeCount = orders.filter((o) => o.stage === 'ORDERED').length;
+  const inAnalysisCount = orders.filter(
+    (o) =>
+      o.stage === 'COLLECTED' ||
+      o.stage === 'PROCESSING' ||
+      o.stage === 'ACCESSIONED' ||
+      o.stage === 'RECEIVED'
+  ).length;
+  const pathologistReviewCount = orders.filter(
+    (o) => o.stage === 'PENDING_REVIEW' || o.stage === 'RESULT_ENTERED'
+  ).length;
+  const criticalCount = orders.filter((o) => o.isCritical).length;
+
   const kpis = [
     {
       label: 'Orders today',
-      value: '412',
+      value: String(totalOrdersToday),
       trend: '+12% vs Tue',
       tBg: '#F0FDF4',
       tFg: '#15803D',
-      sub: 'OPD 58% · IPD 27% · ER 15%',
+      sub: `OPD ${(58 + orders.length * 0.1).toFixed(0)}% · IPD 27% · ER 15%`,
     },
     {
-      label: 'Median turnaround',
-      value: '46m',
-      trend: 'On target',
-      tBg: '#F0FDF4',
-      tFg: '#15803D',
-      sub: 'Target under 60 min',
+      label: 'Pending Phlebotomy',
+      value: String(pendingIntakeCount),
+      trend: pendingIntakeCount > 0 ? 'Intake Queue' : 'All Collected',
+      tBg: pendingIntakeCount > 0 ? '#FFFBEB' : '#F0FDF4',
+      tFg: pendingIntakeCount > 0 ? '#B45309' : '#15803D',
+      sub: `${pendingIntakeCount} awaiting specimen draw`,
     },
     {
-      label: 'Critical call-back',
-      value: '6m',
-      trend: 'Target 15m',
-      tBg: '#F0FDF4',
-      tFg: '#15803D',
-      sub: '6 critical this week, 1 open',
+      label: 'On Analyzers',
+      value: String(inAnalysisCount),
+      trend: 'In Testing',
+      tBg: '#EFF6FF',
+      tFg: '#1D4ED8',
+      sub: `${inAnalysisCount} active specimens`,
     },
     {
-      label: 'Re-test rate',
-      value: '2.1%',
-      trend: '+0.4 pts',
-      tBg: '#FFFBEB',
-      tFg: '#B45309',
-      sub: '9 of 412 returned',
+      label: 'Pathologist Review',
+      value: String(pathologistReviewCount),
+      trend: pathologistReviewCount > 0 ? 'Verification' : 'Up to date',
+      tBg: pathologistReviewCount > 0 ? '#FEF3C7' : '#F0FDF4',
+      tFg: pathologistReviewCount > 0 ? '#B45309' : '#15803D',
+      sub: `${pathologistReviewCount} awaiting sign-off`,
     },
     {
-      label: 'Staff on duty',
-      value: '9',
-      trend: '2 on call',
-      tBg: '#F3F4F6',
-      tFg: '#374151',
-      sub: '2 pathologists · 7 technicians',
+      label: 'Critical Flags',
+      value: String(criticalCount),
+      trend: criticalCount > 0 ? 'STAT Alert' : '0 open',
+      tBg: criticalCount > 0 ? '#FEF2F2' : '#F3F4F6',
+      tFg: criticalCount > 0 ? '#B91C1C' : '#374151',
+      sub: `${criticalCount} panic values logged`,
     },
   ];
 
@@ -206,6 +282,244 @@ export const LabAdminOverviewView: React.FC<Props> = ({ onNavigateTab }) => {
             </div>
           </div>
         ))}
+      </section>
+
+      {/* Live Diagnostic Orders Stream (Real-Time OPD / IPD Intake) */}
+      <section
+        style={{
+          backgroundColor: '#FFFFFF',
+          border: '1px solid #E5E7EB',
+          borderRadius: '12px',
+          padding: '20px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '16px',
+          boxShadow: '0 1px 2px rgba(17,24,39,0.04)',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#111827' }}>
+                Live Diagnostic Orders Stream
+              </h2>
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  backgroundColor: '#EFF6FF',
+                  color: '#1D4ED8',
+                  padding: '2px 8px',
+                  borderRadius: '999px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                }}
+              >
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#2563EB', display: 'inline-block' }} />
+                Real-Time OPD Sync
+              </span>
+            </div>
+            <span style={{ fontSize: '13px', color: '#6B7280' }}>
+              Incoming laboratory and pathology requisitions from OPD Doctor consultations, IPD wards, and emergency desks.
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', backgroundColor: '#F3F4F6', borderRadius: '8px', padding: '3px', border: '1px solid #E5E7EB' }}>
+              {(['all', 'opd', 'stat', 'pending'] as const).map((filterKey) => {
+                const labels: Record<string, string> = {
+                  all: `All (${orders.length})`,
+                  opd: 'OPD Doctor Orders',
+                  stat: 'STAT / Critical',
+                  pending: 'Pending Intake',
+                };
+                return (
+                  <button
+                    key={filterKey}
+                    type="button"
+                    onClick={() => setOrderFilter(filterKey)}
+                    style={{
+                      border: 'none',
+                      backgroundColor: orderFilter === filterKey ? '#FFFFFF' : 'transparent',
+                      color: orderFilter === filterKey ? '#111827' : '#6B7280',
+                      fontWeight: orderFilter === filterKey ? 600 : 500,
+                      fontSize: '12px',
+                      padding: '4px 10px',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      boxShadow: orderFilter === filterKey ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                    }}
+                  >
+                    {labels[filterKey]}
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => navigate('/department/lab?tab=queue')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                height: '34px',
+                padding: '0 12px',
+                borderRadius: '8px',
+                border: '1px solid #2563EB',
+                backgroundColor: '#2563EB',
+                color: '#FFFFFF',
+                fontSize: '12px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              <FlaskConical size={14} /> Open Tech Workbench <ArrowRight size={14} />
+            </button>
+          </div>
+        </div>
+
+        {/* Orders Table */}
+        <div style={{ overflowX: 'auto', border: '1px solid #F3F4F6', borderRadius: '8px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB', color: '#4B5563', fontWeight: 600 }}>
+                <th style={{ padding: '10px 14px' }}>Order & Barcode</th>
+                <th style={{ padding: '10px 14px' }}>Patient Details</th>
+                <th style={{ padding: '10px 14px' }}>Test & Department</th>
+                <th style={{ padding: '10px 14px' }}>Requesting Physician</th>
+                <th style={{ padding: '10px 14px' }}>Priority</th>
+                <th style={{ padding: '10px 14px' }}>Pipeline Stage</th>
+                <th style={{ padding: '10px 14px', textAlign: 'right' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredOrders.length === 0 ? (
+                <tr>
+                  <td colSpan={7} style={{ padding: '28px', textAlign: 'center', color: '#9CA3AF' }}>
+                    No orders match the selected filter.
+                  </td>
+                </tr>
+              ) : (
+                filteredOrders.slice(0, 8).map((ord) => {
+                  const isOpd =
+                    ord.location.toLowerCase().includes('opd') ||
+                    (ord.relevantHistory && ord.relevantHistory.some((h) => h.toLowerCase().includes('opd')));
+
+                  const stageBadge = {
+                    ORDERED: { label: 'Waiting Collection', bg: '#FEF3C7', color: '#B45309' },
+                    COLLECTED: { label: 'Sample Intake', bg: '#E0F2FE', color: '#0369A1' },
+                    RECEIVED: { label: 'Received in Lab', bg: '#E0F2FE', color: '#0369A1' },
+                    ACCESSIONED: { label: 'Accessioned', bg: '#EDE9FE', color: '#6D28D9' },
+                    PROCESSING: { label: 'On Analyzer', bg: '#DBEAFE', color: '#1D4ED8' },
+                    RESULT_ENTERED: { label: 'Results Entered', bg: '#FEF3C7', color: '#92400E' },
+                    PENDING_REVIEW: { label: 'Pathologist Review', bg: '#FCE7F3', color: '#BE185D' },
+                    SIGNED_OFF: { label: 'Signed & Released', bg: '#DCFCE7', color: '#15803D' },
+                  }[ord.stage] || { label: ord.stage, bg: '#F3F4F6', color: '#374151' };
+
+                  return (
+                    <tr key={ord.id} style={{ borderBottom: '1px solid #F3F4F6', transition: 'background-color 0.15s ease' }}>
+                      <td style={{ padding: '12px 14px' }}>
+                        <div style={{ fontWeight: 600, color: '#111827', fontFamily: 'monospace' }}>
+                          {ord.orderNumber}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#6B7280' }}>
+                          {ord.specimenNumber}
+                        </div>
+                      </td>
+                      <td style={{ padding: '12px 14px' }}>
+                        <div style={{ fontWeight: 600, color: '#111827' }}>{ord.patientName}</div>
+                        <div style={{ fontSize: '11px', color: '#6B7280' }}>
+                          {ord.uhid} · {ord.age}y/{ord.gender}
+                        </div>
+                      </td>
+                      <td style={{ padding: '12px 14px' }}>
+                        <div style={{ fontWeight: 500, color: '#111827' }}>{ord.testName}</div>
+                        <div style={{ fontSize: '11px', color: '#6B7280' }}>{ord.category}</div>
+                      </td>
+                      <td style={{ padding: '12px 14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontWeight: 500, color: '#111827' }}>{ord.doctorName}</span>
+                          {isOpd && (
+                            <span
+                              style={{
+                                fontSize: '10px',
+                                fontWeight: 700,
+                                padding: '1px 6px',
+                                borderRadius: '4px',
+                                backgroundColor: '#EFF6FF',
+                                color: '#1D4ED8',
+                              }}
+                            >
+                              OPD
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#6B7280' }}>{ord.location}</div>
+                      </td>
+                      <td style={{ padding: '12px 14px' }}>
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            padding: '3px 8px',
+                            borderRadius: '999px',
+                            backgroundColor:
+                              ord.priority === 'STAT' ? '#FEF2F2' : ord.priority === 'Urgent' ? '#FFFBEB' : '#F3F4F6',
+                            color:
+                              ord.priority === 'STAT' ? '#DC2626' : ord.priority === 'Urgent' ? '#D97706' : '#4B5563',
+                            border: `1px solid ${ord.priority === 'STAT' ? '#FECACA' : ord.priority === 'Urgent' ? '#FDE68A' : '#E5E7EB'}`,
+                          }}
+                        >
+                          {ord.priority}
+                        </span>
+                      </td>
+                      <td style={{ padding: '12px 14px' }}>
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            padding: '3px 8px',
+                            borderRadius: '6px',
+                            backgroundColor: stageBadge.bg,
+                            color: stageBadge.color,
+                          }}
+                        >
+                          {stageBadge.label}
+                        </span>
+                      </td>
+                      <td style={{ padding: '12px 14px', textAlign: 'right' }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (ord.stage === 'PENDING_REVIEW' || ord.stage === 'RESULT_ENTERED') {
+                              navigate('/department/lab?tab=review');
+                            } else {
+                              navigate('/department/lab?tab=queue');
+                            }
+                          }}
+                          style={{
+                            border: '1px solid #E5E7EB',
+                            backgroundColor: '#FFFFFF',
+                            borderRadius: '6px',
+                            padding: '4px 10px',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            color: '#2563EB',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          View →
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       {/* Workload Bar Chart + TAT vs Target */}

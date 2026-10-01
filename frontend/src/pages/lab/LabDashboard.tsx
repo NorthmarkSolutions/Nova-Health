@@ -41,9 +41,11 @@ export const LabDashboard: React.FC = () => {
       setOrders(LabDataStore.getOrders());
     };
     window.addEventListener('nh_lab_sync', handleSync);
+    window.addEventListener('nh_data_sync', handleSync);
     window.addEventListener('storage', handleSync);
     return () => {
       window.removeEventListener('nh_lab_sync', handleSync);
+      window.removeEventListener('nh_data_sync', handleSync);
       window.removeEventListener('storage', handleSync);
     };
   }, []);

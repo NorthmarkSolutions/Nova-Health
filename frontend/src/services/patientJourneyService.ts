@@ -1138,6 +1138,7 @@ export const patientJourneyService = {
     const updated = [order, ...list.filter((o) => o.id !== order.id)];
     localStorage.setItem('nh_lab_orders', JSON.stringify(updated));
     window.dispatchEvent(new Event('nh_data_sync'));
+    window.dispatchEvent(new Event('nh_lab_sync'));
     return order;
   },
 
@@ -1146,6 +1147,7 @@ export const patientJourneyService = {
     const updated = list.map((o) => (o.id === orderId ? { ...o, ...updates } : o));
     localStorage.setItem('nh_lab_orders', JSON.stringify(updated));
     window.dispatchEvent(new Event('nh_data_sync'));
+    window.dispatchEvent(new Event('nh_lab_sync'));
   },
 
   collectSample(orderId: string, collectorName: string = 'Nurse Clara Adams'): SharedLabOrder | null {
@@ -1164,6 +1166,7 @@ export const patientJourneyService = {
     const updatedList = list.map((o) => (o.id === orderId ? updatedOrder : o));
     localStorage.setItem('nh_lab_orders', JSON.stringify(updatedList));
     window.dispatchEvent(new Event('nh_data_sync'));
+    window.dispatchEvent(new Event('nh_lab_sync'));
     return updatedOrder;
   },
 
@@ -1183,6 +1186,7 @@ export const patientJourneyService = {
     const updatedList = list.map((o) => (o.id === orderId ? updatedOrder : o));
     localStorage.setItem('nh_lab_orders', JSON.stringify(updatedList));
     window.dispatchEvent(new Event('nh_data_sync'));
+    window.dispatchEvent(new Event('nh_lab_sync'));
     return updatedOrder;
   },
 

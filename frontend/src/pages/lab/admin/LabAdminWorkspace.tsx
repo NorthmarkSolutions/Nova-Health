@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { DepartmentWorkspaceLayout } from '../../department/DepartmentWorkspaceLayout';
 import { getDepartmentWorkspaceById } from '../../department/departmentWorkspaceStore';
+import { LabDataStore } from '../data/labDataStore';
 import { LabAdminOverviewView } from './LabAdminOverviewView';
 import { LabAdminStaffView } from './LabAdminStaffView';
 import { LabAdminSchedulingView } from './LabAdminSchedulingView';
@@ -23,9 +24,32 @@ export const LabAdminWorkspace: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') || 'overview';
   const workspace = getDepartmentWorkspaceById('ws-lab');
+  const [pendingOrdersCount, setPendingOrdersCount] = useState<number>(() => {
+    return LabDataStore.getOrders().filter((o) => o.stage === 'ORDERED' || o.stage === 'COLLECTED').length;
+  });
+
+  useEffect(() => {
+    const handleSync = () => {
+      const orders = LabDataStore.getOrders();
+      setPendingOrdersCount(orders.filter((o) => o.stage === 'ORDERED' || o.stage === 'COLLECTED').length);
+    };
+    window.addEventListener('nh_lab_sync', handleSync);
+    window.addEventListener('nh_data_sync', handleSync);
+    window.addEventListener('storage', handleSync);
+    return () => {
+      window.removeEventListener('nh_lab_sync', handleSync);
+      window.removeEventListener('nh_data_sync', handleSync);
+      window.removeEventListener('storage', handleSync);
+    };
+  }, []);
 
   const labAdminNavItems = [
-    { id: 'overview', label: 'Dashboard Overview', icon: <LayoutDashboard size={18} /> },
+    {
+      id: 'overview',
+      label: 'Dashboard Overview',
+      icon: <LayoutDashboard size={18} />,
+      badge: pendingOrdersCount > 0 ? String(pendingOrdersCount) : undefined,
+    },
     { id: 'staff', label: '1. Staff Pool & Roster', icon: <Users size={18} />, badge: '14' },
     { id: 'scheduling', label: '2. Duty Scheduling', icon: <Calendar size={18} />, badge: '2' },
     { id: 'equipment', label: '3. Equipment & Inventory', icon: <Wrench size={18} />, badge: '3' },
