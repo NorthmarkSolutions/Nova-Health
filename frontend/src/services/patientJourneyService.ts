@@ -1,4 +1,5 @@
 // Shared Patient Journey Store for cross-department persistence
+import api from './api';
 import { Gender, RoleType, AppointmentStatus } from '../types';
 import {
   getCampusBuildings,
@@ -1032,6 +1033,22 @@ export const patientJourneyService = {
     const list = this.getPatients();
     const updated = [patient, ...list.filter((p) => p.uhid !== patient.uhid)];
     localStorage.setItem('nh_patients', JSON.stringify(updated));
+    // Asynchronously synchronize with Django backend DB
+    api.post('/patients/', {
+      uhid: patient.uhid,
+      firstName: patient.firstName,
+      lastName: patient.lastName,
+      phoneNumber: patient.phone,
+      dateOfBirth: patient.dob || '1990-01-01',
+      gender: patient.gender ? String(patient.gender).toUpperCase() : 'MALE',
+      bloodGroup: patient.bloodGroup || 'O+',
+      emergencyContactName: patient.emergencyContact || '',
+      emergencyContactPhone: patient.phone || '',
+      allergies: (patient as any).allergies || [],
+      chronicConditions: (patient as any).chronicConditions || [],
+    }).catch((err) => {
+      console.warn('Background patient DB sync error:', err?.message || err);
+    });
     return patient;
   },
 

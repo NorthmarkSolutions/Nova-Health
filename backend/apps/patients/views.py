@@ -10,7 +10,7 @@ class PatientListCreateView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        query = request.query_params.get('q', '').strip()
+        query = (request.query_params.get('q') or request.query_params.get('search') or '').strip()
         uhid = request.query_params.get('uhid', '').strip()
         phone = request.query_params.get('phone', '').strip()
 
@@ -21,17 +21,28 @@ class PatientListCreateView(APIView):
         elif phone:
             qs = qs.filter(phone_number__icontains=phone)
         elif query:
-            qs = qs.filter(
-                Q(uhid__icontains=query) |
-                Q(first_name__icontains=query) |
-                Q(last_name__icontains=query) |
-                Q(phone_number__icontains=query)
-            )
+            for part in query.split():
+                qs = qs.filter(
+                    Q(uhid__icontains=part) |
+                    Q(first_name__icontains=part) |
+                    Q(last_name__icontains=part) |
+                    Q(phone_number__icontains=part)
+                )
 
-        serializer = PatientSerializer(qs, many=True)
+        serializer = PatientSerializer(qs[:30], many=True)
         return Response(serializer.data)
 
     def post(self, request):
+        uhid = request.data.get('uhid')
+        if uhid:
+            existing = Patient.objects.filter(uhid=uhid).first()
+            if existing:
+                serializer = PatientSerializer(existing, data=request.data, partial=True)
+                if serializer.is_valid():
+                    patient = serializer.save()
+                    return Response(PatientSerializer(patient).data, status=status.HTTP_200_OK)
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
         serializer = PatientSerializer(data=request.data)
         if serializer.is_valid():
             patient = serializer.save()

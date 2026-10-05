@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { RoleType, DepartmentWorkspace } from '../../types';
 import {
@@ -132,11 +132,11 @@ export const DepartmentWorkspaceLayout: React.FC<Props> = ({
                 padding: '1px 6px',
               }}
             >
-              {workspace.departmentCode?.replace('DEPT-', '') || 'LAB'}
+              {workspace.departmentCode?.replace('DEPT-', '') || 'DEPT'}
             </span>
           </div>
           <span style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>{workspace.departmentName}</span>
-          <span style={{ fontSize: '12px', color: '#6B7280' }}>{workspace.operatingHours || '24/7 Diagnostics'}</span>
+          <span style={{ fontSize: '12px', color: '#6B7280' }}>{workspace.operatingHours || 'Operational Hours'}</span>
 
           {isHospitalAdmin && onSwitchDepartment && (
             <div style={{ marginTop: '8px' }}>
@@ -275,7 +275,10 @@ export const DepartmentWorkspaceLayout: React.FC<Props> = ({
               {displayName}
             </span>
             <span style={{ fontSize: '12px', color: '#6B7280' }}>
-              {role === RoleType.DEPARTMENT_ADMIN ? 'Lab Manager · Dept Admin' : 'Hospital Admin'}
+              {user?.designation ||
+                (role === RoleType.DEPARTMENT_ADMIN
+                  ? `${workspace?.shortName || workspace?.departmentName || 'Department'} Admin`
+                  : 'Hospital Admin')}
             </span>
           </div>
           <button

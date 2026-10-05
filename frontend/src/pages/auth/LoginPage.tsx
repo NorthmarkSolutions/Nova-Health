@@ -30,6 +30,8 @@ import {
   Zap,
   UserCheck,
   Microscope,
+  Package,
+  FileText,
 } from 'lucide-react';
 import api from '../../services/api';
 import {
@@ -224,6 +226,10 @@ export const LoginPage: React.FC = () => {
         return <Radio size={size} color={color} />;
       case 'UserCheck':
         return <UserCheck size={size} color={color} />;
+      case 'Package':
+        return <Package size={size} color={color} />;
+      case 'FileText':
+        return <FileText size={size} color={color} />;
       default:
         return <Building2 size={size} color={color} />;
     }
@@ -267,12 +273,40 @@ export const LoginPage: React.FC = () => {
       });
 
       if (res.data?.accessToken) {
-        login(res.data.accessToken, res.data.user);
+        const isLabAccount =
+          res.data.user?.username === 'labadmin' ||
+          res.data.user?.email === 'lab.admin@northhospital.com' ||
+          resolvedStaff?.departmentId === 'lab' ||
+          resolvedStaff?.departmentCode === 'LAB' ||
+          activeDepartment.id === 'dept-lab';
+
+        const isCardioAccount =
+          resolvedStaff?.departmentId === 'dept-cardiology' ||
+          activeDepartment.id === 'dept-cardiology';
+
+        const enrichedUser = {
+          ...res.data.user,
+          departmentId:
+            res.data.user?.departmentId ||
+            (isLabAccount ? 'lab' : isCardioAccount ? 'dept-cardiology' : resolvedStaff?.departmentId || '1'),
+          departmentCode:
+            res.data.user?.departmentCode ||
+            (isLabAccount ? 'LAB' : isCardioAccount ? 'CARDIO' : resolvedStaff?.departmentCode || activeDepartment.code),
+          departmentName:
+            res.data.user?.departmentName ||
+            (isLabAccount ? 'Diagnostic Laboratory' : isCardioAccount ? 'Cardiology' : resolvedStaff?.departmentName || activeDepartment.name),
+          designation:
+            res.data.user?.designation ||
+            resolvedStaff?.designation ||
+            (isLabAccount ? 'Laboratory Director & Department Admin' : undefined),
+        };
+
+        login(res.data.accessToken, enrichedUser);
         const destination =
           resolvedStaff?.targetRoute ||
           (res.data.user?.role === RoleType.PATHOLOGIST
             ? '/lab?tab=review'
-            : res.data.user?.role === RoleType.DEPARTMENT_ADMIN && activeDepartment.id === 'dept-lab'
+            : res.data.user?.role === RoleType.DEPARTMENT_ADMIN && isLabAccount
             ? '/department/lab'
             : activeDepartment.defaultRoute);
         navigate(destination);
@@ -287,6 +321,17 @@ export const LoginPage: React.FC = () => {
         resolvedStaff?.email ||
         (credentialId.includes('@') ? credentialId : `${credentialId.toLowerCase()}@northhospital.com`);
 
+      const isLabAccount =
+        activeDepartment.id === 'dept-lab' ||
+        resolvedStaff?.departmentId === 'lab' ||
+        resolvedStaff?.departmentId === 'dept-lab' ||
+        credentialId.toLowerCase().includes('lab') ||
+        rawName.toLowerCase().includes('marcus vance');
+
+      const isCardioAccount =
+        activeDepartment.id === 'dept-cardiology' ||
+        resolvedStaff?.departmentId === 'dept-cardiology';
+
       const demoUser = {
         id: resolvedStaff ? resolvedStaff.id : `usr-${Date.now()}`,
         employeeId: resolvedStaff?.employeeId,
@@ -300,17 +345,17 @@ export const LoginPage: React.FC = () => {
         departmentId:
           activeDepartment.id === 'dept-admin'
             ? undefined
-            : activeDepartment.id === 'dept-cardiology'
-            ? 'dept-cardiology'
-            : activeDepartment.id === 'dept-lab'
+            : isLabAccount
             ? 'lab'
+            : isCardioAccount
+            ? 'dept-cardiology'
             : resolvedStaff?.departmentId || '1',
-        departmentName: activeDepartment.name,
-        departmentCode: activeDepartment.code,
+        departmentName: isLabAccount ? 'Diagnostic Laboratory' : resolvedStaff?.departmentName || activeDepartment.name,
+        departmentCode: isLabAccount ? 'LAB' : resolvedStaff?.departmentCode || activeDepartment.code,
       };
 
       login('local-jwt-token-2026', demoUser);
-      const targetDestination = resolvedStaff?.targetRoute || activeDepartment.defaultRoute;
+      const targetDestination = resolvedStaff?.targetRoute || (isLabAccount ? '/department/lab' : activeDepartment.defaultRoute);
       navigate(targetDestination);
     } finally {
       setIsLoading(false);

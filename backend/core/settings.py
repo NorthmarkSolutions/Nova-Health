@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'apps.ot',
     'apps.ipd',
     'apps.billing',
+    'apps.pharmacy',
     'apps.audit',
 ]
 

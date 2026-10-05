@@ -18,7 +18,10 @@ class RoleType(models.TextChoices):
     OT_MANAGER = 'OT_MANAGER', 'OT Manager'
     WARD_MANAGER = 'WARD_MANAGER', 'Ward Manager'
     PHARMACIST = 'PHARMACIST', 'Pharmacist'
+    INVENTORY_MANAGER = 'INVENTORY_MANAGER', 'Inventory Manager'
     CASHIER = 'CASHIER', 'Cashier'
+    BILLING_SUPERVISOR = 'BILLING_SUPERVISOR', 'Billing Supervisor'
+    INSURANCE_COORDINATOR = 'INSURANCE_COORDINATOR', 'Insurance Coordinator'
     PATIENT = 'PATIENT', 'Patient'
 
 class User(AbstractUser):

@@ -174,6 +174,33 @@ export const DEFAULT_WORKSPACES: DepartmentWorkspace[] = [
     createdAt: '2026-09-24T08:00:00.000Z',
     updatedAt: '2026-09-24T08:00:00.000Z',
   },
+  {
+    id: 'ws-pharmacy',
+    departmentId: 'pharmacy',
+    departmentCode: 'DEPT-PHARMACY',
+    departmentName: 'Pharmacy Department & Central Stores',
+    shortName: 'Pharmacy',
+    category: 'clinical',
+    adminId: 'EMP-PH-ADM',
+    adminName: 'Dr. Pooja Shah',
+    adminEmail: 'dr.pooja.shah@northhospital.com',
+    operatingHours: '24/7 Outpatient, Inpatient & Central Vault Dispensing',
+    config: {
+      hasAppointments: false,
+      hasQueue: true,
+      hasAdmissions: false,
+      hasBeds: false,
+      hasDoctors: false,
+      hasTests: false,
+      hasPrescriptions: true,
+      hasRooms: true,
+      hasSchedules: true,
+      hasWalkIn: true,
+      hasBilling: true,
+    },
+    createdAt: '2026-01-15T08:00:00.000Z',
+    updatedAt: '2026-10-01T10:00:00.000Z',
+  },
 ];
 
 // ----------------- DEFAULT OPD DOCTORS -----------------
@@ -359,6 +386,11 @@ export function getDepartmentWorkspaces(): DepartmentWorkspace[] {
           const cardioWs = DEFAULT_WORKSPACES.find((w) => w.departmentId === 'dept-cardiology');
           if (cardioWs) parsed.push(cardioWs);
         }
+        const hasLab = parsed.some((w: any) => w.id === 'ws-lab' || w.departmentId === 'lab' || w.departmentCode === 'DEPT-LAB');
+        if (!hasLab) {
+          const labWs = DEFAULT_WORKSPACES.find((w) => w.id === 'ws-lab' || w.departmentId === 'lab');
+          if (labWs) parsed.push(labWs);
+        }
         return parsed;
       }
     }
@@ -378,8 +410,21 @@ export function saveDepartmentWorkspaces(workspaces: DepartmentWorkspace[]): voi
 }
 
 export function getDepartmentWorkspaceById(departmentId: string): DepartmentWorkspace {
+  const normalizedId = (departmentId || '').toLowerCase();
   const workspaces = getDepartmentWorkspaces();
-  const found = workspaces.find((w) => w.id === departmentId || w.departmentId === departmentId || w.departmentCode.toLowerCase() === departmentId.toLowerCase() || w.shortName.toLowerCase() === departmentId.toLowerCase());
+  const found = workspaces.find(
+    (w) =>
+      w.id === departmentId ||
+      w.departmentId === departmentId ||
+      w.departmentCode.toLowerCase() === normalizedId ||
+      w.shortName.toLowerCase() === normalizedId ||
+      ((normalizedId === 'lab' || normalizedId === 'dept-lab' || normalizedId === 'ws-lab' || normalizedId === '9') &&
+        (w.departmentId === 'lab' || w.id === 'ws-lab' || w.departmentCode === 'DEPT-LAB')) ||
+      ((normalizedId === 'pharmacy' || normalizedId === 'dept-pharmacy' || normalizedId === 'ws-pharmacy' || normalizedId === '8') &&
+        (w.departmentId === 'pharmacy' || w.id === 'ws-pharmacy' || w.departmentCode === 'DEPT-PHARMACY')) ||
+      ((normalizedId === 'opd' || normalizedId === 'dept-opd' || normalizedId === 'ws-opd' || normalizedId === '1') &&
+        (w.departmentId === '1' || w.id === 'ws-opd' || w.departmentCode === 'DEPT-OPD'))
+  );
   if (found) return found;
 
   // Auto-provision if not found
@@ -402,6 +447,12 @@ export function autoProvisionWorkspace(
   deptIdOrCode: string,
   overrides?: Partial<DepartmentWorkspace>
 ): DepartmentWorkspace {
+  const normalized = (deptIdOrCode || '').toLowerCase();
+  if (normalized === 'lab' || normalized === 'dept-lab' || normalized === 'ws-lab' || normalized === '9') {
+    const labWs = DEFAULT_WORKSPACES.find((w) => w.id === 'ws-lab');
+    if (labWs) return labWs;
+  }
+
   // Check departments master in localStorage
   let deptMeta: any = null;
   try {

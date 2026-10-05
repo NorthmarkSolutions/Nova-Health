@@ -14,6 +14,12 @@ import { DoctorDashboard } from './pages/doctor/DoctorDashboard';
 import { DoctorAssistantDashboard } from './pages/doctor/DoctorAssistantDashboard';
 import { NurseDashboard } from './pages/nurse/NurseDashboard';
 import { PharmacyDashboard } from './pages/pharmacy/PharmacyDashboard';
+import { InventoryManagerWorkspace } from './pages/pharmacy/inventory/InventoryManagerWorkspace';
+import { OPDPharmacistWorkspace } from './pages/pharmacy/opd/OPDPharmacistWorkspace';
+import { IPDPharmacistWorkspace } from './pages/pharmacy/ipd/IPDPharmacistWorkspace';
+import { ControlledDrugRegisterWorkspace } from './pages/pharmacy/controlled/ControlledDrugRegisterWorkspace';
+import { PharmacyAdminWorkspace } from './pages/pharmacy/admin/PharmacyAdminWorkspace';
+import { NewOTCSalePage } from './pages/pharmacy/opd/NewOTCSalePage';
 import { LabDashboard } from './pages/lab/LabDashboard';
 import { OtDashboard } from './pages/ot/OtDashboard';
 import { IpdDashboard } from './pages/ipd/IpdDashboard';
@@ -30,9 +36,50 @@ const RoleHomeRedirect: React.FC = () => {
     return <Navigate to="/login" replace />;
   }
 
+  // Dr. Pooja Shah or Pharmacy Admin credentials redirect directly to pharmacy department workspace
+  if (
+    user?.username === 'pharmadmin' ||
+    user?.username === 'dr_pooja_shah' ||
+    user?.email === 'dr.pooja.shah@northhospital.com' ||
+    (user?.firstName?.includes('Pooja') && user?.lastName?.includes('Shah')) ||
+    (user as any)?.designation?.includes('Chief Pharmacist') ||
+    (user as any)?.badge === 'Pharmacy Admin'
+  ) {
+    return <Navigate to="/department/pharmacy" replace />;
+  }
+
+  // Sneha Nair or IPD Pharmacist credentials redirect directly to IPD workspace
+  if (
+    user?.username === 'sneha_nair' ||
+    user?.email === 'sneha.nair@northhospital.com' ||
+    (user as any)?.designation?.includes('IPD') ||
+    (user as any)?.badge === 'IPD Pharmacist'
+  ) {
+    return <Navigate to="/pharmacy/ipd" replace />;
+  }
+
   // For DEPARTMENT_ADMIN, route to their actual assigned department workspace
   if (role === RoleType.DEPARTMENT_ADMIN) {
-    const deptId = user?.departmentId || 'opd';
+    const isLab =
+      user?.departmentId === 'lab' ||
+      user?.departmentId === 'dept-lab' ||
+      user?.departmentId === '9' ||
+      (user as any)?.departmentCode === 'LAB' ||
+      user?.username === 'labadmin' ||
+      user?.email === 'lab.admin@northhospital.com' ||
+      (user?.firstName?.includes('Marcus') && user?.lastName?.includes('Vance'));
+
+    const isPharmacy =
+      user?.departmentId === 'pharmacy' ||
+      user?.departmentId === 'dept-pharmacy' ||
+      user?.departmentId === '8' ||
+      (user as any)?.departmentCode === 'PHARMACY' ||
+      user?.username === 'pharmadmin' ||
+      user?.username === 'dr_pooja_shah' ||
+      user?.email === 'dr.pooja.shah@northhospital.com' ||
+      (user?.firstName?.includes('Pooja') && user?.lastName?.includes('Shah'));
+
+    const deptId = isLab ? 'lab' : isPharmacy ? 'pharmacy' : user?.departmentId || 'opd';
     return <Navigate to={`/department/${deptId}`} replace />;
   }
 
@@ -52,12 +99,38 @@ const RoleHomeRedirect: React.FC = () => {
     [RoleType.PATHOLOGIST]: '/lab',
     [RoleType.LAB_TECH]: '/lab',
     [RoleType.PHARMACIST]: '/pharmacy',
+    [RoleType.INVENTORY_MANAGER]: '/pharmacy/inventory',
     [RoleType.FINANCE_MANAGER]: '/billing',
     [RoleType.CASHIER]: '/billing',
     [RoleType.PATIENT]: '/patient',
   };
 
   return <Navigate to={roleRoutes[role] || '/admin'} replace />;
+};
+
+const PharmacyWorkspaceRouter: React.FC = () => {
+  const { role, user } = useAuth();
+  const searchParams = new URLSearchParams(window.location.search);
+  const view = searchParams.get('view');
+
+  if (view === 'admin' || user?.username === 'pharmadmin' || user?.email === 'dr.pooja.shah@northhospital.com') {
+    return <PharmacyAdminWorkspace />;
+  }
+  if (view === 'cd' || view === 'controlled' || view === 'controlled-drugs') {
+    return <ControlledDrugRegisterWorkspace />;
+  }
+  if (
+    view === 'ipd' ||
+    user?.username === 'sneha_nair' ||
+    user?.email === 'sneha.nair@northhospital.com' ||
+    (user as any)?.badge === 'IPD Pharmacist'
+  ) {
+    return <IPDPharmacistWorkspace />;
+  }
+  if (role === RoleType.INVENTORY_MANAGER || view === 'inventory') {
+    return <InventoryManagerWorkspace />;
+  }
+  return <OPDPharmacistWorkspace />;
 };
 
 export function App() {
@@ -84,6 +157,30 @@ export function App() {
             >
               <Route path="/department/:deptId/*" element={<DepartmentWorkspaceContainer />} />
               <Route path="/department/*" element={<DepartmentWorkspaceContainer />} />
+            </Route>
+
+            {/* Pharmacy Workspaces: Independent Dedicated Engine (OPD Counter & Central Store) */}
+            <Route
+              element={
+                <ProtectedRoute
+                  allowedRoles={[
+                    RoleType.PHARMACIST,
+                    RoleType.INVENTORY_MANAGER,
+                    RoleType.DEPARTMENT_ADMIN,
+                    RoleType.SUPER_ADMIN,
+                    RoleType.HOSPITAL_ADMIN,
+                  ]}
+                />
+              }
+            >
+              <Route path="/pharmacy" element={<PharmacyWorkspaceRouter />} />
+              <Route path="/pharmacy/admin" element={<PharmacyAdminWorkspace />} />
+              <Route path="/pharmacy/opd" element={<OPDPharmacistWorkspace />} />
+              <Route path="/pharmacy/otc-sale/new" element={<NewOTCSalePage />} />
+              <Route path="/pharmacy/ipd" element={<IPDPharmacistWorkspace />} />
+              <Route path="/pharmacy/inventory" element={<InventoryManagerWorkspace />} />
+              <Route path="/pharmacy/controlled-drugs" element={<ControlledDrugRegisterWorkspace />} />
+              <Route path="/pharmacy/controlled" element={<ControlledDrugRegisterWorkspace />} />
             </Route>
 
             {/* Authenticated Role Workspaces Wrapped in Unified AppLayout */}
@@ -119,10 +216,6 @@ export function App() {
                       <Route path="/nurse" element={<NurseDashboard />} />
                     </Route>
 
-                    {/* 5. Pharmacist Dispense Counter */}
-                    <Route element={<ProtectedRoute allowedRoles={[RoleType.PHARMACIST, RoleType.SUPER_ADMIN, RoleType.HOSPITAL_ADMIN]} />}>
-                      <Route path="/pharmacy" element={<PharmacyDashboard />} />
-                    </Route>
 
                     {/* 6. Lab Technician & Pathologist Workstation */}
                     <Route element={<ProtectedRoute allowedRoles={[RoleType.LAB_TECH, RoleType.PATHOLOGIST, RoleType.SUPER_ADMIN, RoleType.HOSPITAL_ADMIN]} />}>
