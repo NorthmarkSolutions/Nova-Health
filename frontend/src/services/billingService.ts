@@ -79,17 +79,21 @@ export interface QuotationResult {
 
 export interface BillingInvoiceItem {
   id?: string;
-  source: string;
+  source?: string;
   department?: string;
   service_code?: string;
+  item_code?: string;
   description: string;
   qty: number;
+  quantity?: number;
   unitPrice: number | string;
+  unit_price?: number | string;
   discount_percent?: number | string;
   discount_amount?: number | string;
   tax_rate?: number | string;
   tax_amount?: number | string;
   total: number | string;
+  total_amount?: number | string;
   source_reference_id?: string;
 }
 
@@ -99,18 +103,26 @@ export interface BillingInvoice {
   invoice_number?: string;
   patient?: string;
   patientName: string;
+  patient_name?: string;
   uhid: string;
+  patient_uhid?: string;
   phone?: string;
   category: string;
   encounter_type?: string;
   date: string;
   subtotal: string | number;
   discount: string | number;
+  discount_amount?: number;
   tax: string | number;
+  tax_amount?: number;
   advanceDeducted: string | number;
+  advance_deducted?: number;
   total: string | number;
+  total_amount?: number;
   paid: string | number;
+  paid_amount?: number;
   balance: string | number;
+  balance_amount?: number;
   status: 'UNPAID' | 'PARTIALLY_PAID' | 'PAID' | 'CANCELLED' | 'REFUNDED' | 'INSURANCE_PENDING' | 'CORPORATE_PENDING';
   settlement_mode?: string;
   token_slip_number?: string;
@@ -230,7 +242,9 @@ export const billingService = {
 
   async processMultiTenderPayment(data: {
     invoice_id: string;
-    split_payments: MultiTenderSplit[];
+    split_payments?: MultiTenderSplit[];
+    tender_lines?: TenderLineItem[];
+    shift_id?: string | null;
     counter_code?: string;
     notes?: string;
   }): Promise<MultiTenderPaymentResponse> {
@@ -261,6 +275,58 @@ export const billingService = {
   async getInvoiceReceipt(invoiceId: string): Promise<InvoiceReceiptData> {
     const res = await api.get(`/billing/invoices/${invoiceId}/receipt`);
     return res.data;
+  },
+
+  async getThermalReceipt(invoiceId: string): Promise<ThermalReceiptPayload> {
+    try {
+      const res = await api.get(`/billing/invoices/${invoiceId}/thermal-receipt`);
+      return res.data;
+    } catch {
+      const r = await this.getInvoiceReceipt(invoiceId);
+      return {
+        hospital_name: r?.hospital?.name || 'North Hospital & Medical Research Centre',
+        tagline: r?.hospital?.tagline || 'Excellence in Patient Care & Clinical Diagnostics',
+        address: r?.hospital?.address || '108 Healthcare Blvd, Central Medical District',
+        phone: r?.hospital?.phone || '+91 22 2847 0000',
+        gstin: r?.hospital?.gstin || '27AAACN1234F1Z5',
+        pan: r?.hospital?.pan || 'AAACN1234F',
+        token_slip_number: r?.invoice?.token_slip_number || `SLIP-${invoiceId.slice(0, 6)}`,
+        invoice_number: r?.invoice?.invoice_number || invoiceId,
+        timestamp: r?.printed_at || new Date().toLocaleString(),
+        counter_name: r?.invoice?.counter || 'Counter 01',
+        cashier_name: r?.invoice?.cashier || 'Cashier Desk',
+        patient_name: r?.patient?.name || 'General Patient',
+        patient_uhid: r?.patient?.uhid || 'UHID-GEN',
+        gender: r?.patient?.gender || 'M',
+        encounter_type: r?.invoice?.encounter_type || 'OUTPATIENT',
+        items: (r?.items || []).map((i) => ({
+          description: i.description,
+          quantity: i.qty,
+          total: Number(i.total)
+        })),
+        gross_total: Number(r?.invoice?.subtotal || 0),
+        discount: Number(r?.invoice?.discount || 0),
+        tax_amount: Number(r?.invoice?.tax || 0),
+        net_total: Number(r?.invoice?.total || 0),
+        amount_paid: Number(r?.invoice?.paid || 0),
+        balance_due: Number(r?.invoice?.balance || 0),
+        tender_breakdown: (r?.payments || []).map((p) => ({
+          mode: p.tender_mode,
+          amount: Number(p.amount),
+          reference: p.transaction_reference
+        })),
+        verification_qr: r?.receipt_token || invoiceId
+      };
+    }
+  },
+
+  async getPatientAdvanceLedger(patientUhid: string): Promise<{ current_balance: number }> {
+    try {
+      const res = await api.get(`/billing/patients/${patientUhid}/advance-ledger`);
+      return res.data;
+    } catch {
+      return { current_balance: 0 };
+    }
   }
 };
 
@@ -307,6 +373,66 @@ export interface MultiTenderSplit {
   cheque_number?: string;
   cheque_bank?: string;
   notes?: string;
+}
+
+export interface TenderLineItem {
+  tender_mode: 'CASH' | 'CARD' | 'UPI' | 'NET_BANKING' | 'CHEQUE' | 'DEPOSIT_DEDUCTION' | 'BANK_TRANSFER' | string;
+  amount: number;
+  reference_number?: string;
+  card_network?: string;
+  card_last_four?: string;
+  auth_code?: string;
+  upi_vpa?: string;
+  cheque_number?: string;
+  cheque_bank?: string;
+  bank_name?: string;
+  notes?: string;
+}
+
+export interface MultiTenderPaymentPayload {
+  invoice_id: string;
+  shift_id?: string | null;
+  tender_lines: TenderLineItem[];
+  counter_code?: string;
+  notes?: string;
+}
+
+export interface ThermalReceiptPayload {
+  hospital_name: string;
+  tagline: string;
+  address: string;
+  phone: string;
+  gstin: string;
+  pan?: string;
+  token_slip_number?: string;
+  invoice_number: string;
+  timestamp: string;
+  counter_name: string;
+  cashier_name: string;
+  patient_name: string;
+  patient_uhid: string;
+  gender?: string;
+  age?: number | string;
+  encounter_type: string;
+  items: Array<{
+    description: string;
+    quantity: number;
+    total: number;
+  }>;
+  gross_total: number;
+  discount: number;
+  tax_amount: number;
+  net_total: number;
+  amount_paid: number;
+  balance_due: number;
+  tender_breakdown?: Array<{
+    mode: string;
+    amount: number;
+    reference?: string;
+  }>;
+  verification_qr?: string;
+  verification_hash?: string;
+  footer_note?: string;
 }
 
 export interface MultiTenderPaymentResponse {

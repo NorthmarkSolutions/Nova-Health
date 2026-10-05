@@ -251,7 +251,7 @@ export const DepartmentStaffManagement: React.FC<Props> = ({ workspace }) => {
   const [emergencyContact, setEmergencyContact] = useState('');
 
   // 3. Role & Professional Credentials
-  const [assignedRole, setAssignedRole] = useState<'doctor' | 'nurse' | 'receptionist' | 'technician' | 'assistant' | 'supervisor'>('doctor');
+  const [assignedRole, setAssignedRole] = useState<'doctor' | 'nurse' | 'receptionist' | 'technician' | 'assistant' | 'supervisor' | 'pharmacist' | string>('doctor');
   const [designation, setDesignation] = useState('Senior Consultant');
   const [qualification, setQualification] = useState('MBBS, MD');
   const [specialization, setSpecialization] = useState('Cardiology');

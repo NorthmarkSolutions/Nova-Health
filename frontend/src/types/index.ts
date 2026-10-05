@@ -230,7 +230,7 @@ export interface DepartmentStaffAssignment {
   staffId: string;
   fullName: string;
   employeeCode: string;
-  role: 'doctor' | 'nurse' | 'receptionist' | 'technician' | 'assistant' | 'supervisor';
+  role: 'doctor' | 'nurse' | 'receptionist' | 'technician' | 'assistant' | 'supervisor' | 'pharmacist' | string;
   designation: string;
   shiftId: string;
   shiftName: string;
@@ -247,7 +247,7 @@ export interface DepartmentStaffAssignment {
   emergencyContact?: string;
   isDepartmentHead?: boolean;
   profileCompletion?: number;
-  onboardingStage?: 'BASIC_CREATED' | 'DEPARTMENT_PENDING' | 'CLINICAL_PENDING' | 'DOCS_PENDING' | 'COMPLETE';
+  onboardingStage?: 'BASIC_CREATED' | 'DEPARTMENT_PENDING' | 'CLINICAL_PENDING' | 'DOCS_PENDING' | 'COMPLETE' | 'FULLY_CERTIFIED' | 'STATIONED_ACTIVE' | string;
 }
 
 export interface DepartmentScheduleSlot {

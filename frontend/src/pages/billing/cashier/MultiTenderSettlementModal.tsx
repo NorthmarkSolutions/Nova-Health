@@ -39,7 +39,7 @@ interface MultiTenderSettlementModalProps {
   };
   currentShift: ShiftSummary | null;
   onClose: () => void;
-  onSuccess: (settledInvoiceId: string) => void;
+  onSuccess: (settledInvoiceId: string, response?: any) => void;
 }
 
 export const MultiTenderSettlementModal: React.FC<MultiTenderSettlementModalProps> = ({
@@ -169,7 +169,7 @@ export const MultiTenderSettlementModal: React.FC<MultiTenderSettlementModalProp
       };
 
       const res = await billingService.processMultiTenderPayment(payload);
-      onSuccess(res.invoice.id);
+      onSuccess(res.invoice.id, res);
     } catch (err: any) {
       setError(err?.response?.data?.error || 'Settlement failed. Please check shift status and tender details.');
     } finally {

@@ -860,6 +860,7 @@ export function generateEmployeeCode(role: StaffRole, deptCode?: string): string
     admin: 'ADM',
     support: 'SUP',
     assistant: 'AST',
+    pharmacist: 'PHM',
   };
 
   const prefix = rolePrefixMap[role] || 'EMP';
