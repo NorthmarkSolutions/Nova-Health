@@ -23,6 +23,20 @@ class PatientSerializer(serializers.ModelSerializer):
             'allergies', 'chronicConditions', 'createdAt'
         ]
 
+    def to_internal_value(self, data):
+        data = data.copy() if hasattr(data, 'copy') else dict(data)
+        if 'gender' in data and isinstance(data['gender'], str):
+            g = data['gender'].strip().upper()
+            if g in ('MALE', 'FEMALE', 'OTHER'):
+                data['gender'] = g
+            elif g.startswith('M'):
+                data['gender'] = 'MALE'
+            elif g.startswith('F'):
+                data['gender'] = 'FEMALE'
+            else:
+                data['gender'] = 'OTHER'
+        return super().to_internal_value(data)
+
     def create(self, validated_data):
         if not validated_data.get('uhid'):
             validated_data['uhid'] = Patient.generate_uhid()

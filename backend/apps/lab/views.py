@@ -449,8 +449,7 @@ class LabOrderListCreateView(APIView):
         orders = LabOrder.objects.select_related('patient', 'test', 'doctor__user').prefetch_related('results').all()
         return Response(LabOrderSerializer(orders, many=True).data)
     def post(self, request):
-        view = LabOrderViewSet.as_view({'post': 'create'})
-        return view(request)
+        return LabOrderViewSet().create(request)
 
 class LabOrderStatusView(APIView):
     permission_classes = [AllowAny]

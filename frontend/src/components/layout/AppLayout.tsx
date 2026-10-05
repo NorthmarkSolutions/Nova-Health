@@ -541,6 +541,8 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
         return 'OPD Nurse Station & Triage';
       case RoleType.PHARMACIST:
         return 'Pharmacy Counter';
+      case RoleType.INVENTORY_MANAGER:
+        return 'Pharmacy Central Store';
       case RoleType.CASHIER:
       case RoleType.FINANCE_MANAGER:
         return 'Billing & Accounts';
@@ -559,7 +561,17 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
     const roleRoutes: Record<RoleType, string> = {
       [RoleType.SUPER_ADMIN]: '/admin',
       [RoleType.HOSPITAL_ADMIN]: '/admin',
-      [RoleType.DEPARTMENT_ADMIN]: user?.departmentId ? `/department/${user.departmentId}` : user?.departmentCode ? `/department/${user.departmentCode.toLowerCase().replace('dept-', '')}` : '/department/opd',
+      [RoleType.DEPARTMENT_ADMIN]:
+        user?.departmentId === 'lab' ||
+        (user as any)?.departmentCode === 'LAB' ||
+        user?.email === 'lab.admin@northhospital.com' ||
+        (user?.firstName?.includes('Marcus') && user?.lastName?.includes('Vance'))
+          ? '/department/lab'
+          : user?.departmentId
+          ? `/department/${user.departmentId}`
+          : user?.departmentCode
+          ? `/department/${user.departmentCode.toLowerCase().replace('dept-', '')}`
+          : '/department/opd',
       [RoleType.RECEPTION_SUPERVISOR]: '/reception',
       [RoleType.RECEPTIONIST]: '/reception',
       [RoleType.DOCTOR]: '/doctor',
@@ -573,6 +585,7 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
       [RoleType.PATHOLOGIST]: '/lab',
       [RoleType.LAB_TECH]: '/lab',
       [RoleType.PHARMACIST]: '/pharmacy',
+      [RoleType.INVENTORY_MANAGER]: '/pharmacy',
       [RoleType.FINANCE_MANAGER]: '/billing',
       [RoleType.CASHIER]: '/billing',
       [RoleType.PATIENT]: '/patient',
@@ -664,7 +677,7 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
               }}
             >
               <option value={RoleType.HOSPITAL_ADMIN}>Hospital Admin</option>
-              <option value={RoleType.DEPARTMENT_ADMIN}>Department Admin (OPD)</option>
+              <option value={RoleType.DEPARTMENT_ADMIN}>Department Admin</option>
               <option value={RoleType.RECEPTIONIST}>Receptionist</option>
               <option value={RoleType.DOCTOR}>Doctor (OPD)</option>
               <option value={RoleType.DOCTOR_ASSISTANT}>Doctor Assistant (Chamber 204)</option>

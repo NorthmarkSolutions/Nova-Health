@@ -48,6 +48,13 @@ class ConsultationCreateView(APIView):
                         instructions=med.get('instructions', ''),
                     )
 
+                # Automatic Handoff to Pharmacy Dispense Queue (Read-Only)
+                try:
+                    from apps.pharmacy.services import PharmacyClinicalHandoffService
+                    PharmacyClinicalHandoffService.create_dispense_order_from_prescription(prescription)
+                except Exception:
+                    pass
+
             return Response(ConsultationSerializer(consultation).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

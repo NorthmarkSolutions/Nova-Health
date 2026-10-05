@@ -18,7 +18,15 @@ export type StaffCadre =
   | 'assistant'
   | 'receptionist'
   | 'technician'
-  | 'admin';
+  | 'admin'
+  | 'pathologist'
+  | 'opd_pharmacist'
+  | 'ipd_pharmacist'
+  | 'inventory_manager'
+  | 'billing_admin'
+  | 'billing_supervisor'
+  | 'cashier'
+  | 'insurance_coordinator';
 
 export interface CadreMeta {
   key: StaffCadre;
@@ -35,6 +43,13 @@ export const CADRE_METADATA: Record<StaffCadre, CadreMeta> = {
     pluralLabel: 'Doctors',
     iconKey: 'Stethoscope',
     badgeColor: '#0284c7',
+  },
+  pathologist: {
+    key: 'pathologist',
+    label: 'Consultant Pathologist',
+    pluralLabel: 'Pathologists',
+    iconKey: 'Microscope',
+    badgeColor: '#7c3aed',
   },
   nurse: {
     key: 'nurse',
@@ -70,6 +85,55 @@ export const CADRE_METADATA: Record<StaffCadre, CadreMeta> = {
     pluralLabel: 'Administration',
     iconKey: 'ShieldCheck',
     badgeColor: '#059669',
+  },
+  opd_pharmacist: {
+    key: 'opd_pharmacist',
+    label: 'OPD Pharmacist',
+    pluralLabel: 'OPD Pharmacist',
+    iconKey: 'Pill',
+    badgeColor: '#ec4899',
+  },
+  ipd_pharmacist: {
+    key: 'ipd_pharmacist',
+    label: 'IPD Pharmacist',
+    pluralLabel: 'IPD Pharmacist',
+    iconKey: 'BedDouble',
+    badgeColor: '#a855f7',
+  },
+  inventory_manager: {
+    key: 'inventory_manager',
+    label: 'Inventory Manager',
+    pluralLabel: 'Inventory Manager',
+    iconKey: 'Package',
+    badgeColor: '#f97316',
+  },
+  billing_admin: {
+    key: 'billing_admin',
+    label: 'Billing Admin',
+    pluralLabel: 'Billing Admin',
+    iconKey: 'ShieldCheck',
+    badgeColor: '#059669',
+  },
+  billing_supervisor: {
+    key: 'billing_supervisor',
+    label: 'Billing Supervisor',
+    pluralLabel: 'Supervisor',
+    iconKey: 'UserCheck',
+    badgeColor: '#2563eb',
+  },
+  cashier: {
+    key: 'cashier',
+    label: 'Billing Executive',
+    pluralLabel: 'Cashier / OPD',
+    iconKey: 'Receipt',
+    badgeColor: '#10b981',
+  },
+  insurance_coordinator: {
+    key: 'insurance_coordinator',
+    label: 'IPD & TPA Billing',
+    pluralLabel: 'IPD & TPA',
+    iconKey: 'FileText',
+    badgeColor: '#8b5cf6',
   },
 };
 
@@ -527,34 +591,64 @@ export const DEPARTMENT_LOGIN_NODES: DepartmentNode[] = [
     defaultRoute: '/billing',
     demoAccounts: [
       {
+        id: 'demo-bill-adm',
+        employeeId: 'EMP-BILL-ADM',
+        name: 'Anita Desai',
+        designation: 'Head of Billing & Revenue Operations',
+        role: RoleType.DEPARTMENT_ADMIN,
+        cadre: 'billing_admin',
+        email: 'billing.admin@northhospital.com',
+        targetRoute: '/department/billing',
+        badge: 'Billing Admin',
+        departmentId: 'dept-billing',
+        departmentCode: 'BILLING',
+        departmentName: 'Billing & Financial Accounts',
+        avatarInitials: 'AD',
+      },
+      {
+        id: 'demo-bill-sup',
+        employeeId: 'EMP-BILL-SUP',
+        name: 'Vikramaditya Rao',
+        designation: 'Billing Shift Supervisor & Auditor',
+        role: RoleType.FINANCE_MANAGER,
+        cadre: 'billing_supervisor',
+        email: 'billing.supervisor@northhospital.com',
+        targetRoute: '/billing/supervisor',
+        badge: 'Supervisor',
+        departmentId: 'dept-billing',
+        departmentCode: 'BILLING',
+        departmentName: 'Billing & Financial Accounts',
+        avatarInitials: 'VR',
+      },
+      {
         id: 'demo-bill-cash',
         employeeId: 'EMP-CASH-01',
-        name: 'David Miller',
-        designation: 'Senior Cash Counter Officer',
+        name: 'Ritu Verma',
+        designation: 'Senior OPD Cashier & Billing Executive',
         role: RoleType.CASHIER,
-        cadre: 'admin',
-        email: 'billing@northhospital.com',
+        cadre: 'cashier',
+        email: 'cashier@northhospital.com',
         targetRoute: '/billing',
         badge: 'Cashier',
         departmentId: 'dept-billing',
         departmentCode: 'BILLING',
         departmentName: 'Billing & Financial Accounts',
-        avatarInitials: 'DM',
+        avatarInitials: 'RV',
       },
       {
-        id: 'demo-bill-mgr',
-        employeeId: 'EMP-FIN-01',
-        name: 'Sunita Bai',
-        designation: 'Patient Accounts & Billing Supervisor',
-        role: RoleType.FINANCE_MANAGER,
-        cadre: 'admin',
+        id: 'demo-bill-tpa',
+        employeeId: 'EMP-BILL-TPA',
+        name: 'David Miller',
+        designation: 'IPD & TPA Insurance Billing Officer',
+        role: RoleType.CASHIER,
+        cadre: 'insurance_coordinator',
         email: 'billing@northhospital.com',
-        targetRoute: '/billing',
-        badge: 'Finance Mgr',
+        targetRoute: '/billing/queue?type=tpa',
+        badge: 'IPD & TPA',
         departmentId: 'dept-billing',
         departmentCode: 'BILLING',
         departmentName: 'Billing & Financial Accounts',
-        avatarInitials: 'SB',
+        avatarInitials: 'DM',
       },
     ],
   },
@@ -592,17 +686,17 @@ export const DEPARTMENT_LOGIN_NODES: DepartmentNode[] = [
       {
         id: 'demo-lab-doc',
         employeeId: 'EMP-PATH-01',
-        name: 'Dr. Anita Roy',
+        name: 'Dr. Kavitha Menon',
         designation: 'Consultant Clinical Pathologist & Hematologist',
         role: RoleType.PATHOLOGIST,
-        cadre: 'doctor',
-        email: 'lab@northhospital.com',
-        targetRoute: '/lab',
+        cadre: 'pathologist',
+        email: 'pathologist@northhospital.com',
+        targetRoute: '/lab?tab=review',
         badge: 'Pathologist',
-        departmentId: 'dept-lab',
+        departmentId: 'lab',
         departmentCode: 'LAB',
         departmentName: 'Diagnostic Laboratory',
-        avatarInitials: 'AR',
+        avatarInitials: 'KM',
       },
       {
         id: 'demo-lab-tech',
@@ -612,9 +706,9 @@ export const DEPARTMENT_LOGIN_NODES: DepartmentNode[] = [
         role: RoleType.LAB_TECH,
         cadre: 'technician',
         email: 'lab@northhospital.com',
-        targetRoute: '/lab',
+        targetRoute: '/lab?tab=queue',
         badge: 'Lab Tech',
-        departmentId: 'dept-lab',
+        departmentId: 'lab',
         departmentCode: 'LAB',
         departmentName: 'Diagnostic Laboratory',
         avatarInitials: 'SC',
@@ -638,18 +732,63 @@ export const DEPARTMENT_LOGIN_NODES: DepartmentNode[] = [
     defaultRoute: '/pharmacy',
     demoAccounts: [
       {
-        id: 'demo-pharm-01',
-        employeeId: 'EMP-PHARM-01',
-        name: 'Grace Hopper',
-        designation: 'Lead Clinical Pharmacist (Central Dispensing)',
+        id: 'demo-pharm-adm',
+        employeeId: 'EMP-PH-ADM',
+        name: 'Dr. Pooja Shah',
+        designation: 'Pharmacy Admin · Chief Pharmacist',
+        role: RoleType.DEPARTMENT_ADMIN,
+        cadre: 'admin',
+        email: 'dr.pooja.shah@northhospital.com',
+        targetRoute: '/department/pharmacy',
+        badge: 'Pharmacy Admin',
+        departmentId: 'pharmacy',
+        departmentCode: 'PHARMACY',
+        departmentName: 'Pharmacy Department & Central Stores',
+        avatarInitials: 'PS',
+      },
+      {
+        id: 'demo-pharm-02',
+        employeeId: 'EMP-PHARM-02',
+        name: 'Arjun Varma',
+        designation: 'Senior OPD Dispensing Pharmacist (Counter 2)',
         role: RoleType.PHARMACIST,
-        cadre: 'technician',
-        email: 'pharmacy@northhospital.com',
-        targetRoute: '/pharmacy',
-        badge: 'Pharmacist',
+        cadre: 'opd_pharmacist',
+        email: 'arjun.varma@northhospital.com',
+        targetRoute: '/pharmacy/opd',
+        badge: 'OPD Pharmacist',
         departmentId: 'dept-pharmacy',
         departmentCode: 'PHARMACY',
         departmentName: 'Pharmacy & Dispensing Counter',
+        avatarInitials: 'AV',
+      },
+      {
+        id: 'demo-pharm-03',
+        employeeId: 'EMP-PHARM-03',
+        name: 'Sneha Nair',
+        designation: 'Inpatient Clinical & Ward Supply Pharmacist',
+        role: RoleType.PHARMACIST,
+        cadre: 'ipd_pharmacist',
+        email: 'sneha.nair@northhospital.com',
+        targetRoute: '/pharmacy/ipd',
+        badge: 'IPD Pharmacist',
+        departmentId: 'dept-pharmacy',
+        departmentCode: 'PHARMACY',
+        departmentName: 'Pharmacy & Dispensing Counter',
+        avatarInitials: 'SN',
+      },
+      {
+        id: 'demo-pharm-01',
+        employeeId: 'EMP-PHARM-01',
+        name: 'Grace Hopper',
+        designation: 'Central Medical Store & Inventory Manager',
+        role: RoleType.INVENTORY_MANAGER,
+        cadre: 'inventory_manager',
+        email: 'pharmacy@northhospital.com',
+        targetRoute: '/pharmacy/inventory',
+        badge: 'Inventory Mgr',
+        departmentId: 'dept-pharmacy',
+        departmentCode: 'PHARMACY',
+        departmentName: 'Pharmacy Department & Central Stores',
         avatarInitials: 'GH',
       },
     ],
@@ -745,11 +884,156 @@ export function findDemoStaffByCredential(identifier: string): DemoStaffAccount 
       (a) =>
         a.employeeId.toLowerCase() === query ||
         a.email.toLowerCase() === query ||
+        (a.email.split('@')[0] && a.email.split('@')[0].toLowerCase() === query) ||
         a.name.toLowerCase().includes(query)
     );
     if (match) return match;
   }
+  // Common aliases for lab
+  if (
+    query === 'pathologist' ||
+    query === 'pathology' ||
+    query === 'kavitha' ||
+    query === 'kavitha.menon' ||
+    query === 'kavitha.menon@northhospital.com' ||
+    query === 'emp-path-01'
+  ) {
+    return DEPARTMENT_LOGIN_NODES.find((d) => d.id === 'dept-lab')?.demoAccounts.find((a) => a.cadre === 'pathologist');
+  }
+  if (
+    query === 'lab' ||
+    query === 'labtech' ||
+    query === 'lab tech' ||
+    query === 'technician' ||
+    query === 'sarah' ||
+    query === 'sarah connor' ||
+    query === 'emp-lab-01' ||
+    query === 'david'
+  ) {
+    return DEPARTMENT_LOGIN_NODES.find((d) => d.id === 'dept-lab')?.demoAccounts.find((a) => a.cadre === 'technician');
+  }
+  if (
+    query === 'labadmin' ||
+    query === 'lab admin' ||
+    query === 'marcus' ||
+    query === 'marcus vance' ||
+    query === 'emp-lab-adm' ||
+    query === 'lab.admin@northhospital.com'
+  ) {
+    return DEPARTMENT_LOGIN_NODES.find((d) => d.id === 'dept-lab')?.demoAccounts.find((a) => a.cadre === 'admin');
+  }
+  if (
+    query === 'sneha' ||
+    query === 'sneha nair' ||
+    query === 'sneha.nair@northhospital.com' ||
+    query === 'emp-pharm-03' ||
+    query === 'ipd pharmacist' ||
+    query === 'ipd pharmacy'
+  ) {
+    return DEPARTMENT_LOGIN_NODES.find((d) => d.id === 'dept-pharmacy')?.demoAccounts.find((a) => a.id === 'demo-pharm-03');
+  }
+  if (
+    query === 'pooja' ||
+    query === 'dr pooja shah' ||
+    query === 'dr. pooja shah' ||
+    query === 'pooja shah' ||
+    query === 'pharmadmin' ||
+    query === 'pharmacy admin' ||
+    query === 'emp-ph-adm' ||
+    query === 'dr.pooja.shah@northhospital.com'
+  ) {
+    return DEPARTMENT_LOGIN_NODES.find((d) => d.id === 'dept-pharmacy')?.demoAccounts.find((a) => a.id === 'demo-pharm-adm');
+  }
+  if (
+    query === 'arjun' ||
+    query === 'arjun varma' ||
+    query === 'arjun.varma@northhospital.com' ||
+    query === 'emp-pharm-02' ||
+    query === 'opd pharmacist'
+  ) {
+    return DEPARTMENT_LOGIN_NODES.find((d) => d.id === 'dept-pharmacy')?.demoAccounts.find((a) => a.id === 'demo-pharm-02');
+  }
+  if (
+    query === 'grace' ||
+    query === 'grace hopper' ||
+    query === 'pharmacy@northhospital.com' ||
+    query === 'emp-pharm-01' ||
+    query === 'inventory' ||
+    query === 'inventory manager'
+  ) {
+    return DEPARTMENT_LOGIN_NODES.find((d) => d.id === 'dept-pharmacy')?.demoAccounts.find((a) => a.id === 'demo-pharm-01');
+  }
+  if (
+    query === 'anita' ||
+    query === 'anita desai' ||
+    query === 'billing.admin@northhospital.com' ||
+    query === 'emp-bill-adm' ||
+    query === 'billing admin'
+  ) {
+    return DEPARTMENT_LOGIN_NODES.find((d) => d.id === 'dept-billing')?.demoAccounts.find((a) => a.id === 'demo-bill-adm');
+  }
+  if (
+    query === 'vikram' ||
+    query === 'vikramaditya' ||
+    query === 'vikramaditya rao' ||
+    query === 'billing.supervisor@northhospital.com' ||
+    query === 'emp-bill-sup' ||
+    query === 'billing supervisor'
+  ) {
+    return DEPARTMENT_LOGIN_NODES.find((d) => d.id === 'dept-billing')?.demoAccounts.find((a) => a.id === 'demo-bill-sup');
+  }
+  if (
+    query === 'ritu' ||
+    query === 'ritu verma' ||
+    query === 'cashier@northhospital.com' ||
+    query === 'emp-cash-01' ||
+    query === 'cashier'
+  ) {
+    return DEPARTMENT_LOGIN_NODES.find((d) => d.id === 'dept-billing')?.demoAccounts.find((a) => a.id === 'demo-bill-cash');
+  }
   return undefined;
+}
+
+export function getCadrePluralLabel(cadreKey: StaffCadre, deptId?: string): string {
+  if (deptId === 'dept-lab') {
+    if (cadreKey === 'pathologist') return 'Pathologists';
+    if (cadreKey === 'technician') return 'Lab Techs';
+    if (cadreKey === 'admin') return 'Administration';
+  }
+  if (deptId === 'dept-pharmacy') {
+    if (cadreKey === 'admin') return 'Pharmacy Admin';
+    if (cadreKey === 'opd_pharmacist') return 'OPD Pharmacist';
+    if (cadreKey === 'ipd_pharmacist') return 'IPD Pharmacist';
+    if (cadreKey === 'inventory_manager') return 'Inventory Manager';
+  }
+  if (deptId === 'dept-billing') {
+    if (cadreKey === 'billing_admin' || cadreKey === 'admin') return 'Billing Admin';
+    if (cadreKey === 'billing_supervisor') return 'Supervisor';
+    if (cadreKey === 'cashier') return 'Cashier / OPD';
+    if (cadreKey === 'insurance_coordinator') return 'IPD & TPA';
+  }
+  return CADRE_METADATA[cadreKey]?.pluralLabel || cadreKey;
+}
+
+export function getCadreSingleLabel(cadreKey: StaffCadre, deptId?: string): string {
+  if (deptId === 'dept-lab') {
+    if (cadreKey === 'pathologist') return 'Consultant Pathologist';
+    if (cadreKey === 'technician') return 'Medical Lab Technologist';
+    if (cadreKey === 'admin') return 'Laboratory Administrator';
+  }
+  if (deptId === 'dept-pharmacy') {
+    if (cadreKey === 'admin') return 'Chief Pharmacist / Admin';
+    if (cadreKey === 'opd_pharmacist') return 'OPD Dispensing Pharmacist';
+    if (cadreKey === 'ipd_pharmacist') return 'IPD Ward Supply Pharmacist';
+    if (cadreKey === 'inventory_manager') return 'Central Store & Inventory Manager';
+  }
+  if (deptId === 'dept-billing') {
+    if (cadreKey === 'billing_admin' || cadreKey === 'admin') return 'Head of Billing & Revenue';
+    if (cadreKey === 'billing_supervisor') return 'Billing Shift Supervisor';
+    if (cadreKey === 'cashier') return 'Billing Executive / Cashier';
+    if (cadreKey === 'insurance_coordinator') return 'IPD & TPA Insurance Billing Officer';
+  }
+  return CADRE_METADATA[cadreKey]?.label || cadreKey;
 }
 
 // Returns list of unique cadres available within a department

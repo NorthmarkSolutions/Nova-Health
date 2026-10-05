@@ -46,6 +46,7 @@ import {
 } from 'lucide-react';
 import { PrescriptionItem } from '../../types';
 import { WorkspaceHeader } from '../../components/workspace';
+import { pharmacyInventoryService, AllergyEvaluationResponse } from '../../services/pharmacyInventoryService';
 import {
   patientJourneyService,
   SharedPatient,
@@ -429,6 +430,38 @@ export const DoctorDashboard: React.FC = () => {
     );
   };
 
+  // Real-time Pharmacy Allergy Cross-Reactivity & Stock State (Phase 3 Integration)
+  const [allergyEvaluation, setAllergyEvaluation] = useState<AllergyEvaluationResponse | null>(null);
+  const [checkingAllergies, setCheckingAllergies] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!activeToken?.uhid) return;
+    const meds = prescriptionItems
+      .filter((p) => p.medicineName.trim().length > 0)
+      .map((p) => ({ name: p.medicineName }));
+
+    if (meds.length === 0) {
+      setAllergyEvaluation(null);
+      return;
+    }
+
+    let isMounted = true;
+    setCheckingAllergies(true);
+    pharmacyInventoryService
+      .checkAllergies(activeToken.uhid, meds)
+      .then((res) => {
+        if (isMounted) setAllergyEvaluation(res);
+      })
+      .catch((err) => console.warn('Pharmacy allergy check notice:', err))
+      .finally(() => {
+        if (isMounted) setCheckingAllergies(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeToken?.uhid, prescriptionItems]);
+
   // Investigation Ordering State
   const [orderedLabTests, setOrderedLabTests] = useState<string[]>(['Complete Blood Count (CBC) with ESR']);
   const [orderedRadiology, setOrderedRadiology] = useState<string[]>(['12-Lead ECG']);
@@ -655,6 +688,33 @@ export const DoctorDashboard: React.FC = () => {
     };
     patientJourneyService.addPrescription(newPrescription);
     setPrescriptions(patientJourneyService.getPrescriptions());
+
+    // Phase 3 Doctor -> Pharmacy Integration: Safe Handoff to Pharmacy Queue (Read-Only)
+    const validPrescriptionMeds = prescriptionItems.filter((p) => p.medicineName.trim().length > 0);
+    if (validPrescriptionMeds.length > 0) {
+      pharmacyInventoryService
+        .enqueueDoctorPrescription({
+          uhid: activeToken.uhid,
+          encounter_type: 'OPD',
+          doctor_name: doctorName,
+          priority: orderPriority,
+          diagnosis,
+          instructions: doctorNotes || followUpReason,
+          medications: validPrescriptionMeds.map((p) => ({
+            medicationName: p.medicineName,
+            dosage: p.dosage,
+            frequency: p.frequency,
+            durationDays: p.durationDays,
+            instructions: p.instructions,
+          })),
+        })
+        .then((res) => {
+          showToast(`⚡ Rx enqueued in Pharmacy Queue (${res.dispense_order.order_number}). Central stock & billing remain untouched.`);
+        })
+        .catch((err) => {
+          console.warn('Pharmacy handoff notice:', err);
+        });
+    }
 
     // 3. Dispatch Investigation Orders
     if (orderedLabTests.length > 0 || orderedRadiology.length > 0) {
@@ -1964,6 +2024,60 @@ export const DoctorDashboard: React.FC = () => {
                       </div>
                     </div>
 
+                    {/* Real-time Allergy Cross-Reactivity Alert Banner (Phase 3) */}
+                    {allergyEvaluation?.has_allergy_conflict && (
+                      <div
+                        style={{
+                          backgroundColor: '#fef2f2',
+                          border: '2px solid #ef4444',
+                          borderRadius: '10px',
+                          padding: '1rem 1.25rem',
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: '0.875rem',
+                          boxShadow: '0 4px 12px rgba(239, 68, 68, 0.1)',
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '50%',
+                            backgroundColor: '#fee2e2',
+                            color: '#b91c1c',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                          }}
+                        >
+                          <AlertTriangle size={20} />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                            <span style={{ fontSize: '0.925rem', fontWeight: 800, color: '#991b1b' }}>
+                              CRITICAL PATIENT ALLERGY / CROSS-REACTIVITY WARNING
+                            </span>
+                            <span className="badge badge-danger" style={{ fontSize: '0.75rem', fontWeight: 800 }}>
+                              ACTION REQUIRED
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '0.85rem', color: '#7f1d1d', lineHeight: 1.45 }}>
+                            {allergyEvaluation.medications
+                              .filter((m) => m.has_allergy_conflict)
+                              .map((m, idx) => (
+                                <div key={idx} style={{ marginTop: '0.2rem' }}>
+                                  • <strong>{m.medicine_name}</strong>: {m.clinical_warning}
+                                </div>
+                              ))}
+                          </div>
+                          <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: '#991b1b', fontWeight: 600 }}>
+                            Note: This Rx will be tagged with a high-priority warning banner in the Pharmacy Queue. Pharmacists will be required to review this alert before dispensing.
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Prescription Table with Reason Column */}
                     <div className="table-container" style={{ borderRadius: '10px', border: '1px solid #e2e8f0', overflowX: 'auto' }}>
                       <table style={{ width: '100%', minWidth: '950px', borderCollapse: 'collapse' }}>
@@ -1998,11 +2112,63 @@ export const DoctorDashboard: React.FC = () => {
                                 <td>
                                   <input
                                     className="form-input"
-                                    style={{ fontSize: '0.875rem', padding: '0.45rem 0.65rem', fontWeight: 600 }}
+                                    style={{
+                                      fontSize: '0.875rem',
+                                      padding: '0.45rem 0.65rem',
+                                      fontWeight: 600,
+                                      borderColor: allergyEvaluation?.medications.find(
+                                        (m) =>
+                                          m.medicine_name.toLowerCase().includes(item.medicineName.toLowerCase()) ||
+                                          item.medicineName.toLowerCase().includes(m.medicine_name.toLowerCase())
+                                      )?.has_allergy_conflict
+                                        ? '#ef4444'
+                                        : undefined,
+                                    }}
                                     value={item.medicineName}
                                     onChange={(e) => updatePrescriptionItem(idx, 'medicineName', e.target.value)}
                                     placeholder="Drug name & strength"
                                   />
+                                  {(() => {
+                                    const match = allergyEvaluation?.medications.find(
+                                      (m) =>
+                                        m.medicine_name.toLowerCase().includes(item.medicineName.toLowerCase()) ||
+                                        item.medicineName.toLowerCase().includes(m.medicine_name.toLowerCase())
+                                    );
+                                    if (!match) return null;
+                                    return (
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginTop: '4px', flexWrap: 'wrap' }}>
+                                        {match.has_allergy_conflict && (
+                                          <span
+                                            style={{
+                                              fontSize: '0.7rem',
+                                              fontWeight: 700,
+                                              padding: '2px 6px',
+                                              borderRadius: '4px',
+                                              backgroundColor: '#fee2e2',
+                                              color: '#dc2626',
+                                              display: 'inline-flex',
+                                              alignItems: 'center',
+                                              gap: '3px',
+                                            }}
+                                          >
+                                            <ShieldAlert size={11} /> Allergy Risk
+                                          </span>
+                                        )}
+                                        <span
+                                          style={{
+                                            fontSize: '0.7rem',
+                                            fontWeight: 700,
+                                            padding: '2px 6px',
+                                            borderRadius: '4px',
+                                            backgroundColor: match.in_stock ? '#ecfdf5' : '#fff1f2',
+                                            color: match.in_stock ? '#059669' : '#e11d48',
+                                          }}
+                                        >
+                                          {match.in_stock ? `Stock: ${match.stock_quantity}` : 'Out of Stock'}
+                                        </span>
+                                      </div>
+                                    );
+                                  })()}
                                 </td>
                                 <td>
                                   <input

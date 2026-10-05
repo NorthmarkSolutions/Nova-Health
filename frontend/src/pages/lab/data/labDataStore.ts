@@ -1,5 +1,6 @@
 // Lab Department Data Store & Real-time State Service
 // Implements 8-step specimen pipeline, analyzer telemetry, parameter reference ranges, and domain events.
+import { patientJourneyService, SharedLabOrder } from '../../../services/patientJourneyService';
 
 export type SpecimenStep =
   | 'ORDERED'
@@ -865,15 +866,257 @@ const INITIAL_CATALOG: CatalogTestItem[] = [
   },
 ];
 
+// ==========================================
+// Cross-Department OPD <-> Lab Adapter Utils
+// ==========================================
+
+export function mapTestNameToCode(testName: string): string {
+  const t = (testName || '').toLowerCase();
+  if (t.includes('cbc') || t.includes('blood count') || t.includes('hemogram')) return 'HEM-CBC-01';
+  if (t.includes('rft') || t.includes('renal') || t.includes('kidney') || t.includes('urea') || t.includes('creatinine')) return 'BIO-RFT-01';
+  if (t.includes('lft') || t.includes('liver') || t.includes('bilirubin')) return 'BIO-LFT-01';
+  if (t.includes('electrolyte') || t.includes('sodium') || t.includes('potassium')) return 'BIO-ELE-01';
+  if (t.includes('lipid') || t.includes('cholesterol')) return 'BIO-LIP-01';
+  if (t.includes('a1c') || t.includes('glucose') || t.includes('sugar') || t.includes('diabetes')) return 'BIO-A1C-01';
+  if (t.includes('troponin') || t.includes('cardiac')) return 'IMM-TRP-01';
+  if (t.includes('thyroid') || t.includes('tsh') || t.includes('t3') || t.includes('t4')) return 'IMM-THY-01';
+  if (t.includes('urine')) return 'CP-URN-01';
+  if (t.includes('x-ray') || t.includes('scan') || t.includes('mri') || t.includes('ct') || t.includes('ultrasound')) return 'RAD-IMG-01';
+  return 'LAB-GEN-01';
+}
+
+export function getDefaultParametersForTest(testName: string, category: string = 'Hematology'): TestParameterResult[] {
+  const t = (testName || '').toLowerCase();
+  if (t.includes('cbc') || t.includes('blood count') || t.includes('hemogram')) {
+    return [
+      { group: 'RED CELLS', name: 'Hemoglobin', unit: 'g/dL', low: 13, high: 17, criticalLow: 7.0, criticalHigh: 20.0, observedValue: null, previousValue: 13.5 },
+      { group: 'RED CELLS', name: 'RBC count', unit: '×10⁶/µL', low: 4.5, high: 5.9, observedValue: null, previousValue: 4.7 },
+      { group: 'RED CELLS', name: 'Hematocrit', unit: '%', low: 40, high: 50, criticalLow: 20, criticalHigh: 60, observedValue: null, previousValue: 42.0 },
+      { group: 'RED CELLS', name: 'MCV', unit: 'fL', low: 80, high: 100, observedValue: null, previousValue: 86.0 },
+      { group: 'WHITE CELLS', name: 'WBC count', unit: '×10³/µL', low: 4, high: 11, criticalLow: 2.0, criticalHigh: 30.0, observedValue: null, previousValue: 6.8 },
+      { group: 'WHITE CELLS', name: 'Neutrophils', unit: '%', low: 40, high: 75, observedValue: null, previousValue: 60 },
+      { group: 'WHITE CELLS', name: 'Lymphocytes', unit: '%', low: 20, high: 45, observedValue: null, previousValue: 30 },
+      { group: 'PLATELETS', name: 'Platelet count', unit: '×10³/µL', low: 150, high: 410, criticalLow: 50, criticalHigh: 1000, observedValue: null, previousValue: 240 },
+    ];
+  }
+  if (t.includes('rft') || t.includes('renal') || t.includes('kidney')) {
+    return [
+      { group: 'RENAL PANEL', name: 'Potassium', unit: 'mmol/L', low: 3.5, high: 5.1, criticalLow: 2.8, criticalHigh: 6.5, observedValue: null, previousValue: 4.2 },
+      { group: 'RENAL PANEL', name: 'Creatinine', unit: 'mg/dL', low: 0.7, high: 1.3, criticalHigh: 4.0, observedValue: null, previousValue: 1.1 },
+      { group: 'RENAL PANEL', name: 'Urea', unit: 'mg/dL', low: 17, high: 43, observedValue: null, previousValue: 32 },
+      { group: 'RENAL PANEL', name: 'eGFR', unit: 'mL/min/1.73m²', low: 60, high: 120, criticalLow: 15, observedValue: null, previousValue: 88 },
+      { group: 'ELECTROLYTES', name: 'Sodium', unit: 'mmol/L', low: 135, high: 145, criticalLow: 120, criticalHigh: 160, observedValue: null, previousValue: 139 },
+      { group: 'ELECTROLYTES', name: 'Chloride', unit: 'mmol/L', low: 98, high: 107, observedValue: null, previousValue: 101 },
+    ];
+  }
+  if (t.includes('electrolyte')) {
+    return [
+      { group: 'ELECTROLYTES', name: 'Sodium', unit: 'mmol/L', low: 135, high: 145, criticalLow: 120, criticalHigh: 160, observedValue: null, previousValue: 138 },
+      { group: 'ELECTROLYTES', name: 'Potassium', unit: 'mmol/L', low: 3.5, high: 5.1, criticalLow: 2.8, criticalHigh: 6.5, observedValue: null, previousValue: 4.1 },
+      { group: 'ELECTROLYTES', name: 'Chloride', unit: 'mmol/L', low: 98, high: 107, observedValue: null, previousValue: 100 },
+      { group: 'ELECTROLYTES', name: 'Bicarbonate', unit: 'mmol/L', low: 22, high: 29, observedValue: null, previousValue: 24 },
+    ];
+  }
+  if (t.includes('lft') || t.includes('liver')) {
+    return [
+      { group: 'LIVER PANEL', name: 'Total Bilirubin', unit: 'mg/dL', low: 0.2, high: 1.2, observedValue: null, previousValue: 0.8 },
+      { group: 'LIVER PANEL', name: 'Direct Bilirubin', unit: 'mg/dL', low: 0.0, high: 0.3, observedValue: null, previousValue: 0.2 },
+      { group: 'ENZYMES', name: 'SGOT (AST)', unit: 'U/L', low: 10, high: 40, criticalHigh: 300, observedValue: null, previousValue: 28 },
+      { group: 'ENZYMES', name: 'SGPT (ALT)', unit: 'U/L', low: 7, high: 56, criticalHigh: 300, observedValue: null, previousValue: 31 },
+      { group: 'ENZYMES', name: 'Alkaline Phosphatase', unit: 'U/L', low: 44, high: 147, observedValue: null, previousValue: 92 },
+      { group: 'PROTEINS', name: 'Total Protein', unit: 'g/dL', low: 6.0, high: 8.3, observedValue: null, previousValue: 7.1 },
+      { group: 'PROTEINS', name: 'Albumin', unit: 'g/dL', low: 3.5, high: 5.0, observedValue: null, previousValue: 4.2 },
+    ];
+  }
+  if (t.includes('lipid') || t.includes('cholesterol')) {
+    return [
+      { group: 'LIPID PROFILE', name: 'Total Cholesterol', unit: 'mg/dL', low: 125, high: 200, observedValue: null, previousValue: 185 },
+      { group: 'LIPID PROFILE', name: 'Triglycerides', unit: 'mg/dL', low: 50, high: 150, observedValue: null, previousValue: 130 },
+      { group: 'LIPID PROFILE', name: 'HDL Cholesterol', unit: 'mg/dL', low: 40, high: 60, observedValue: null, previousValue: 48 },
+      { group: 'LIPID PROFILE', name: 'LDL Cholesterol', unit: 'mg/dL', low: 60, high: 100, observedValue: null, previousValue: 95 },
+    ];
+  }
+  if (t.includes('a1c') || t.includes('glucose') || t.includes('sugar')) {
+    return [
+      { group: 'GLYCEMIC CONTROL', name: 'Fasting Plasma Glucose', unit: 'mg/dL', low: 70, high: 99, criticalLow: 50, criticalHigh: 400, observedValue: null, previousValue: 92 },
+      { group: 'GLYCEMIC CONTROL', name: 'HbA1c', unit: '%', low: 4.0, high: 5.6, criticalHigh: 12.0, observedValue: null, previousValue: 5.4 },
+    ];
+  }
+  if (t.includes('troponin') || t.includes('cardiac')) {
+    return [
+      { group: 'CARDIAC MARKERS', name: 'Troponin I (hs)', unit: 'ng/L', low: 0, high: 52, criticalHigh: 100, observedValue: null, previousValue: 14 },
+    ];
+  }
+  if (t.includes('thyroid') || t.includes('tsh')) {
+    return [
+      { group: 'THYROID PANEL', name: 'TSH', unit: 'µIU/mL', low: 0.4, high: 4.5, observedValue: null, previousValue: 2.1 },
+      { group: 'THYROID PANEL', name: 'Free T3', unit: 'pg/mL', low: 2.0, high: 4.4, observedValue: null, previousValue: 3.1 },
+      { group: 'THYROID PANEL', name: 'Free T4', unit: 'ng/dL', low: 0.8, high: 1.8, observedValue: null, previousValue: 1.2 },
+    ];
+  }
+  if (t.includes('urine')) {
+    return [
+      { group: 'URINE ANALYSIS', name: 'Specific Gravity', unit: '', low: 1.005, high: 1.030, observedValue: null, previousValue: 1.015 },
+      { group: 'URINE ANALYSIS', name: 'pH', unit: '', low: 4.5, high: 8.0, observedValue: null, previousValue: 6.0 },
+      { group: 'MICROSCOPY', name: 'Pus Cells', unit: '/hpf', low: 0, high: 5, observedValue: null, previousValue: 2 },
+      { group: 'MICROSCOPY', name: 'RBCs', unit: '/hpf', low: 0, high: 2, observedValue: null, previousValue: 0 },
+    ];
+  }
+  return [
+    { group: (category || 'INVESTIGATION').toUpperCase(), name: `${testName} Observation`, unit: 'units', low: 10, high: 50, observedValue: null },
+  ];
+}
+
+export function mapSharedStageToWorkbench(stage: SharedLabOrder['stage']): SpecimenStep {
+  switch (stage) {
+    case 'ORDERED':
+      return 'ORDERED';
+    case 'COLLECTED':
+    case 'SAMPLE_COLLECTED':
+      return 'COLLECTED';
+    case 'PROCESSING':
+      return 'PROCESSING';
+    case 'RESULT_ENTERED':
+      return 'PENDING_REVIEW';
+    case 'VALIDATED':
+    case 'REPORT_GENERATED':
+      return 'SIGNED_OFF';
+    default:
+      return 'ORDERED';
+  }
+}
+
+export function mapWorkbenchStageToShared(stage: SpecimenStep): SharedLabOrder['stage'] {
+  switch (stage) {
+    case 'ORDERED':
+      return 'ORDERED';
+    case 'COLLECTED':
+    case 'RECEIVED':
+    case 'ACCESSIONED':
+      return 'COLLECTED';
+    case 'PROCESSING':
+      return 'PROCESSING';
+    case 'RESULT_ENTERED':
+    case 'PENDING_REVIEW':
+      return 'RESULT_ENTERED';
+    case 'SIGNED_OFF':
+      return 'REPORT_GENERATED';
+    default:
+      return 'ORDERED';
+  }
+}
+
+export function convertSharedToWorkbench(shared: SharedLabOrder): LabQueueOrder {
+  let params: TestParameterResult[] = [];
+  if (shared.parameters && shared.parameters.length > 0) {
+    params = shared.parameters.map((p) => {
+      let low = 0;
+      let high = 100;
+      if (p.referenceRange) {
+        const parts = p.referenceRange.replace(/[<>]/g, '').split('-').map((s) => parseFloat(s.trim()));
+        if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+          low = parts[0];
+          high = parts[1];
+        } else if (parts.length === 1 && !isNaN(parts[0])) {
+          high = parts[0];
+        }
+      }
+      const obsNum = p.observedValue && !isNaN(parseFloat(p.observedValue)) ? parseFloat(p.observedValue) : null;
+      return {
+        group: (shared.category || 'INVESTIGATION').toUpperCase(),
+        name: p.paramName,
+        unit: p.unit || '',
+        low,
+        high,
+        criticalLow: p.isCritical ? low * 0.7 : undefined,
+        criticalHigh: p.isCritical ? high * 1.3 : undefined,
+        observedValue: obsNum,
+      };
+    });
+  } else {
+    params = getDefaultParametersForTest(shared.testName, shared.category);
+  }
+
+  const priorityMapped: 'STAT' | 'Urgent' | 'Routine' =
+    shared.priority === 'STAT' ? 'STAT' : shared.priority === 'URGENT' ? 'Urgent' : 'Routine';
+
+  return {
+    id: shared.id,
+    orderNumber: shared.orderNo || `LAB-${shared.id.slice(-4)}`,
+    specimenNumber: shared.barcode || `SPM-${Math.floor(10000 + Math.random() * 90000)}`,
+    patientName: shared.patientName,
+    age: shared.age || 35,
+    gender: shared.gender === 'FEMALE' ? 'F' : shared.gender === 'MALE' ? 'M' : 'Other',
+    uhid: shared.uhid,
+    testName: shared.testName,
+    testCode: mapTestNameToCode(shared.testName),
+    category: shared.category || 'Hematology',
+    doctorName: shared.doctor || 'OPD Attending Physician',
+    location: 'OPD Consultation Room',
+    sampleType: shared.sampleType || 'Venous Blood',
+    priority: priorityMapped,
+    stage: mapSharedStageToWorkbench(shared.stage),
+    orderedAt: shared.collectedAt || 'Today',
+    collectedAt: shared.stage !== 'ORDERED' ? shared.collectedAt || '09:30' : undefined,
+    isCritical: Boolean(shared.isFlaggedCritical),
+    parameters: params,
+    technicianNote: shared.technicianNote || '',
+    pathologistInterpretation: shared.pathologistRemarks || '',
+    relevantHistory: ['OPD Consultation Referral', `Priority: ${priorityMapped}`],
+  };
+}
+
 export class LabDataStore {
   // Orders
   static getOrders(): LabQueueOrder[] {
+    let workbenchOrders: LabQueueOrder[] = [];
     try {
       const raw = localStorage.getItem(STORAGE_KEY_ORDERS);
-      if (raw) return JSON.parse(raw);
-    } catch {}
-    this.saveOrders(INITIAL_ORDERS);
-    return INITIAL_ORDERS;
+      if (raw) {
+        workbenchOrders = JSON.parse(raw);
+      } else {
+        workbenchOrders = INITIAL_ORDERS;
+        localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(INITIAL_ORDERS));
+      }
+    } catch {
+      workbenchOrders = INITIAL_ORDERS;
+    }
+
+    // Hydrate from patientJourneyService (OPD Doctor orders)
+    try {
+      const sharedOrders = patientJourneyService.getLabOrders();
+      let hasNewSync = false;
+
+      sharedOrders.forEach((shared) => {
+        const existingIdx = workbenchOrders.findIndex(
+          (o) => o.id === shared.id || o.orderNumber === shared.orderNo
+        );
+
+        if (existingIdx === -1) {
+          // Brand new order from OPD doctor: prepend to lab workbench
+          const converted = convertSharedToWorkbench(shared);
+          workbenchOrders.unshift(converted);
+          hasNewSync = true;
+        } else {
+          // Existing order: sync external stage updates if updated by Nurse phlebotomy
+          const existing = workbenchOrders[existingIdx];
+          const mappedStage = mapSharedStageToWorkbench(shared.stage);
+          if (shared.stage === 'COLLECTED' && existing.stage === 'ORDERED') {
+            existing.stage = 'COLLECTED';
+            existing.collectedAt = shared.collectedAt || existing.collectedAt || 'Today';
+            hasNewSync = true;
+          }
+        }
+      });
+
+      if (hasNewSync) {
+        localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(workbenchOrders));
+      }
+    } catch (err) {
+      console.error('Error hydrating LabQueueOrders from patientJourneyService:', err);
+    }
+
+    return workbenchOrders;
   }
 
   static saveOrders(orders: LabQueueOrder[]) {
@@ -896,6 +1139,60 @@ export class LabDataStore {
     const updated = { ...orders[idx], ...updates };
     orders[idx] = updated;
     this.saveOrders(orders);
+
+    // Sync back to patientJourneyService (so OPD Doctor & Nurse see updated results & stage)
+    try {
+      const sharedList = patientJourneyService.getLabOrders();
+      const matchingShared = sharedList.find(
+        (s) => s.id === orderId || s.orderNo === orderId || s.orderNo === updated.orderNumber
+      );
+
+      if (matchingShared) {
+        const mappedStage = mapWorkbenchStageToShared(updated.stage);
+        const mappedParams = (updated.parameters || []).map((p) => {
+          const isCrit =
+            (p.criticalLow !== undefined && p.observedValue !== null && p.observedValue < p.criticalLow) ||
+            (p.criticalHigh !== undefined && p.observedValue !== null && p.observedValue > p.criticalHigh);
+          const isAbn =
+            isCrit ||
+            (p.observedValue !== null && (p.observedValue < p.low || p.observedValue > p.high));
+          return {
+            paramName: p.name,
+            observedValue: p.observedValue !== null && p.observedValue !== undefined ? String(p.observedValue) : '—',
+            referenceRange: `${p.low} - ${p.high}`,
+            unit: p.unit,
+            isAbnormal: isAbn,
+            isCritical: isCrit,
+            flag: isCrit ? 'CRITICAL' : isAbn ? 'ABNORMAL' : undefined,
+          };
+        });
+
+        patientJourneyService.updateLabOrder(matchingShared.id, {
+          stage: mappedStage,
+          parameters: mappedParams.length > 0 ? mappedParams : matchingShared.parameters,
+          isFlaggedCritical: Boolean(updated.isCritical),
+          isFlaggedAbnormal: Boolean(
+            updated.isCritical ||
+              (updated.parameters &&
+                updated.parameters.some((p) => p.observedValue !== null && (p.observedValue < p.low || p.observedValue > p.high)))
+          ),
+          technicianNote: updated.technicianNote || matchingShared.technicianNote,
+          pathologistRemarks: updated.pathologistInterpretation || matchingShared.pathologistRemarks,
+          approvedBy:
+            updated.signedOffBy ||
+            (updated.stage === 'SIGNED_OFF' ? 'Dr. Kavitha Menon' : matchingShared.approvedBy),
+          approvedAt:
+            updated.signedOffAt ||
+            (updated.stage === 'SIGNED_OFF'
+              ? new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              : matchingShared.approvedAt),
+          collectedAt: updated.collectedAt || matchingShared.collectedAt,
+        });
+      }
+    } catch (err) {
+      console.error('Error synchronizing lab update back to patientJourneyService:', err);
+    }
+
     return updated;
   }
 

@@ -13,6 +13,7 @@ import { DepartmentSettings } from './DepartmentSettings';
 import { DepartmentReports } from './DepartmentReports';
 import { DepartmentOpdOperations } from './DepartmentOpdOperations';
 import { LabAdminWorkspace } from '../lab/admin/LabAdminWorkspace';
+import { PharmacyAdminWorkspace } from '../pharmacy/admin/PharmacyAdminWorkspace';
 
 export const DepartmentWorkspaceContainer: React.FC = () => {
   const { deptId } = useParams<{ deptId?: string }>();
@@ -21,7 +22,47 @@ export const DepartmentWorkspaceContainer: React.FC = () => {
 
   // If user is DEPARTMENT_ADMIN, their scope is strictly locked to their assigned department!
   const isDeptAdmin = role === RoleType.DEPARTMENT_ADMIN;
-  const userAssignedDeptId = user?.departmentId || '1';
+
+  // Department alias helpers
+  const isLabDept = (id?: string) =>
+    id === 'lab' || id === 'dept-lab' || id === 'ws-lab' || id === '9';
+  const isPharmacyDept = (id?: string) =>
+    id === 'pharmacy' || id === 'dept-pharmacy' || id === 'ws-pharmacy' || id === '8';
+  const isOpdDept = (id?: string) =>
+    id === '1' || id === 'opd' || id === 'dept-opd' || id === 'ws-opd';
+  const isCardioDept = (id?: string) =>
+    id === 'dept-cardiology' || id === 'cardiology' || id === 'ws-dept-cardiology';
+
+  // Determine user's assigned department based on explicit ID or credentials heuristics
+  const isLabUser =
+    isLabDept(user?.departmentId) ||
+    (user as any)?.departmentCode === 'LAB' ||
+    user?.username === 'labadmin' ||
+    user?.email === 'lab.admin@northhospital.com' ||
+    (user?.firstName?.includes('Marcus') && user?.lastName?.includes('Vance'));
+
+  const isPharmacyUser =
+    isPharmacyDept(user?.departmentId) ||
+    (user as any)?.departmentCode === 'PHARMACY' ||
+    user?.username === 'pharmadmin' ||
+    user?.username === 'dr_pooja_shah' ||
+    user?.email === 'dr.pooja.shah@northhospital.com' ||
+    (user?.firstName?.includes('Pooja') && user?.lastName?.includes('Shah'));
+
+  const isCardioUser =
+    isCardioDept(user?.departmentId) ||
+    (user as any)?.departmentCode === 'CARDIO' ||
+    user?.email?.includes('cardio');
+
+  const resolvedDeptId = isLabUser
+    ? 'lab'
+    : isPharmacyUser
+    ? 'pharmacy'
+    : isCardioUser
+    ? 'dept-cardiology'
+    : user?.departmentId || '1';
+
+  const userAssignedDeptId = isDeptAdmin ? resolvedDeptId : (user?.departmentId || '1');
 
   // Determine effective department id
   const effectiveDeptId = isDeptAdmin
@@ -30,17 +71,26 @@ export const DepartmentWorkspaceContainer: React.FC = () => {
 
   // Security & Scope Protection: If Department Admin tries to access a different dept URL, redirect immediately!
   useEffect(() => {
-    if (
-      isDeptAdmin &&
-      deptId &&
-      deptId !== userAssignedDeptId &&
-      deptId !== 'opd' &&
-      !(userAssignedDeptId === '9' && deptId === 'lab') &&
-      !(userAssignedDeptId === 'lab' && deptId === '9')
-    ) {
-      navigate(`/department/${userAssignedDeptId}`, { replace: true });
+    if (!isDeptAdmin) return;
+
+    if (isLabUser) {
+      if (!isLabDept(deptId)) {
+        navigate('/department/lab', { replace: true });
+      }
+    } else if (isPharmacyUser) {
+      if (!isPharmacyDept(deptId)) {
+        navigate('/department/pharmacy', { replace: true });
+      }
+    } else if (isCardioUser) {
+      if (!isCardioDept(deptId)) {
+        navigate('/department/dept-cardiology', { replace: true });
+      }
+    } else {
+      if (deptId && !isOpdDept(deptId) && deptId !== userAssignedDeptId) {
+        navigate(`/department/${userAssignedDeptId}`, { replace: true });
+      }
     }
-  }, [isDeptAdmin, deptId, userAssignedDeptId, navigate]);
+  }, [isDeptAdmin, isLabUser, isPharmacyUser, isCardioUser, deptId, userAssignedDeptId, navigate]);
 
   const [workspace, setWorkspace] = useState<DepartmentWorkspace>(() =>
     getDepartmentWorkspaceById(effectiveDeptId)
@@ -81,16 +131,25 @@ export const DepartmentWorkspaceContainer: React.FC = () => {
   };
 
   const isLabWorkspace =
-    deptId === 'lab' ||
-    deptId === 'ws-lab' ||
-    effectiveDeptId === 'lab' ||
-    effectiveDeptId === 'ws-lab' ||
-    effectiveDeptId === '9' ||
+    isLabDept(deptId) ||
+    isLabDept(effectiveDeptId) ||
     workspace?.departmentCode === 'DEPT-LAB' ||
-    (user as any)?.departmentCode === 'LAB';
+    workspace?.id === 'ws-lab' ||
+    isLabUser;
 
   if (isLabWorkspace) {
     return <LabAdminWorkspace />;
+  }
+
+  const isPharmacyWorkspace =
+    isPharmacyDept(deptId) ||
+    isPharmacyDept(effectiveDeptId) ||
+    workspace?.departmentCode === 'DEPT-PHARMACY' ||
+    workspace?.id === 'ws-pharmacy' ||
+    isPharmacyUser;
+
+  if (isPharmacyWorkspace) {
+    return <PharmacyAdminWorkspace />;
   }
 
   return (

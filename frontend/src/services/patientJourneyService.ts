@@ -1,4 +1,5 @@
 // Shared Patient Journey Store for cross-department persistence
+import api from './api';
 import { Gender, RoleType, AppointmentStatus } from '../types';
 import {
   getCampusBuildings,
@@ -1032,6 +1033,22 @@ export const patientJourneyService = {
     const list = this.getPatients();
     const updated = [patient, ...list.filter((p) => p.uhid !== patient.uhid)];
     localStorage.setItem('nh_patients', JSON.stringify(updated));
+    // Asynchronously synchronize with Django backend DB
+    api.post('/patients/', {
+      uhid: patient.uhid,
+      firstName: patient.firstName,
+      lastName: patient.lastName,
+      phoneNumber: patient.phone,
+      dateOfBirth: patient.dob || '1990-01-01',
+      gender: patient.gender ? String(patient.gender).toUpperCase() : 'MALE',
+      bloodGroup: patient.bloodGroup || 'O+',
+      emergencyContactName: patient.emergencyContact || '',
+      emergencyContactPhone: patient.phone || '',
+      allergies: (patient as any).allergies || [],
+      chronicConditions: (patient as any).chronicConditions || [],
+    }).catch((err) => {
+      console.warn('Background patient DB sync error:', err?.message || err);
+    });
     return patient;
   },
 
@@ -1138,6 +1155,7 @@ export const patientJourneyService = {
     const updated = [order, ...list.filter((o) => o.id !== order.id)];
     localStorage.setItem('nh_lab_orders', JSON.stringify(updated));
     window.dispatchEvent(new Event('nh_data_sync'));
+    window.dispatchEvent(new Event('nh_lab_sync'));
     return order;
   },
 
@@ -1146,6 +1164,7 @@ export const patientJourneyService = {
     const updated = list.map((o) => (o.id === orderId ? { ...o, ...updates } : o));
     localStorage.setItem('nh_lab_orders', JSON.stringify(updated));
     window.dispatchEvent(new Event('nh_data_sync'));
+    window.dispatchEvent(new Event('nh_lab_sync'));
   },
 
   collectSample(orderId: string, collectorName: string = 'Nurse Clara Adams'): SharedLabOrder | null {
@@ -1164,6 +1183,7 @@ export const patientJourneyService = {
     const updatedList = list.map((o) => (o.id === orderId ? updatedOrder : o));
     localStorage.setItem('nh_lab_orders', JSON.stringify(updatedList));
     window.dispatchEvent(new Event('nh_data_sync'));
+    window.dispatchEvent(new Event('nh_lab_sync'));
     return updatedOrder;
   },
 
@@ -1183,6 +1203,7 @@ export const patientJourneyService = {
     const updatedList = list.map((o) => (o.id === orderId ? updatedOrder : o));
     localStorage.setItem('nh_lab_orders', JSON.stringify(updatedList));
     window.dispatchEvent(new Event('nh_data_sync'));
+    window.dispatchEvent(new Event('nh_lab_sync'));
     return updatedOrder;
   },
 
