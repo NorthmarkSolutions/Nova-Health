@@ -147,7 +147,7 @@ export const IPDPharmacistWorkspace: React.FC = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
 
-  const displayName = user?.name || user?.full_name || (user?.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : 'Sneha Nair');
+  const displayName = user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user?.username || 'Sneha Nair';
   const designation = 'IPD Pharmacist · PH-4380';
   const initials = displayName
     .split(' ')

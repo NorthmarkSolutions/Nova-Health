@@ -406,8 +406,12 @@ export const pharmacyInventoryService = {
 
   async createTransfer(data: {
     medicine_id: string;
+    batch_id?: string;
     quantity: number;
+    source?: string;
     destination: string;
+    priority?: string;
+    notes?: string;
   }): Promise<TransferRequestItem> {
     const res = await api.post('/pharmacy/transfers/', data);
     return res.data;
@@ -505,9 +509,9 @@ export const pharmacyInventoryService = {
   },
 
   // --- Batch Operations & Disposal ---
-  async createBatch(data: Partial<BatchItem>): Promise<BatchItem> {
+  async createBatch(medicineId: string, data: Partial<BatchItem>): Promise<BatchItem> {
     try {
-      const res = await api.post('/pharmacy/batches/', data);
+      const res = await api.post('/pharmacy/batches/', { medicine_id: medicineId, ...data });
       return res.data;
     } catch {
       return {
@@ -539,18 +543,18 @@ export const pharmacyInventoryService = {
     }
   },
 
-  async returnBatchToVendor(batchId: string, quantity: number, reason: string): Promise<{ success: boolean; credit_note: string }> {
+  async returnBatchToVendor(batchId: string, data: any): Promise<{ success: boolean; credit_note: string }> {
     try {
-      const res = await api.post(`/pharmacy/batches/${batchId}/return-to-vendor/`, { quantity, reason });
+      const res = await api.post(`/pharmacy/batches/${batchId}/return-to-vendor/`, data);
       return res.data;
     } catch {
       return { success: true, credit_note: `CN-${Date.now().toString().slice(-4)}` };
     }
   },
 
-  async destroyBatch(batchId: string, quantity: number, witnessName: string): Promise<{ success: boolean; cert_id: string }> {
+  async destroyBatch(batchId: string, data: any): Promise<{ success: boolean; cert_id: string }> {
     try {
-      const res = await api.post(`/pharmacy/batches/${batchId}/destroy/`, { quantity, witness_name: witnessName });
+      const res = await api.post(`/pharmacy/batches/${batchId}/destroy/`, data);
       return res.data;
     } catch {
       return { success: true, cert_id: `BIO-DEST-${Date.now().toString().slice(-4)}` };
@@ -644,9 +648,9 @@ export const pharmacyInventoryService = {
     }
   },
 
-  async fulfillDemandWithTransfer(demandId: string, batchId: string, quantity: number): Promise<{ success: boolean; transfer_id: string }> {
+  async fulfillDemandWithTransfer(demandId: string, data: any): Promise<{ success: boolean; transfer_id: string }> {
     try {
-      const res = await api.post('/pharmacy/inventory/demand/fulfill/', { demand_id: demandId, batch_id: batchId, quantity });
+      const res = await api.post('/pharmacy/inventory/demand/fulfill/', { demand_id: demandId, ...data });
       return res.data;
     } catch {
       return { success: true, transfer_id: `TR-${Date.now().toString().slice(-4)}` };

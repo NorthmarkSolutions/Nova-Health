@@ -12,14 +12,16 @@ export interface HospitalShift {
   isDefault?: boolean;
 }
 
-export type StaffRole = 'doctor' | 'nurse' | 'technician' | 'paramedic' | 'admin' | 'support' | 'assistant';
+export type StaffRole = 'doctor' | 'nurse' | 'technician' | 'paramedic' | 'admin' | 'support' | 'assistant' | 'pharmacist';
 export type StaffStatus = 'ACTIVE' | 'ON_LEAVE' | 'SUSPENDED' | 'RESIGNED';
 export type StaffOnboardingStage =
   | 'BASIC_CREATED'
   | 'DEPARTMENT_PENDING'
   | 'CLINICAL_PENDING'
   | 'DOCS_PENDING'
-  | 'COMPLETE';
+  | 'COMPLETE'
+  | 'FULLY_CERTIFIED'
+  | 'STATIONED_ACTIVE';
 
 export interface StaffMemberAddress {
   street?: string;

@@ -168,8 +168,8 @@ export const MultiTenderSettlementModal: React.FC<MultiTenderSettlementModalProp
         notes: `Cashier settlement at counter ${currentShift?.counter_name || 'Desk'}`
       };
 
-      const res = await billingService.settleMultiTender(payload);
-      onSuccess(res.invoice_id);
+      const res = await billingService.processMultiTenderPayment(payload);
+      onSuccess(res.invoice.id);
     } catch (err: any) {
       setError(err?.response?.data?.error || 'Settlement failed. Please check shift status and tender details.');
     } finally {
