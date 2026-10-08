@@ -14,6 +14,7 @@ import { DepartmentReports } from './DepartmentReports';
 import { DepartmentOpdOperations } from './DepartmentOpdOperations';
 import { LabAdminWorkspace } from '../lab/admin/LabAdminWorkspace';
 import { PharmacyAdminWorkspace } from '../pharmacy/admin/PharmacyAdminWorkspace';
+import { BillingAdminWorkspace } from '../billing/admin/BillingAdminWorkspace';
 
 export const DepartmentWorkspaceContainer: React.FC = () => {
   const { deptId } = useParams<{ deptId?: string }>();
@@ -28,6 +29,8 @@ export const DepartmentWorkspaceContainer: React.FC = () => {
     id === 'lab' || id === 'dept-lab' || id === 'ws-lab' || id === '9';
   const isPharmacyDept = (id?: string) =>
     id === 'pharmacy' || id === 'dept-pharmacy' || id === 'ws-pharmacy' || id === '8';
+  const isBillingDept = (id?: string) =>
+    id === 'billing' || id === 'dept-billing' || id === 'ws-billing';
   const isOpdDept = (id?: string) =>
     id === '1' || id === 'opd' || id === 'dept-opd' || id === 'ws-opd';
   const isCardioDept = (id?: string) =>
@@ -150,6 +153,16 @@ export const DepartmentWorkspaceContainer: React.FC = () => {
 
   if (isPharmacyWorkspace) {
     return <PharmacyAdminWorkspace />;
+  }
+
+  const isBillingWorkspace =
+    isBillingDept(deptId) ||
+    isBillingDept(effectiveDeptId) ||
+    workspace?.departmentCode === 'DEPT-BILLING' ||
+    workspace?.id === 'ws-billing';
+
+  if (isBillingWorkspace) {
+    return <BillingAdminWorkspace />;
   }
 
   return (

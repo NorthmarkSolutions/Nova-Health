@@ -26,7 +26,10 @@ export type StaffCadre =
   | 'billing_admin'
   | 'billing_supervisor'
   | 'cashier'
-  | 'insurance_coordinator';
+  | 'insurance_coordinator'
+  | 'accounts_admin'
+  | 'finance_manager'
+  | 'internal_auditor';
 
 export interface CadreMeta {
   key: StaffCadre;
@@ -134,6 +137,27 @@ export const CADRE_METADATA: Record<StaffCadre, CadreMeta> = {
     pluralLabel: 'IPD & TPA',
     iconKey: 'FileText',
     badgeColor: '#8b5cf6',
+  },
+  accounts_admin: {
+    key: 'accounts_admin',
+    label: 'Chief Accounts Officer',
+    pluralLabel: 'Accounts Admin',
+    iconKey: 'ShieldCheck',
+    badgeColor: '#0284c7',
+  },
+  finance_manager: {
+    key: 'finance_manager',
+    label: 'Finance & Tax Accountant',
+    pluralLabel: 'Finance & Tax',
+    iconKey: 'FileSpreadsheet',
+    badgeColor: '#059669',
+  },
+  internal_auditor: {
+    key: 'internal_auditor',
+    label: 'Internal Financial Auditor',
+    pluralLabel: 'Auditor',
+    iconKey: 'ScrollText',
+    badgeColor: '#d97706',
   },
 };
 
@@ -577,15 +601,15 @@ export const DEPARTMENT_LOGIN_NODES: DepartmentNode[] = [
   {
     id: 'dept-billing',
     code: 'BILLING',
-    name: 'Billing & Financial Accounts',
+    name: 'Patient Billing & Cashier Desk',
     shortName: 'Billing & Cashier',
     category: 'support',
     iconKey: 'Receipt',
     accentColor: '#16a34a',
     bgLight: 'rgba(22, 163, 74, 0.08)',
     borderLight: 'rgba(22, 163, 74, 0.25)',
-    badge: 'Finance Desk',
-    description: 'Cash counter, insurance TPA pre-auth, OPD tokens settlement & receipts',
+    badge: 'Cashier Counter',
+    description: 'Cash counter, OPD token settlement, IPD running bills & discharge clearance',
     operatingHours: '24/7 Cashier Counter',
     defaultRole: RoleType.CASHIER,
     defaultRoute: '/billing',
@@ -595,14 +619,14 @@ export const DEPARTMENT_LOGIN_NODES: DepartmentNode[] = [
         employeeId: 'EMP-BILL-ADM',
         name: 'Anita Desai',
         designation: 'Head of Billing & Revenue Operations',
-        role: RoleType.DEPARTMENT_ADMIN,
+        role: RoleType.BILLING_ADMIN,
         cadre: 'billing_admin',
         email: 'billing.admin@northhospital.com',
-        targetRoute: '/department/billing',
+        targetRoute: '/billing/admin',
         badge: 'Billing Admin',
         departmentId: 'dept-billing',
         departmentCode: 'BILLING',
-        departmentName: 'Billing & Financial Accounts',
+        departmentName: 'Patient Billing & Cashier Desk',
         avatarInitials: 'AD',
       },
       {
@@ -610,14 +634,14 @@ export const DEPARTMENT_LOGIN_NODES: DepartmentNode[] = [
         employeeId: 'EMP-BILL-SUP',
         name: 'Vikramaditya Rao',
         designation: 'Billing Shift Supervisor & Auditor',
-        role: RoleType.FINANCE_MANAGER,
+        role: RoleType.BILLING_SUPERVISOR,
         cadre: 'billing_supervisor',
         email: 'billing.supervisor@northhospital.com',
         targetRoute: '/billing/supervisor',
         badge: 'Supervisor',
         departmentId: 'dept-billing',
         departmentCode: 'BILLING',
-        departmentName: 'Billing & Financial Accounts',
+        departmentName: 'Patient Billing & Cashier Desk',
         avatarInitials: 'VR',
       },
       {
@@ -632,7 +656,7 @@ export const DEPARTMENT_LOGIN_NODES: DepartmentNode[] = [
         badge: 'Cashier',
         departmentId: 'dept-billing',
         departmentCode: 'BILLING',
-        departmentName: 'Billing & Financial Accounts',
+        departmentName: 'Patient Billing & Cashier Desk',
         avatarInitials: 'RV',
       },
       {
@@ -643,12 +667,75 @@ export const DEPARTMENT_LOGIN_NODES: DepartmentNode[] = [
         role: RoleType.CASHIER,
         cadre: 'insurance_coordinator',
         email: 'billing@northhospital.com',
-        targetRoute: '/billing/queue?type=tpa',
+        targetRoute: '/billing/ipd',
         badge: 'IPD & TPA',
         departmentId: 'dept-billing',
         departmentCode: 'BILLING',
-        departmentName: 'Billing & Financial Accounts',
+        departmentName: 'Patient Billing & Cashier Desk',
         avatarInitials: 'DM',
+      },
+    ],
+  },
+  {
+    id: 'dept-accounts',
+    code: 'ACCOUNTS',
+    name: 'Accounts & Financial Governance',
+    shortName: 'Accounts & Finance',
+    category: 'admin',
+    iconKey: 'Building2',
+    accentColor: '#0284c7',
+    bgLight: 'rgba(2, 132, 199, 0.08)',
+    borderLight: 'rgba(2, 132, 199, 0.25)',
+    badge: 'Finance Desk',
+    description: 'Hospital general ledger, revenue analytics, tax & GST filings, period close & audit trails',
+    operatingHours: '09:00 - 18:00 (Corporate)',
+    defaultRole: RoleType.FINANCE_MANAGER,
+    defaultRoute: '/accounts',
+    demoAccounts: [
+      {
+        id: 'demo-acc-adm',
+        employeeId: 'EMP-ACC-ADM',
+        name: 'Kavita Sundaram',
+        designation: 'Chief Accounts Officer & Financial Controller',
+        role: RoleType.FINANCE_MANAGER,
+        cadre: 'accounts_admin',
+        email: 'accounts.admin@northhospital.com',
+        targetRoute: '/accounts',
+        badge: 'Accounts Admin',
+        departmentId: 'dept-accounts',
+        departmentCode: 'ACCOUNTS',
+        departmentName: 'Accounts & Financial Governance',
+        avatarInitials: 'KS',
+      },
+      {
+        id: 'demo-acc-aud',
+        employeeId: 'EMP-ACC-AUD',
+        name: 'Arun Mehta',
+        designation: 'Senior Internal Financial Auditor',
+        role: RoleType.INTERNAL_AUDITOR,
+        cadre: 'internal_auditor',
+        email: 'auditor@northhospital.com',
+        targetRoute: '/accounts/audit',
+        badge: 'Internal Auditor',
+        departmentId: 'dept-accounts',
+        departmentCode: 'ACCOUNTS',
+        departmentName: 'Accounts & Financial Governance',
+        avatarInitials: 'AM',
+      },
+      {
+        id: 'demo-acc-tax',
+        employeeId: 'EMP-ACC-01',
+        name: 'Suresh Nair',
+        designation: 'Senior Tax & Revenue Accountant',
+        role: RoleType.FINANCE_MANAGER,
+        cadre: 'finance_manager',
+        email: 'accounts.admin@northhospital.com',
+        targetRoute: '/accounts/tax',
+        badge: 'Tax & GST',
+        departmentId: 'dept-accounts',
+        departmentCode: 'ACCOUNTS',
+        departmentName: 'Accounts & Financial Governance',
+        avatarInitials: 'SN',
       },
     ],
   },
@@ -991,6 +1078,44 @@ export function findDemoStaffByCredential(identifier: string): DemoStaffAccount 
   ) {
     return DEPARTMENT_LOGIN_NODES.find((d) => d.id === 'dept-billing')?.demoAccounts.find((a) => a.id === 'demo-bill-cash');
   }
+  if (
+    query === 'david' ||
+    query === 'david miller' ||
+    query === 'billing@northhospital.com' ||
+    query === 'emp-bill-tpa' ||
+    query === 'tpa' ||
+    query === 'ipd billing'
+  ) {
+    return DEPARTMENT_LOGIN_NODES.find((d) => d.id === 'dept-billing')?.demoAccounts.find((a) => a.id === 'demo-bill-tpa');
+  }
+  if (
+    query === 'kavita' ||
+    query === 'kavita sundaram' ||
+    query === 'accounts.admin@northhospital.com' ||
+    query === 'emp-acc-adm' ||
+    query === 'accounts admin'
+  ) {
+    return DEPARTMENT_LOGIN_NODES.find((d) => d.id === 'dept-accounts')?.demoAccounts.find((a) => a.id === 'demo-acc-adm');
+  }
+  if (
+    query === 'arun' ||
+    query === 'arun mehta' ||
+    query === 'auditor@northhospital.com' ||
+    query === 'emp-acc-aud' ||
+    query === 'internal auditor' ||
+    query === 'auditor'
+  ) {
+    return DEPARTMENT_LOGIN_NODES.find((d) => d.id === 'dept-accounts')?.demoAccounts.find((a) => a.id === 'demo-acc-aud');
+  }
+  if (
+    query === 'suresh' ||
+    query === 'suresh nair' ||
+    query === 'emp-acc-01' ||
+    query === 'tax' ||
+    query === 'tax accountant'
+  ) {
+    return DEPARTMENT_LOGIN_NODES.find((d) => d.id === 'dept-accounts')?.demoAccounts.find((a) => a.id === 'demo-acc-tax');
+  }
   return undefined;
 }
 
@@ -1012,6 +1137,11 @@ export function getCadrePluralLabel(cadreKey: StaffCadre, deptId?: string): stri
     if (cadreKey === 'cashier') return 'Cashier / OPD';
     if (cadreKey === 'insurance_coordinator') return 'IPD & TPA';
   }
+  if (deptId === 'dept-accounts') {
+    if (cadreKey === 'accounts_admin' || cadreKey === 'admin') return 'Accounts Admin';
+    if (cadreKey === 'internal_auditor') return 'Auditors';
+    if (cadreKey === 'finance_manager') return 'Finance & Tax';
+  }
   return CADRE_METADATA[cadreKey]?.pluralLabel || cadreKey;
 }
 
@@ -1032,6 +1162,11 @@ export function getCadreSingleLabel(cadreKey: StaffCadre, deptId?: string): stri
     if (cadreKey === 'billing_supervisor') return 'Billing Shift Supervisor';
     if (cadreKey === 'cashier') return 'Billing Executive / Cashier';
     if (cadreKey === 'insurance_coordinator') return 'IPD & TPA Insurance Billing Officer';
+  }
+  if (deptId === 'dept-accounts') {
+    if (cadreKey === 'accounts_admin' || cadreKey === 'admin') return 'Chief Accounts Officer & Controller';
+    if (cadreKey === 'internal_auditor') return 'Senior Internal Financial Auditor';
+    if (cadreKey === 'finance_manager') return 'Senior Finance & Tax Accountant';
   }
   return CADRE_METADATA[cadreKey]?.label || cadreKey;
 }

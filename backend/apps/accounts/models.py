@@ -21,6 +21,10 @@ class RoleType(models.TextChoices):
     INVENTORY_MANAGER = 'INVENTORY_MANAGER', 'Inventory Manager'
     CASHIER = 'CASHIER', 'Cashier'
     BILLING_SUPERVISOR = 'BILLING_SUPERVISOR', 'Billing Supervisor'
+    BILLING_ADMIN = 'BILLING_ADMIN', 'Billing Admin'
+    BILLING_MANAGER = 'BILLING_MANAGER', 'Billing Manager'
+    FINANCE_MANAGER = 'FINANCE_MANAGER', 'Finance Manager'
+    INTERNAL_AUDITOR = 'INTERNAL_AUDITOR', 'Internal Auditor'
     INSURANCE_COORDINATOR = 'INSURANCE_COORDINATOR', 'Insurance Coordinator'
     PATIENT = 'PATIENT', 'Patient'
 

@@ -1294,32 +1294,31 @@ class PharmacyBillingSettlementService:
 
             change_due = max(Decimal('0.00'), tendered - total) if tender_mode == 'CASH' else Decimal('0.00')
 
-            invoice = Invoice.objects.create(
-                invoice_number=inv_no,
+            # Architectural Invariant: Delegate charge creation & settlement to Billing
+            from apps.billing.services import DepartmentChargeIntegrationService, BillingCoreService
+            charge_res = DepartmentChargeIntegrationService.emit_pharmacy_dispense_charge(order, routing='PAY_AT_PHARMACY', amount=total)
+            charge_item = charge_res['charge_item']
+
+            invoice = BillingCoreService.consolidate_charges_to_invoice(
                 patient=order.patient,
+                charge_ids=[charge_item.id],
+                cashier=user,
                 category=InvoiceCategory.PHARMACY,
-                date=today_str,
-                subtotal=total,
-                discount=Decimal('0.00'),
-                tax=Decimal('0.00'),
-                total=total,
-                paid=total,
-                balance=Decimal('0.00'),
-                status=InvoiceStatus.PAID,
-                settlement_mode=mode,
-                corporate_reference=ref_no
+                encounter_type='PHARMACY'
             )
 
-            pay_seq = Payment.objects.count() + 1
-            pay_no = f"PAY-PH-{today_str}-{pay_seq:04d}"
-            Payment.objects.create(
-                invoice=invoice,
-                payment_number=pay_no,
-                amount=total,
-                payment_method=tender_mode,
-                transaction_reference=ref_no,
-                cashier=user
+            pay_res = BillingCoreService.process_multi_tender_payment(
+                invoice_id=str(invoice.id),
+                cashier=user,
+                split_payments=[{
+                    'tender_mode': tender_mode,
+                    'amount': total,
+                    'transaction_reference': ref_no
+                }]
             )
+            created_payment = pay_res['payments'][0] if pay_res.get('payments') else None
+            pay_no = created_payment.payment_number if created_payment else f"PAY-{today_str}-0001"
+            inv_no = invoice.invoice_number
 
             # Credit Shift Drawer
             if tender_mode == 'CASH':
@@ -1356,23 +1355,13 @@ class PharmacyBillingSettlementService:
             token_count = PharmacyDispenseOrder.objects.filter(token_slip_number__isnull=False).count() + 1
             token_no = f"PH-{8800 + token_count}"
 
-            invoice = Invoice.objects.create(
-                invoice_number=inv_no,
-                patient=order.patient,
-                category=InvoiceCategory.PHARMACY,
-                date=today_str,
-                subtotal=total,
-                discount=Decimal('0.00'),
-                tax=Decimal('0.00'),
-                total=total,
-                paid=Decimal('0.00'),
-                balance=total,
-                status=InvoiceStatus.UNPAID,
-                settlement_mode=mode,
-                token_slip_number=token_no
-            )
-
+            # Architectural Invariant: Emit BillableChargeItem to Billing rather than direct Invoice instantiation.
+            # Billing raises and settles the invoice at the cashier; the order is marked PAID from that settlement.
             order.token_slip_number = token_no
+            from apps.billing.services import DepartmentChargeIntegrationService
+            charge_res = DepartmentChargeIntegrationService.emit_pharmacy_dispense_charge(order, routing='PAY_AT_RECEPTION', amount=total)
+            charge_item = charge_res['charge_item']
+            invoice = None
             order.handover_policy = handover_policy
             order.payment_status = DispensePaymentStatus.UNPAID
             order.payer_covered_amount = total
@@ -1380,7 +1369,7 @@ class PharmacyBillingSettlementService:
             order.receipt_data = {
                 'type': 'RECEPTION_TOKEN_SLIP',
                 'token_slip_number': token_no,
-                'invoice_number': inv_no,
+                'charge_item_id': str(charge_item.id),
                 'handover_policy': handover_policy,
                 'amount_due': float(total),
                 'barcode_code': token_no,
@@ -1626,8 +1615,10 @@ class PharmacyBillingSettlementService:
                 'timestamp': timezone.now().strftime('%d %b %Y, %H:%M'),
             }
 
-        # Create line items under the generated invoice
-        for item in order.items.all():
+        # Engines 1 & 2 delegate to Billing, whose consolidation already itemises the charge (engine 2 has no
+        # invoice until the cashier bills it). Only engines that still create their own invoice add medicine lines.
+        billing_owned = mode in (SettlementMode.PAY_AT_PHARMACY, SettlementMode.PAY_AT_RECEPTION)
+        for item in ([] if billing_owned else order.items.all()):
             eff_name = (item.substituted_medicine.name if item.substituted_medicine else item.medicine.name)
             InvoiceItem.objects.create(
                 invoice=invoice,
@@ -1648,6 +1639,25 @@ class PharmacyBillingSettlementService:
         if not order:
             raise ValueError(f"No dispense order found for token slip: {token_slip_number}")
 
+        from apps.billing.models import BillableChargeItem, InvoiceStatus as BillingInvoiceStatus
+        charge = BillableChargeItem.objects.select_related('invoice').filter(
+            department='PHARMACY', source_reference_id=str(order.id)
+        ).exclude(status='CANCELLED').first()
+        if charge is not None:
+            # Billing-owned token (charge emitted to the cashier queue): Billing is the payment system of record,
+            # so this webhook only confirms a settlement Billing has already recorded and never writes a Payment.
+            invoice = charge.invoice
+            if not invoice or invoice.status != BillingInvoiceStatus.PAID:
+                raise ValueError(
+                    f"Token {token_slip_number} is not yet settled at Billing. Collect it from the cashier Invoice Queue first."
+                )
+            order.payment_status = DispensePaymentStatus.PAID
+            order.payment_reference = order.payment_reference or invoice.invoice_number
+            order.billing_invoice = invoice
+            order.save()
+            return order
+
+        # Legacy orders settled before Billing owned pharmacy invoices
         with transaction.atomic():
             order.payment_status = DispensePaymentStatus.PAID
             order.payment_reference = receipt_no

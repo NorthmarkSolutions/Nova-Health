@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { RoleType } from '../../types';
+import { RoleType, BILLING_WORKSPACE_ROLES } from '../../types';
 import {
   LayoutDashboard,
   UserPlus,
@@ -117,6 +117,9 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
         return 'Outpatient Pharmacy • Ground Floor';
       case RoleType.CASHIER:
       case RoleType.FINANCE_MANAGER:
+      case RoleType.BILLING_SUPERVISOR:
+      case RoleType.BILLING_MANAGER:
+      case RoleType.BILLING_ADMIN:
         return 'Billing Counter 02 • Ground Floor';
       default:
         return 'Central Facility • Main Campus';
@@ -184,7 +187,25 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
       path: '/billing',
       badge: 'Cash',
       icon: <Receipt size={18} strokeWidth={1.75} />,
-      allowedRoles: [RoleType.SUPER_ADMIN, RoleType.HOSPITAL_ADMIN, RoleType.CASHIER, RoleType.FINANCE_MANAGER],
+      allowedRoles: [RoleType.SUPER_ADMIN, RoleType.HOSPITAL_ADMIN, ...BILLING_WORKSPACE_ROLES],
+    },
+    {
+      label: 'Billing Supervisor',
+      path: '/billing/supervisor',
+      icon: <ShieldCheck size={18} strokeWidth={1.75} />,
+      allowedRoles: [RoleType.SUPER_ADMIN, RoleType.HOSPITAL_ADMIN, RoleType.BILLING_SUPERVISOR, RoleType.BILLING_MANAGER, RoleType.BILLING_ADMIN],
+    },
+    {
+      label: 'Billing Admin · Pricing',
+      path: '/billing/admin',
+      icon: <Receipt size={18} strokeWidth={1.75} />,
+      allowedRoles: [RoleType.SUPER_ADMIN, RoleType.HOSPITAL_ADMIN, RoleType.BILLING_MANAGER, RoleType.BILLING_ADMIN],
+    },
+    {
+      label: 'Finance & Audit',
+      path: '/billing/finance',
+      icon: <BarChart2 size={18} strokeWidth={1.75} />,
+      allowedRoles: [RoleType.SUPER_ADMIN, RoleType.HOSPITAL_ADMIN, RoleType.FINANCE_MANAGER, RoleType.INTERNAL_AUDITOR, RoleType.BILLING_MANAGER, RoleType.BILLING_ADMIN],
     },
     {
       label: 'Nurse Station',
@@ -545,6 +566,10 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
         return 'Pharmacy Central Store';
       case RoleType.CASHIER:
       case RoleType.FINANCE_MANAGER:
+      case RoleType.BILLING_SUPERVISOR:
+      case RoleType.BILLING_MANAGER:
+      case RoleType.BILLING_ADMIN:
+      case RoleType.INTERNAL_AUDITOR:
         return 'Billing & Accounts';
       case RoleType.PATIENT:
         return 'Patient Portal';
@@ -586,8 +611,12 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
       [RoleType.LAB_TECH]: '/lab',
       [RoleType.PHARMACIST]: '/pharmacy',
       [RoleType.INVENTORY_MANAGER]: '/pharmacy',
-      [RoleType.FINANCE_MANAGER]: '/billing',
+      [RoleType.FINANCE_MANAGER]: '/billing/finance',
       [RoleType.CASHIER]: '/billing',
+      [RoleType.BILLING_SUPERVISOR]: '/billing/supervisor',
+      [RoleType.BILLING_MANAGER]: '/billing/supervisor',
+      [RoleType.BILLING_ADMIN]: '/billing/admin',
+      [RoleType.INTERNAL_AUDITOR]: '/billing/finance',
       [RoleType.PATIENT]: '/patient',
     };
     navigate(roleRoutes[selected] || '/admin');
@@ -686,6 +715,7 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
               <option value={RoleType.NURSE}>Nurse Station</option>
               <option value={RoleType.LAB_TECH}>Lab Technician</option>
               <option value={RoleType.CASHIER}>Cashier / Billing</option>
+              <option value={RoleType.BILLING_SUPERVISOR}>Billing Supervisor</option>
               <option value={RoleType.PHARMACIST}>Pharmacist</option>
               <option value={RoleType.PATIENT}>Patient Portal</option>
             </select>

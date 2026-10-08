@@ -110,6 +110,46 @@ class Command(BaseCommand):
                 'is_staff': True,
             },
             {
+                'username': 'cashier',
+                'email': 'cashier@northhospital.com',
+                'first_name': 'Ritu',
+                'last_name': 'Verma',
+                'role': RoleType.CASHIER,
+                'is_staff': True,
+            },
+            {
+                'username': 'billing_admin',
+                'email': 'billing.admin@northhospital.com',
+                'first_name': 'Anita',
+                'last_name': 'Desai',
+                'role': RoleType.BILLING_ADMIN,
+                'is_staff': True,
+            },
+            {
+                'username': 'billing_supervisor',
+                'email': 'billing.supervisor@northhospital.com',
+                'first_name': 'Vikramaditya',
+                'last_name': 'Rao',
+                'role': RoleType.BILLING_SUPERVISOR,
+                'is_staff': True,
+            },
+            {
+                'username': 'accounts_admin',
+                'email': 'accounts.admin@northhospital.com',
+                'first_name': 'Kavita',
+                'last_name': 'Sundaram',
+                'role': RoleType.FINANCE_MANAGER,
+                'is_staff': True,
+            },
+            {
+                'username': 'internal_auditor',
+                'email': 'auditor@northhospital.com',
+                'first_name': 'Arun',
+                'last_name': 'Mehta',
+                'role': RoleType.INTERNAL_AUDITOR,
+                'is_staff': True,
+            },
+            {
                 'username': 'nurse',
                 'email': 'nurse@northhospital.com',
                 'first_name': 'Maria',
@@ -174,6 +214,14 @@ class Command(BaseCommand):
         dep_ipd, _ = Department.objects.get_or_create(
             code='IPD_WARD',
             defaults={'name': 'Inpatient Care Wards', 'department_type': 'INPATIENT', 'room_number': '101', 'floor_number': 1}
+        )
+        dep_billing, _ = Department.objects.get_or_create(
+            code='BILLING',
+            defaults={'name': 'Patient Billing & Cashier Desk', 'department_type': 'SUPPORT', 'room_number': 'C01', 'floor_number': 1}
+        )
+        dep_accounts, _ = Department.objects.get_or_create(
+            code='ACCOUNTS',
+            defaults={'name': 'Accounts & Financial Governance', 'department_type': 'SUPPORT', 'room_number': 'F10', 'floor_number': 2}
         )
 
         room_101, _ = Room.objects.get_or_create(

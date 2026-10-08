@@ -1293,8 +1293,9 @@ class ReceptionClearanceWebhookView(APIView):
     """
     Cashier clearance webhook: Central Cashier / Receptionist clears a token-slip invoice.
     Automatically marks the Pharmacy Dispense Order as PAID and syncs the Billing Invoice.
+    Requires a logged-in user: it can confirm payments, so it must never run anonymously.
     """
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
         token_slip = request.data.get('token_slip_number') or request.data.get('token')
@@ -1305,8 +1306,7 @@ class ReceptionClearanceWebhookView(APIView):
             return Response({'error': 'Both token_slip_number and receipt_number are required.'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            user = request.user if request.user and request.user.is_authenticated else User.objects.first()
-            order = PharmacyBillingSettlementService.clear_reception_payment(token_slip, user, receipt_no, amount_paid)
+            order = PharmacyBillingSettlementService.clear_reception_payment(token_slip, request.user, receipt_no, amount_paid)
             return Response({
                 'success': True,
                 'message': f"Reception payment cleared for token {token_slip}.",

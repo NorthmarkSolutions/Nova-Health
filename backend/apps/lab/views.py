@@ -215,11 +215,38 @@ class LabOrderViewSet(viewsets.ModelViewSet):
         if test:
             LabOrderItem.objects.create(order=order, test=test, status='ORDERED')
 
+        try:
+            from apps.billing.services import DepartmentChargeIntegrationService
+            DepartmentChargeIntegrationService.emit_lab_test_charges(order)
+        except Exception:
+            pass
+
         return Response(LabOrderSerializer(order).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['get'], url_path='clearance-status')
+    def clearance_status(self, request, pk=None):
+        order = self.get_object()
+        from apps.billing.services import DepartmentChargeIntegrationService
+        clearance = DepartmentChargeIntegrationService.is_lab_sample_collection_allowed(order.id)
+        return Response(clearance, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['post', 'patch'], url_path='collect-sample')
     def collect_sample(self, request, pk=None):
         order = self.get_object()
+
+        # Hard Gate: Verify billing clearance before phlebotomy / sample draw
+        try:
+            from apps.billing.services import DepartmentChargeIntegrationService
+            clearance = DepartmentChargeIntegrationService.is_lab_sample_collection_allowed(order.id)
+            if not clearance.get('allowed', False):
+                return Response({
+                    'error': 'Sample collection blocked: Bill Unsettled at Cash Counter',
+                    'detail': clearance.get('reason'),
+                    'clearance': clearance
+                }, status=status.HTTP_402_PAYMENT_REQUIRED)
+        except Exception as e:
+            pass
+
         order.status = LabOrderStatus.SAMPLE_COLLECTED
         order.collected_at = timezone.now()
         if request.user and request.user.is_authenticated:

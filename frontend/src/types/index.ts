@@ -18,8 +18,23 @@ export enum RoleType {
   INVENTORY_MANAGER = 'INVENTORY_MANAGER',
   FINANCE_MANAGER = 'FINANCE_MANAGER',
   CASHIER = 'CASHIER',
+  BILLING_SUPERVISOR = 'BILLING_SUPERVISOR',
+  BILLING_MANAGER = 'BILLING_MANAGER',
+  BILLING_ADMIN = 'BILLING_ADMIN',
+  INTERNAL_AUDITOR = 'INTERNAL_AUDITOR',
   PATIENT = 'PATIENT',
 }
+
+/** Roles that open the Billing Executive workspace (/billing). Mirrors CASHIER_OR_ABOVE_ROLES on the backend,
+ *  plus FINANCE_MANAGER, which the backend grants read-only billing access (no collections, discounts or refunds). */
+export const BILLING_WORKSPACE_ROLES: RoleType[] = [
+  RoleType.CASHIER,
+  RoleType.BILLING_SUPERVISOR,
+  RoleType.BILLING_MANAGER,
+  RoleType.BILLING_ADMIN,
+  RoleType.FINANCE_MANAGER,
+  RoleType.INTERNAL_AUDITOR,
+];
 
 export enum Gender {
   MALE = 'MALE',

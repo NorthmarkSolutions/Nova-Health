@@ -1109,28 +1109,51 @@ class PharmacyBillingSettlementEnginesTestCase(APITestCase):
         self.assertTrue(token_slip.startswith('PH-'))
         self.assertEqual(resp.data['receipt_data']['type'], 'RECEPTION_TOKEN_SLIP')
 
-        # Verify invoice created with status UNPAID
-        inv = Invoice.objects.filter(token_slip_number=token_slip).first()
-        self.assertIsNotNone(inv)
-        self.assertEqual(inv.status, InvoiceStatus.UNPAID)
-        self.assertEqual(inv.balance, Decimal('150.00'))
+        # Billing owns the invoice: pharmacy only queues a charge carrying the token slip (no Invoice yet)
+        from apps.billing.models import BillableChargeItem, DepartmentChargeEvent
+        self.assertFalse(Invoice.objects.filter(token_slip_number=token_slip).exists())
+        charge = BillableChargeItem.objects.get(department='PHARMACY', source_reference_id=str(order.id))
+        self.assertEqual(charge.status, 'PENDING')
+        self.assertEqual(charge.total_amount, Decimal('150.00'))
+        self.assertEqual(DepartmentChargeEvent.objects.get(charge_item=charge).metadata['token_slip_number'], token_slip)
 
-        # Cashier clearance webhook execution
+        # The webhook cannot mark the token paid before Billing has settled it
         self.client.force_authenticate(user=self.cashier)
-        wh_resp = self.client.post('/api/v1/pharmacy/billing/reception-webhook/', {
-            'token_slip_number': token_slip,
-            'receipt_number': 'RCP-CENTRAL-8842',
-            'amount_paid': 150.00
+        early = self.client.post('/api/v1/pharmacy/billing/reception-webhook/', {
+            'token_slip_number': token_slip, 'receipt_number': 'RCP-CENTRAL-8842', 'amount_paid': 150.00
         }, format='json')
+        self.assertEqual(early.status_code, 400)
+        order.refresh_from_db()
+        self.assertEqual(order.payment_status, 'UNPAID')
 
-        self.assertEqual(wh_resp.status_code, 200)
-        self.assertTrue(wh_resp.data['success'])
-        self.assertEqual(wh_resp.data['order']['payment_status'], 'PAID')
+        # Central cashier (Billing CASHIER role; receptionists cannot collect) settles through the Billing workspace
+        billing_cashier = User.objects.create_user(username='central_cashier', password='Password123!', role=RoleType.CASHIER)
+        from apps.billing.services import CounterShiftControlService
+        CounterShiftControlService.open_shift(billing_cashier, 'CNT-CENTRAL', Decimal('5000.00'))
+        self.client.force_authenticate(user=billing_cashier)
+        bill = self.client.post('/api/v1/billing/cashier/bill-and-collect/', {
+            'patient': str(order.patient.id), 'charge_ids': [str(charge.id)],
+            'split_payments': [{'tender_mode': 'CASH', 'amount': 150}]
+        }, format='json')
+        self.assertEqual(bill.status_code, 201, bill.content)
+        self.assertEqual(bill.json()['clinical_unlocks'][0]['gating_action'], 'PHARMACY_MEDICINE_RELEASE')
 
-        inv.refresh_from_db()
+        order.refresh_from_db()
+        self.assertEqual(order.payment_status, 'PAID')
+        inv = order.billing_invoice
+        self.assertIsNotNone(inv)
         self.assertEqual(inv.status, InvoiceStatus.PAID)
         self.assertEqual(inv.paid, Decimal('150.00'))
         self.assertEqual(inv.balance, Decimal('0.00'))
+        self.assertEqual(Payment.objects.filter(invoice=inv).count(), 1)
+
+        # Webhook now just confirms the Billing settlement (no second payment)
+        wh_resp = self.client.post('/api/v1/pharmacy/billing/reception-webhook/', {
+            'token_slip_number': token_slip, 'receipt_number': 'RCP-CENTRAL-8842', 'amount_paid': 150.00
+        }, format='json')
+        self.assertEqual(wh_resp.status_code, 200)
+        self.assertEqual(wh_resp.data['order']['payment_status'], 'PAID')
+        self.assertEqual(Payment.objects.filter(invoice=inv).count(), 1)
 
     def test_engine_3_insurance_copay_split(self):
         self.client.force_authenticate(user=self.pharmacist)
@@ -1568,7 +1591,11 @@ class PharmacyIPDWorkflowsTestCase(APITestCase):
         self.batch_mer.refresh_from_db()
         self.assertEqual(self.batch_mer.available_quantity, initial_stock + 2)
 
-        tx = PharmacyStockTransaction.objects.filter(reference_type='WARD_RETURN_RESTOCK').first()
+        # The routed endpoint (IPDWardReturnClassificationView -> PharmacyIPDOperationsService) records the restock as
+        # a RETURN_RESTOCK movement referenced to this ward return.
+        tx = PharmacyStockTransaction.objects.filter(
+            reference_type='WARD_RETURN', reference_id=ret.id, transaction_type=StockTransactionType.RETURN_RESTOCK
+        ).first()
         self.assertIsNotNone(tx)
         self.assertEqual(tx.quantity_delta, 2)
 

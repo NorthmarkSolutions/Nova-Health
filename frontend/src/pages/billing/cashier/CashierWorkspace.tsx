@@ -39,13 +39,14 @@ import {
 import { MultiTenderPaymentModal } from './MultiTenderPaymentModal';
 import { ReceiptThermalPreviewModal } from './ReceiptThermalPreviewModal';
 import { CashierShiftModal } from './CashierShiftModal';
+import { InvoiceQueueTab } from './InvoiceQueueTab';
 import { useCurrency } from '../../../config/currency';
 
 export const CashierWorkspace: React.FC = () => {
   const { format: formatMoney } = useCurrency();
 
   // Navigation Subtabs
-  const [activeTab, setActiveTab] = useState<'queue' | 'history' | 'walkin' | 'shift_report'>('queue');
+  const [activeTab, setActiveTab] = useState<'queue' | 'unbilled_charges' | 'history' | 'walkin' | 'shift_report'>('queue');
 
   // Core Data States
   const [shift, setShift] = useState<ShiftSummary | null>(null);
@@ -491,6 +492,40 @@ export const CashierWorkspace: React.FC = () => {
         </button>
 
         <button
+          onClick={() => setActiveTab('unbilled_charges')}
+          style={{
+            padding: '0.75rem 1.25rem',
+            background: 'none',
+            border: 'none',
+            borderBottom: activeTab === 'unbilled_charges' ? '3px solid #2563eb' : '3px solid transparent',
+            color: activeTab === 'unbilled_charges' ? '#2563eb' : '#64748b',
+            fontWeight: activeTab === 'unbilled_charges' ? 700 : 500,
+            fontSize: '0.875rem',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            marginBottom: '-2px'
+          }}
+        >
+          <Layers size={16} />
+          <span>Department Unbilled Worklist</span>
+          <span
+            style={{
+              backgroundColor: activeTab === 'unbilled_charges' ? '#eff6ff' : '#f8fafc',
+              color: activeTab === 'unbilled_charges' ? '#1d4ed8' : '#64748b',
+              fontSize: '0.6875rem',
+              fontWeight: 700,
+              padding: '2px 8px',
+              borderRadius: '10px',
+              border: '1px solid #cbd5e1'
+            }}
+          >
+            Clinical Gateways
+          </span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('history')}
           style={{
             padding: '0.75rem 1.25rem',
@@ -766,6 +801,17 @@ export const CashierWorkspace: React.FC = () => {
             )}
           </div>
         </div>
+      )}
+
+      {/* TAB: UNBILLED CLINICAL CHARGES WORKLIST (PHASE 2) */}
+      {activeTab === 'unbilled_charges' && (
+        <InvoiceQueueTab
+          onOpenPayment={(invoice) => {
+            setReceiptInvoiceId(invoice.id);
+            setShowPaymentModal(true);
+            loadData(true);
+          }}
+        />
       )}
 
       {/* TAB 2: INVOICES & SETTLED RECEIPTS */}

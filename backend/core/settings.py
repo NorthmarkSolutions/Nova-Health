@@ -112,6 +112,7 @@ CORS_ALLOW_HEADERS = [
     'user-agent',
     'x-csrftoken',
     'x-requested-with',
+    'x-billing-assist-shift',
 ]
 
 # Django slash behavior for REST APIs
@@ -126,6 +127,7 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.AllowAny',
     ),
     'DEFAULT_PAGINATION_CLASS': None,
+    'EXCEPTION_HANDLER': 'apps.billing.exceptions.billing_exception_handler',
 }
 
 # SimpleJWT

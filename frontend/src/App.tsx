@@ -23,10 +23,11 @@ import { NewOTCSalePage } from './pages/pharmacy/opd/NewOTCSalePage';
 import { LabDashboard } from './pages/lab/LabDashboard';
 import { OtDashboard } from './pages/ot/OtDashboard';
 import { IpdDashboard } from './pages/ipd/IpdDashboard';
-import { BillingDashboard } from './pages/billing/BillingDashboard';
+import { BillingDepartmentContainer } from './pages/billing/BillingDepartmentContainer';
+import { AccountsDepartmentContainer } from './pages/accounts/AccountsDepartmentContainer';
 import { PatientDashboard } from './pages/patient/PatientDashboard';
 import { DepartmentWorkspaceContainer } from './pages/department/DepartmentWorkspaceContainer';
-import { RoleType } from './types';
+import { RoleType, BILLING_WORKSPACE_ROLES } from './types';
 
 const queryClient = new QueryClient();
 
@@ -60,6 +61,23 @@ const RoleHomeRedirect: React.FC = () => {
 
   // For DEPARTMENT_ADMIN, route to their actual assigned department workspace
   if (role === RoleType.DEPARTMENT_ADMIN) {
+    const isBilling =
+      user?.departmentId === 'billing' ||
+      user?.departmentId === 'dept-billing' ||
+      (user as any)?.departmentCode === 'BILLING' ||
+      user?.username?.includes('bill') ||
+      user?.email?.includes('bill');
+
+    const isAccounts =
+      user?.departmentId === 'accounts' ||
+      user?.departmentId === 'dept-accounts' ||
+      (user as any)?.departmentCode === 'ACCOUNTS' ||
+      user?.username?.includes('acc') ||
+      user?.email?.includes('acc');
+
+    if (isBilling) return <Navigate to="/billing/admin" replace />;
+    if (isAccounts) return <Navigate to="/accounts" replace />;
+
     const isLab =
       user?.departmentId === 'lab' ||
       user?.departmentId === 'dept-lab' ||
@@ -100,8 +118,12 @@ const RoleHomeRedirect: React.FC = () => {
     [RoleType.LAB_TECH]: '/lab',
     [RoleType.PHARMACIST]: '/pharmacy',
     [RoleType.INVENTORY_MANAGER]: '/pharmacy/inventory',
-    [RoleType.FINANCE_MANAGER]: '/billing',
+    [RoleType.FINANCE_MANAGER]: '/accounts',
+    [RoleType.INTERNAL_AUDITOR]: '/accounts/audit',
     [RoleType.CASHIER]: '/billing',
+    [RoleType.BILLING_SUPERVISOR]: '/billing/supervisor',
+    [RoleType.BILLING_MANAGER]: '/billing/supervisor',
+    [RoleType.BILLING_ADMIN]: '/billing/admin',
     [RoleType.PATIENT]: '/patient',
   };
 
@@ -183,6 +205,40 @@ export function App() {
               <Route path="/pharmacy/controlled" element={<ControlledDrugRegisterWorkspace />} />
             </Route>
 
+            {/* Billing Department Workspace: Independent Dedicated Engine */}
+            <Route
+              element={
+                <ProtectedRoute
+                  allowedRoles={[
+                    ...BILLING_WORKSPACE_ROLES,
+                    RoleType.DEPARTMENT_ADMIN,
+                    RoleType.SUPER_ADMIN,
+                    RoleType.HOSPITAL_ADMIN,
+                  ]}
+                />
+              }
+            >
+              <Route path="/billing/*" element={<BillingDepartmentContainer />} />
+            </Route>
+
+            {/* Accounts & Financial Governance: Independent Dedicated Engine */}
+            <Route
+              element={
+                <ProtectedRoute
+                  allowedRoles={[
+                    RoleType.FINANCE_MANAGER,
+                    RoleType.INTERNAL_AUDITOR,
+                    RoleType.BILLING_ADMIN,
+                    RoleType.DEPARTMENT_ADMIN,
+                    RoleType.SUPER_ADMIN,
+                    RoleType.HOSPITAL_ADMIN,
+                  ]}
+                />
+              }
+            >
+              <Route path="/accounts/*" element={<AccountsDepartmentContainer />} />
+            </Route>
+
             {/* Authenticated Role Workspaces Wrapped in Unified AppLayout */}
             <Route
               path="/*"
@@ -230,11 +286,6 @@ export function App() {
                     {/* 8. Inpatient Department (IPD) Care */}
                     <Route element={<ProtectedRoute allowedRoles={[RoleType.WARD_MANAGER, RoleType.NURSE, RoleType.DOCTOR, RoleType.SUPER_ADMIN, RoleType.HOSPITAL_ADMIN]} />}>
                       <Route path="/ipd" element={<IpdDashboard />} />
-                    </Route>
-
-                    {/* 9. Cashier / Billing Desk */}
-                    <Route element={<ProtectedRoute allowedRoles={[RoleType.CASHIER, RoleType.FINANCE_MANAGER, RoleType.SUPER_ADMIN, RoleType.HOSPITAL_ADMIN]} />}>
-                      <Route path="/billing" element={<BillingDashboard />} />
                     </Route>
 
                     {/* 10. Patient Companion Portal */}
