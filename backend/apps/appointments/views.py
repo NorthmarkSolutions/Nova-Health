@@ -5,6 +5,7 @@ from rest_framework.permissions import AllowAny
 from django.utils import timezone
 from .models import Appointment, VitalSign
 from .serializers import AppointmentSerializer, VitalSignSerializer
+from apps.billing.services import DepartmentChargeIntegrationService
 
 class AppointmentListCreateView(APIView):
     permission_classes = [AllowAny]
@@ -30,6 +31,10 @@ class AppointmentListCreateView(APIView):
         serializer = AppointmentSerializer(data=request.data)
         if serializer.is_valid():
             apt = serializer.save()
+            try:
+                DepartmentChargeIntegrationService.emit_opd_consultation_charge(apt)
+            except Exception as e:
+                pass
             return Response(AppointmentSerializer(apt).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -56,6 +61,11 @@ class AppointmentStatusView(APIView):
         if new_status:
             apt.status = new_status
             apt.save()
+            if new_status in ['WAITING', 'TRIAGED', 'IN_CONSULTATION']:
+                try:
+                    DepartmentChargeIntegrationService.emit_opd_consultation_charge(apt)
+                except Exception:
+                    pass
         return Response(AppointmentSerializer(apt).data)
 
 class AppointmentVitalsView(APIView):

@@ -12,6 +12,7 @@ import {
   FileText,
   FlaskConical,
   SlidersHorizontal,
+  ShieldAlert,
 } from 'lucide-react';
 import { KpiRow, KpiCard } from '../../../components/workspace';
 import {
@@ -195,6 +196,12 @@ export const LabTechnicianQueueView: React.FC<Props> = ({
     e.stopPropagation();
 
     if (order.stage === 'ORDERED') {
+      const isUnpaid = order.billingStatus === 'UNPAID' || order.isPaid === false;
+      if (isUnpaid) {
+        onShowToast?.(`⚠️ Sample collection blocked: Bill Unsettled at Cash Counter for ${order.patientName}.`);
+        return;
+      }
+
       const now = new Date();
       const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
       LabDataStore.updateOrder(order.id, {
@@ -537,15 +544,43 @@ export const LabTechnicianQueueView: React.FC<Props> = ({
                             alignItems: 'center',
                           }}
                         >
-                          {ord.stage === 'ORDERED' && (
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-secondary"
-                              onClick={(e) => handleActionClick(ord, e)}
-                            >
-                              Collect Sample
-                            </button>
-                          )}
+                          {ord.stage === 'ORDERED' && (() => {
+                            const isUnpaid = ord.billingStatus === 'UNPAID' || ord.isPaid === false;
+                            return (
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                {isUnpaid && (
+                                  <span
+                                    className="badge"
+                                    style={{
+                                      fontSize: '11px',
+                                      backgroundColor: '#fffbeb',
+                                      color: '#b45309',
+                                      border: '1px solid #fde68a',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '4px',
+                                      padding: '3px 8px',
+                                      fontWeight: 600,
+                                    }}
+                                    title="Bill Unsettled at Cash Counter - Payment required before specimen draw"
+                                  >
+                                    <ShieldAlert size={12} color="#d97706" />
+                                    Unpaid Bill
+                                  </span>
+                                )}
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-secondary"
+                                  onClick={(e) => handleActionClick(ord, e)}
+                                  disabled={isUnpaid}
+                                  style={isUnpaid ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
+                                  title={isUnpaid ? "Bill Unsettled at Cash Counter - Direct patient to Billing Desk" : "Collect Sample"}
+                                >
+                                  Collect Sample
+                                </button>
+                              </div>
+                            );
+                          })()}
                           {ord.stage === 'COLLECTED' && (
                             <button
                               type="button"
@@ -699,6 +734,31 @@ export const LabTechnicianQueueView: React.FC<Props> = ({
 
             {/* Drawer Body */}
             <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', flex: 1 }}>
+              {/* Sample Collection Hard Gate Warning if Unpaid */}
+              {activeDrawerOrder.stage === 'ORDERED' && (activeDrawerOrder.billingStatus === 'UNPAID' || activeDrawerOrder.isPaid === false) && (
+                <div
+                  style={{
+                    padding: '14px 16px',
+                    backgroundColor: '#fffbeb',
+                    border: '1px solid #fde68a',
+                    borderRadius: '10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                  }}
+                >
+                  <ShieldAlert size={22} color="#d97706" style={{ flexShrink: 0 }} />
+                  <div>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#92400e' }}>
+                      Sample Collection Hard Gate: Bill Unsettled at Cash Counter
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#b45309', marginTop: '2px' }}>
+                      This order is pending payment of {activeDrawerOrder.billingAmount ? `₹${activeDrawerOrder.billingAmount}` : 'prescribed charges'} at the Central Billing Desk. Vacutainer barcode generation and sample collection are restricted until bill settlement.
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Stepper Progression */}
               <div
                 style={{

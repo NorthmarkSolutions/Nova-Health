@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { RoleType } from '../../types';
+import { RoleType, User as UserType } from '../../types';
 import {
   Hospital,
   Building2,
@@ -284,11 +284,17 @@ export const LoginPage: React.FC = () => {
           resolvedStaff?.departmentId === 'dept-cardiology' ||
           activeDepartment.id === 'dept-cardiology';
 
-        const enrichedUser = {
-          ...res.data.user,
+        const enrichedUser: UserType = {
+          id: res.data.user?.id || (resolvedStaff ? resolvedStaff.id : `usr-${Date.now()}`),
+          username: res.data.user?.username || credentialId,
+          email: res.data.user?.email || (resolvedStaff ? resolvedStaff.email : credentialId),
+          firstName: res.data.user?.firstName || (resolvedStaff ? resolvedStaff.name.split(' ')[0] : 'Staff'),
+          lastName: res.data.user?.lastName || (resolvedStaff ? resolvedStaff.name.split(' ').slice(1).join(' ') : 'Member'),
+          role: (res.data.user?.role || resolvedStaff?.role || activeDepartment.defaultRole) as RoleType,
+          employeeId: resolvedStaff?.employeeId || res.data.user?.username,
           departmentId:
             res.data.user?.departmentId ||
-            (isLabAccount ? 'lab' : isCardioAccount ? 'dept-cardiology' : resolvedStaff?.departmentId || '1'),
+            (isLabAccount ? 'lab' : isCardioAccount ? 'dept-cardiology' : resolvedStaff?.departmentId || activeDepartment.id || 'dept-billing'),
           departmentCode:
             res.data.user?.departmentCode ||
             (isLabAccount ? 'LAB' : isCardioAccount ? 'CARDIO' : resolvedStaff?.departmentCode || activeDepartment.code),
@@ -301,12 +307,24 @@ export const LoginPage: React.FC = () => {
             (isLabAccount ? 'Laboratory Director & Department Admin' : undefined),
         };
 
+        // Persist token and user in AuthContext & localStorage
         login(res.data.accessToken, enrichedUser);
+
+        const roleDestinationMap: Record<string, string> = {
+          [RoleType.BILLING_ADMIN]: '/billing/admin',
+          [RoleType.BILLING_SUPERVISOR]: '/billing/supervisor',
+          [RoleType.BILLING_MANAGER]: '/billing/supervisor',
+          [RoleType.CASHIER]: '/billing',
+          [RoleType.FINANCE_MANAGER]: '/accounts',
+          [RoleType.INTERNAL_AUDITOR]: '/accounts/audit',
+        };
+
         const destination =
           resolvedStaff?.targetRoute ||
-          (res.data.user?.role === RoleType.PATHOLOGIST
+          roleDestinationMap[enrichedUser.role] ||
+          (enrichedUser.role === RoleType.PATHOLOGIST
             ? '/lab?tab=review'
-            : res.data.user?.role === RoleType.DEPARTMENT_ADMIN && isLabAccount
+            : enrichedUser.role === RoleType.DEPARTMENT_ADMIN && isLabAccount
             ? '/department/lab'
             : activeDepartment.defaultRoute);
         navigate(destination);
@@ -315,6 +333,14 @@ export const LoginPage: React.FC = () => {
     } catch {
       // 2. Seamless Mock / Dev Mode Fallback
       const effectiveRole = resolvedStaff?.role || activeDepartment.defaultRole;
+      const roleDestinationMap: Record<string, string> = {
+        [RoleType.BILLING_ADMIN]: '/billing/admin',
+        [RoleType.BILLING_SUPERVISOR]: '/billing/supervisor',
+        [RoleType.BILLING_MANAGER]: '/billing/supervisor',
+        [RoleType.CASHIER]: '/billing',
+        [RoleType.FINANCE_MANAGER]: '/accounts',
+        [RoleType.INTERNAL_AUDITOR]: '/accounts/audit',
+      };
       const rawName = resolvedStaff?.name || credentialId.split('@')[0];
       const cleanName = rawName.replace(/^(Nurse|Dr\.)\s+/i, '').trim();
       const effectiveEmail =
@@ -355,7 +381,10 @@ export const LoginPage: React.FC = () => {
       };
 
       login('local-jwt-token-2026', demoUser);
-      const targetDestination = resolvedStaff?.targetRoute || (isLabAccount ? '/department/lab' : activeDepartment.defaultRoute);
+      const targetDestination =
+        resolvedStaff?.targetRoute ||
+        roleDestinationMap[effectiveRole] ||
+        (isLabAccount ? '/department/lab' : activeDepartment.defaultRoute);
       navigate(targetDestination);
     } finally {
       setIsLoading(false);

@@ -110,3 +110,14 @@ desktop.ini
 *.njsproj
 *.sln
 *.sw?
+
+# -----------------------------------------------------------------------------
+# 7. Local Knowledge Graph & Scratch (Keep Local Only)
+# -----------------------------------------------------------------------------
+graphify-out/
+.graphify/
+*.graphify*
+.agents/
+backend/scratch/
+
+

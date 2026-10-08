@@ -59,6 +59,9 @@ export interface LabQueueOrder {
   isCritical?: boolean;
   criticalAcknowledgedAt?: string;
   criticalAcknowledgedBy?: string;
+  isPaid?: boolean;
+  billingStatus?: 'PAID' | 'UNPAID' | 'EXEMPT';
+  billingAmount?: number;
   technicianNote?: string;
   pathologistInterpretation?: string;
   relevantHistory?: string[];
@@ -372,6 +375,54 @@ const INITIAL_ORDERS: LabQueueOrder[] = [
       { group: 'THYROID', name: 'Free T3', unit: 'pg/mL', low: 2.0, high: 4.4, observedValue: 3.2, previousValue: 3.1 },
       { group: 'THYROID', name: 'Free T4', unit: 'ng/dL', low: 0.8, high: 1.8, observedValue: 1.2, previousValue: 1.3 },
     ],
+  },
+  {
+    id: 'ord-0144',
+    orderNumber: 'LAB-0144',
+    specimenNumber: 'SPM-88215',
+    patientName: 'Sunita Deshmukh',
+    age: 52,
+    gender: 'F',
+    uhid: 'UHID-202609-00102',
+    testName: 'Thyroid profile',
+    testCode: 'IMM-THY-01',
+    category: 'Immunoassay',
+    doctorName: 'Dr. Sarah Jenkins',
+    location: 'OPD Room 101',
+    sampleType: 'Serum · SST',
+    priority: 'Routine',
+    stage: 'ORDERED',
+    isPaid: false,
+    billingStatus: 'UNPAID',
+    billingAmount: 650.00,
+    orderedAt: '10:15',
+    parameters: [
+      { group: 'THYROID', name: 'TSH', unit: 'µIU/mL', low: 0.4, high: 4.5, observedValue: null },
+      { group: 'THYROID', name: 'Free T3', unit: 'pg/mL', low: 2.0, high: 4.4, observedValue: null },
+      { group: 'THYROID', name: 'Free T4', unit: 'ng/dL', low: 0.8, high: 1.8, observedValue: null },
+    ],
+  },
+  {
+    id: 'ord-0145',
+    orderNumber: 'LAB-0145',
+    specimenNumber: 'SPM-88216',
+    patientName: 'Ramesh Kulkarni',
+    age: 48,
+    gender: 'M',
+    uhid: 'UHID-202609-00105',
+    testName: 'Complete blood count',
+    testCode: 'HEM-CBC-01',
+    category: 'Hematology',
+    doctorName: 'Dr. Michael Chang',
+    location: 'OPD Room 104',
+    sampleType: 'EDTA whole blood',
+    priority: 'STAT',
+    stage: 'ORDERED',
+    isPaid: true,
+    billingStatus: 'PAID',
+    billingAmount: 350.00,
+    orderedAt: '10:20',
+    parameters: INITIAL_CBC_PARAMS,
   },
 ];
 

@@ -1,0 +1,1475 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/lucide-static@0.460.0/font/lucide.css">
+<style>
+body{margin:0;background:#F9FAFB;color:#111827;font-family:Inter,-apple-system,BlinkMacSystemFont,sans-serif;-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}
+a{color:#2563EB;text-decoration:none}a:hover{color:#1D4ED8}
+input,select,textarea,button{font-family:inherit}
+@keyframes slideIn{from{transform:translateX(24px);opacity:0}to{transform:none;opacity:1}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+</style>
+</helmet>
+
+<div style="display:flex;min-height:100vh">
+
+<aside style="width:260px;flex:0 0 260px;background:#FFFFFF;border-right:1px solid #E5E7EB;height:100vh;position:sticky;top:0;display:flex;flex-direction:column;padding:20px 16px;gap:20px">
+  <div style="display:flex;align-items:center;gap:10px;padding:0 8px">
+    <div style="width:32px;height:32px;border-radius:10px;background:#2563EB;color:#FFFFFF;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px">N</div>
+    <div style="display:flex;flex-direction:column"><span style="font-size:15px;font-weight:600">NorthHospital</span><span style="font-size:12px;color:#6B7280">HMS</span></div>
+  </div>
+  <div style="border:1px solid #E5E7EB;border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;background:#F9FAFB">
+    <span style="font-size:12px;color:#6B7280">Workspace</span>
+    <span style="font-size:14px;font-weight:600">Billing · {{ ctx.counterName }}</span>
+    <span style="display:flex;align-items:center;gap:6px;font-size:12px;color:{{ shiftChip.fg }}"><span style="width:6px;height:6px;border-radius:50%;background:{{ shiftChip.fg }}"></span>{{ shiftChip.side }}</span>
+  </div>
+  <nav style="display:flex;flex-direction:column;gap:2px;flex:1">
+    <span style="font-size:12px;color:#6B7280;padding:0 12px 6px">Work</span>
+    <button onClick="{{ goDashboard }}" style="display:flex;align-items:center;gap:12px;height:40px;padding:0 12px;border:none;border-radius:10px;background:{{ nav.dashBg }};color:{{ nav.dashFg }};font-size:14px;font-weight:500;cursor:pointer;text-align:left"><i class="icon-layout-dashboard" style="font-size:18px"></i>Dashboard</button>
+    <button onClick="{{ goQueue }}" style="display:flex;align-items:center;gap:12px;height:40px;padding:0 12px;border:none;border-radius:10px;background:{{ nav.queueBg }};color:{{ nav.queueFg }};font-size:14px;font-weight:500;cursor:pointer;text-align:left"><i class="icon-list-ordered" style="font-size:18px"></i><span style="flex:1">Invoice Queue</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;background:#FFFBEB;color:#B45309;border-radius:999px;padding:2px 8px">{{ queueCount }}</span></button>
+    <button onClick="{{ goIpd }}" style="display:flex;align-items:center;gap:12px;height:40px;padding:0 12px;border:none;border-radius:10px;background:{{ nav.ipdBg }};color:{{ nav.ipdFg }};font-size:14px;font-weight:500;cursor:pointer;text-align:left"><i class="icon-bed-double" style="font-size:18px"></i>IPD Running Bills</button>
+    <span style="font-size:12px;color:#6B7280;padding:16px 12px 6px">Records</span>
+    <button onClick="{{ goReceipts }}" style="display:flex;align-items:center;gap:12px;height:40px;padding:0 12px;border:none;border-radius:10px;background:{{ nav.rcBg }};color:{{ nav.rcFg }};font-size:14px;font-weight:500;cursor:pointer;text-align:left"><i class="icon-receipt-text" style="font-size:18px"></i>Receipts &amp; Invoices</button>
+    <button onClick="{{ goRequests }}" style="display:flex;align-items:center;gap:12px;height:40px;padding:0 12px;border:none;border-radius:10px;background:{{ nav.reqBg }};color:{{ nav.reqFg }};font-size:14px;font-weight:500;cursor:pointer;text-align:left"><i class="icon-inbox" style="font-size:18px"></i><span style="flex:1">My Requests</span><sc-if value="{{ reqPendingCount }}"><span style="font-family:'JetBrains Mono',monospace;font-size:12px;background:#FFFBEB;color:#B45309;border-radius:999px;padding:2px 8px">{{ reqPendingCount }}</span></sc-if></button>
+    <span style="font-size:12px;color:#6B7280;padding:16px 12px 6px">Counter</span>
+    <button onClick="{{ goShift }}" style="display:flex;align-items:center;gap:12px;height:40px;padding:0 12px;border:none;border-radius:10px;background:{{ nav.shiftBg }};color:{{ nav.shiftFg }};font-size:14px;font-weight:500;cursor:pointer;text-align:left"><i class="icon-timer" style="font-size:18px"></i>Counter Shift</button>
+  </nav>
+  <div style="display:flex;align-items:center;gap:10px;padding:12px 8px 0;border-top:1px solid #E5E7EB">
+    <div style="width:36px;height:36px;border-radius:50%;background:{{ ctx.avBg }};color:{{ ctx.avFg }};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600">{{ ctx.ini }}</div>
+    <div style="display:flex;flex-direction:column;flex:1;min-width:0"><span style="font-size:14px;font-weight:500">{{ ctx.user }}</span><span style="font-size:12px;color:#6B7280">{{ ctx.role }}</span></div>
+    <button title="Logout" style="width:36px;height:36px;border:none;background:transparent;border-radius:10px;color:#6B7280;cursor:pointer"><i class="icon-log-out" style="font-size:18px"></i></button>
+  </div>
+</aside>
+
+<div style="flex:1;min-width:0;display:flex;flex-direction:column">
+  <div style="position:sticky;top:0;z-index:5;height:56px;background:#FFFFFF;border-bottom:1px solid #E5E7EB;display:flex;align-items:center;gap:16px;padding:0 24px">
+    <div style="flex:1;min-width:0;font-size:13px;color:#6B7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">North Hospital / Billing · {{ ctx.counterName }} / <span style="color:#111827;font-weight:500">{{ crumb }}</span></div>
+    <sc-if value="{{ sw.show }}"><div style="position:relative;flex-shrink:0">
+      <button onClick="{{ sw.toggle }}" style="height:36px;padding:0 12px;border:1px solid {{ sw.bd }};background:{{ sw.bg }};border-radius:10px;display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;white-space:nowrap"><i class="icon-repeat" style="font-size:15px;color:{{ sw.fg }}"></i><span style="color:#6B7280">{{ sw.prefix }}</span><span style="font-weight:600;color:#111827">{{ sw.current }}</span><i class="icon-chevron-down" style="font-size:14px;color:#6B7280"></i></button>
+      <sc-if value="{{ sw.open }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ sw.close }}" style="position:fixed;inset:0;z-index:25"></div>
+        <div style="position:absolute;right:0;top:44px;width:320px;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;box-shadow:0 12px 32px rgba(17,24,39,0.12);padding:6px;z-index:30;display:flex;flex-direction:column">
+          <span style="font-size:11px;color:#6B7280;padding:8px 10px 6px;letter-spacing:0.04em">SIGNED IN AS VIKRAMADITYA RAO · BILLING SUPERVISOR</span>
+          <sc-for list="{{ sw.items }}" as="w" hint-placeholder-count="7"><button onClick="{{ w.go }}" style="display:flex;align-items:center;gap:10px;padding:10px;border:none;background:{{ w.bg }};border-radius:8px;cursor:pointer;text-align:left;font-family:inherit;border-top:{{ w.divider }}" style-hover="background:#F5F9FF"><i class="{{ w.icon }}" style="font-size:16px;color:{{ w.iconFg }}"></i><span style="display:flex;flex-direction:column;flex:1;min-width:0"><span style="font-size:13px;font-weight:500;color:#111827">{{ w.label }}</span><span style="font-size:12px;color:#6B7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ w.sub }}</span></span><sc-if value="{{ w.active }}"><i class="icon-check" style="font-size:16px;color:#2563EB"></i></sc-if></button></sc-for>
+          <span style="font-size:11px;color:#6B7280;padding:8px 10px;border-top:1px solid #F3F4F6;margin-top:4px">Every workspace switch is recorded in the audit stream.</span>
+        </div>
+      </sc-if>
+    </div>
+    </sc-if><span style="display:flex;align-items:center;gap:6px;font-size:12px;color:{{ shiftChip.fg }};background:{{ shiftChip.bg }};border:1px solid {{ shiftChip.border }};border-radius:999px;padding:4px 10px;white-space:nowrap">{{ shiftChip.top }}</span>
+  </div>
+
+  <sc-if value="{{ ctx.isSup }}" hint-placeholder-val="{{ false }}"><div style="position:sticky;top:56px;z-index:4;display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:10px 24px;background:#FFFBEB;border-bottom:1px solid #FDE68A">
+    <i class="icon-user-cog" style="font-size:18px;color:#B45309"></i>
+    <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:240px"><span style="font-size:13px;font-weight:600;color:#92400E">Viewing as Billing Supervisor · {{ ctx.counterName }}</span><span style="font-size:12px;color:#92400E">You are assisting on {{ ctx.cashier }}’s shift. Actions post to this counter as “assisted by Vikramaditya Rao”. Requests you raise here route to Billing Admin.</span></div>
+    <button onClick="{{ ctx.back }}" style="height:36px;padding:0 14px;border:none;background:#B45309;color:#FFFFFF;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px;white-space:nowrap"><i class="icon-arrow-left" style="font-size:15px"></i>Return to Supervisor Workspace</button>
+  </div></sc-if>
+  <main style="padding:24px;display:flex;flex-direction:column;gap:24px">
+
+  <sc-if value="{{ isDashboard }}" hint-placeholder-val="{{ true }}">
+    <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;justify-content:space-between">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <h1 style="margin:0;font-size:32px;font-weight:700;letter-spacing:-0.01em">Billing Dashboard</h1>
+        <p style="margin:0;font-size:14px;color:#6B7280">Counter 1 queue, shift collections and requests awaiting decision.</p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button onClick="{{ closeCounter }}" style="height:40px;padding:0 16px;white-space:nowrap;flex-shrink:0;border:none;background:transparent;color:#6B7280;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer">Close Counter</button>
+        <button onClick="{{ openDeposit }}" style="height:40px;padding:0 16px;white-space:nowrap;flex-shrink:0;border:1px solid #E5E7EB;background:#FFFFFF;color:#111827;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:8px" style-hover="background:#F9FAFB"><i class="icon-piggy-bank" style="font-size:16px"></i>Accept Deposit</button>
+        <button onClick="{{ goQueue }}" style="height:40px;padding:0 16px;white-space:nowrap;flex-shrink:0;border:none;background:#2563EB;color:#FFFFFF;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:8px" style-hover="background:#1D4ED8"><i class="icon-plus" style="font-size:16px"></i>New Bill</button>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:16px">
+      <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="5">
+        <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:20px;height:120px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 1px 2px rgba(17,24,39,0.04)">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:13px;color:#6B7280">{{ k.label }}</span>
+            <i class="{{ k.icon }}" style="font-size:18px;color:#6B7280"></i>
+          </div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:600;letter-spacing:-0.02em">{{ k.value }}</div>
+          <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px"><span style="color:#6B7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ k.sub }}</span><span style="color:{{ k.trendColor }};white-space:nowrap;font-weight:500">{{ k.trend }}</span></div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:16px 20px;display:flex;flex-wrap:wrap;gap:16px 32px;align-items:center">
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <span style="font-size:12px;color:#6B7280">Counter 1 status</span>
+        <div style="display:flex;gap:4px;background:#F3F4F6;border-radius:10px;padding:4px">
+          <sc-for list="{{ counter.states }}" as="c" hint-placeholder-count="3"><span style="height:28px;padding:0 12px;border-radius:8px;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;background:{{ c.bg }};color:{{ c.fg }};box-shadow:{{ c.shadow }}"><span style="width:6px;height:6px;border-radius:50%;background:{{ c.dot }}"></span>{{ c.label }}</span></sc-for>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:16px;flex:1 1 560px">
+        <sc-for list="{{ counter.metrics }}" as="m" hint-placeholder-count="5">
+          <div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;color:#6B7280">{{ m.label }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:{{ m.weight }}">{{ m.value }}</span></div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start">
+      <div style="flex:1 1 520px;min-width:0;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;overflow:hidden">
+        <div style="display:flex;flex-direction:column;gap:12px;padding:16px 20px;border-bottom:1px solid #E5E7EB">
+          <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between">
+            <div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:16px;font-weight:600">Invoice Queue</span><span style="font-size:13px;color:#6B7280">{{ queueCount }} open · STAT first</span></div>
+            <div style="display:flex;align-items:center;gap:8px;height:40px;border:1px solid #E5E7EB;border-radius:10px;padding:0 12px;flex:1 1 220px;max-width:320px"><i class="icon-search" style="font-size:16px;color:#6B7280"></i><input value="{{ search }}" onChange="{{ onSearch }}" placeholder="Name, UHID, mobile, token" style="border:none;outline:none;flex:1;font-size:14px;background:transparent;min-width:0"></div>
+          </div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;background:#F3F4F6;border-radius:10px;padding:4px;align-self:flex-start">
+            <sc-for list="{{ qTabs }}" as="t" hint-placeholder-count="7"><button onClick="{{ t.pick }}" style="height:32px;padding:0 12px;border:none;border-radius:8px;background:{{ t.bg }};color:{{ t.fg }};font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap;box-shadow:{{ t.shadow }}">{{ t.label }} <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#6B7280">{{ t.count }}</span></button></sc-for>
+          </div>
+        </div>
+        <div style="overflow-x:auto"><div style="min-width:600px">
+          <div style="display:grid;grid-template-columns:minmax(140px,1.5fr) minmax(80px,1fr) 90px 110px 90px;gap:12px;align-items:center;height:44px;padding:0 20px;background:#F9FAFB;border-bottom:1px solid #E5E7EB;font-size:12px;color:#6B7280;font-weight:500"><span>Patient</span><span>Charges</span><span>Status</span><span>Payer</span><span style="text-align:right">Amount</span></div>
+          <sc-for list="{{ dashRows }}" as="p" hint-placeholder-count="8">
+            <div onClick="{{ p.select }}" style="display:grid;grid-template-columns:minmax(140px,1.5fr) minmax(80px,1fr) 90px 110px 90px;gap:12px;align-items:center;height:60px;padding:0 20px;border-bottom:1px solid #F3F4F6;cursor:pointer;background:{{ p.rowBg }};opacity:{{ p.opacity }};transition:background 0.15s ease" style-hover="background:#F5F9FF">
+              <div style="display:flex;flex-direction:column;min-width:0"><span style="font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.name }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#6B7280;white-space:nowrap">{{ p.uhid }} · {{ p.wait }}m</span></div>
+              <div style="display:flex;gap:6px;align-items:center;min-width:0;flex-wrap:wrap"><span style="font-size:12px;background:#F3F4F6;border-radius:6px;padding:2px 8px;white-space:nowrap">{{ p.source }}</span><sc-if value="{{ p.stat }}"><span style="font-size:12px;background:#FEF2F2;color:#DC2626;border-radius:6px;padding:2px 8px;font-weight:600">STAT</span></sc-if><sc-if value="{{ p.hasAlert }}"><i class="icon-triangle-alert" style="font-size:14px;color:#B45309"></i></sc-if></div>
+              <div><span style="font-size:12px;font-weight:500;color:{{ p.statusFg }};background:{{ p.statusBg }};border-radius:999px;padding:3px 10px;white-space:nowrap">{{ p.statusLabel }}</span></div><div style="display:flex;flex-direction:column;gap:2px;align-items:flex-start;min-width:0"><span style="font-size:12px;font-weight:500;color:{{ p.payerFg }};background:{{ p.payerBg }};border-radius:999px;padding:3px 10px;white-space:nowrap">{{ p.payerType }}</span><sc-if value="{{ p.hasPayerName }}"><span style="font-size:11px;color:#6B7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">{{ p.payer }}</span></sc-if></div>
+              
+              <span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500;text-align:right">{{ p.amountF }}</span>
+            </div>
+          </sc-for>
+          <sc-if value="{{ dashEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:40px;text-align:center;color:#6B7280;font-size:14px">No invoices match this filter.</div></sc-if>
+        </div></div>
+      </div>
+
+      <div style="flex:1 1 380px;max-width:{{ layout.panelMax }};min-width:0;position:{{ layout.pos }};top:80px;max-height:{{ layout.maxH }};overflow-y:{{ layout.ovf }};background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;display:flex;flex-direction:column;box-shadow:0 1px 2px rgba(17,24,39,0.04)">
+        <sc-if value="{{ ap.has }}" hint-placeholder-val="{{ true }}">
+          <div style="padding:16px 20px;border-bottom:1px solid #F3F4F6;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span style="font-size:12px;color:#6B7280;text-transform:uppercase;letter-spacing:0.06em">Active invoice</span><span style="font-size:12px;font-weight:500;color:{{ ap.statusFg }};background:{{ ap.statusBg }};border-radius:999px;padding:3px 10px;white-space:nowrap">{{ ap.statusLabel }}</span></div>
+            <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:20px;font-weight:600">{{ ap.name }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#6B7280">{{ ap.uhid }} · {{ ap.token }}</span></div>
+            <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 16px;font-size:13px">
+              <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:12px;color:#6B7280">Age / Gender</span><span>{{ ap.ageSex }}</span></div>
+              <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:12px;color:#6B7280">Mobile</span><span style="font-family:'JetBrains Mono',monospace">{{ ap.mobile }}</span></div>
+              <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:12px;color:#6B7280">Encounter</span><span>{{ ap.encounter }}</span></div>
+              <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start"><span style="font-size:12px;color:#6B7280">Payer</span><span style="font-size:12px;font-weight:500;color:{{ ap.payerFg }};background:{{ ap.payerBg }};border-radius:999px;padding:3px 10px;white-space:nowrap">{{ ap.payerLabel }}</span></div>
+            </div>
+          </div>
+
+          <sc-if value="{{ ap.hasAlerts }}">
+            <div style="padding:16px 20px;border-bottom:1px solid #F3F4F6;display:flex;flex-direction:column;gap:12px;gap:8px">
+              <sc-for list="{{ ap.alerts }}" as="a" hint-placeholder-count="1">
+                <div style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:10px;background:{{ a.bg }};border:1px solid {{ a.border }}">
+                  <i class="{{ a.icon }}" style="font-size:16px;color:{{ a.fg }};margin-top:1px"></i>
+                  <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0"><span style="font-size:13px;font-weight:600;color:{{ a.fg }}">{{ a.title }}</span><span style="font-size:12px;color:#374151;line-height:1.45">{{ a.text }}</span></div>
+                  <sc-if value="{{ a.hasAction }}"><button onClick="{{ a.action }}" style="border:none;background:transparent;padding:0;color:{{ a.fg }};font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">{{ a.actionLabel }}</button></sc-if>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <div style="padding:16px 20px;border-bottom:1px solid #F3F4F6;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:14px;font-weight:600">Invoice summary</span><button onClick="{{ ap.openFull }}" style="border:none;background:transparent;padding:0;color:#2563EB;font-size:13px;font-weight:500;cursor:pointer">Edit lines →</button></div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <sc-for list="{{ ap.cats }}" as="c" hint-placeholder-count="5"><div style="display:flex;justify-content:space-between;gap:12px;font-size:13px"><span style="color:{{ c.labelColor }}">{{ c.label }}</span><span style="font-family:'JetBrains Mono',monospace;color:{{ c.color }}">{{ c.amountF }}</span></div></sc-for>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;padding-top:10px;border-top:1px solid #F3F4F6">
+              <div style="display:flex;justify-content:space-between;gap:12px;font-size:13px"><span style="color:#6B7280">Subtotal</span><span style="font-family:'JetBrains Mono',monospace;">{{ ap.subF }}</span></div>
+              <div style="display:flex;justify-content:space-between;gap:12px;font-size:13px;align-items:center"><span style="display:flex;align-items:center;gap:8px;color:#6B7280">Discount {{ ap.discLabel }}<sc-if value="{{ ap.discPending }}"><span style="font-size:11px;font-weight:600;color:#B45309;background:#FFFBEB;border:1px solid #FDE68A;border-radius:999px;padding:1px 8px">Pending approval</span></sc-if><sc-if value="{{ ap.canReqDisc }}"><button onClick="{{ ap.reqDiscount }}" style="border:none;background:transparent;padding:0;color:#2563EB;font-size:12px;font-weight:500;cursor:pointer">Request discount</button></sc-if></span><span style="font-family:'JetBrains Mono',monospace;color:#15803D">− {{ ap.discF }}</span></div>
+              <div style="display:flex;justify-content:space-between;gap:12px;font-size:13px"><span style="color:#6B7280">Tax (GST incl.)</span><span style="font-family:'JetBrains Mono',monospace;color:#6B7280">{{ ap.taxF }}</span></div>
+              <sc-if value="{{ ap.hasPaid }}"><div style="display:flex;justify-content:space-between;gap:12px;font-size:13px"><span style="color:#6B7280">Paid earlier</span><span style="font-family:'JetBrains Mono',monospace;color:#15803D">− {{ ap.paidF }}</span></div></sc-if>
+              <div style="display:flex;justify-content:space-between;gap:12px;padding-top:8px;border-top:1px solid #F3F4F6;align-items:baseline"><span style="font-size:14px;font-weight:600">Grand total</span><span style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:600">{{ ap.totalF }}</span></div>
+            </div>
+          </div>
+
+          <div style="padding:16px 20px;border-bottom:1px solid #F3F4F6;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:14px;font-weight:600">Advance &amp; deposit</span><button onClick="{{ ap.addDeposit }}" style="height:32px;padding:0 12px;border:1px solid #E5E7EB;background:#FFFFFF;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap" style-hover="background:#F9FAFB"><i class="icon-plus" style="font-size:14px"></i>Add deposit</button></div>
+            <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+              <div style="display:flex;flex-direction:column;gap:2px;padding:10px 12px;background:#F9FAFB;border-radius:10px"><span style="font-size:12px;color:#6B7280">Advance balance</span><span style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:600">{{ ap.advF }}</span></div>
+              <div style="display:flex;flex-direction:column;gap:2px;padding:10px 12px;background:#F9FAFB;border-radius:10px"><span style="font-size:12px;color:#6B7280">Available credit</span><span style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:600">{{ ap.creditF }}</span></div>
+            </div>
+            <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:{{ ap.advCursor }};color:{{ ap.advColor }}"><input type="checkbox" checked="{{ ap.useAdv }}" disabled="{{ ap.advDisabled }}" onChange="{{ ap.toggleAdv }}" style="width:16px;height:16px;accent-color:#2563EB">Use advance <span style="font-family:'JetBrains Mono',monospace;margin-left:auto">{{ ap.advUseF }}</span></label>
+            <sc-if value="{{ ap.hasTx }}">
+              <div style="display:flex;flex-direction:column">
+                <sc-for list="{{ ap.tx }}" as="t" hint-placeholder-count="2"><div style="display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid #F3F4F6;font-size:12px"><div style="display:flex;flex-direction:column;min-width:0"><span>{{ t.label }}</span><span style="font-family:'JetBrains Mono',monospace;color:#6B7280">{{ t.d }} · {{ t.ref }}</span></div><span style="font-family:'JetBrains Mono',monospace;color:{{ t.color }};white-space:nowrap">{{ t.amtF }}</span></div></sc-for>
+              </div>
+            </sc-if>
+          </div>
+
+          <div style="padding:16px 20px;border-bottom:1px solid #F3F4F6;display:flex;flex-direction:column;gap:12px">
+            <span style="font-size:14px;font-weight:600">Payment</span>
+            <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+              <sc-for list="{{ ap.methods }}" as="m" hint-placeholder-count="6">
+                <button onClick="{{ m.pick }}" disabled="{{ m.disabled }}" title="{{ m.reason }}" style="height:52px;padding:0 10px;border:1px solid {{ m.border }};background:{{ m.bg }};border-radius:10px;cursor:{{ m.cursor }};display:flex;align-items:center;gap:8px;text-align:left;opacity:{{ m.opacity }}">
+                  <span style="width:16px;height:16px;flex:0 0 16px;border-radius:50%;border:1.5px solid {{ m.ring }};display:flex;align-items:center;justify-content:center"><span style="width:8px;height:8px;border-radius:50%;background:{{ m.dot }}"></span></span>
+                  <span style="display:flex;flex-direction:column;min-width:0"><span style="font-size:13px;font-weight:500;color:#111827;white-space:nowrap">{{ m.label }}</span><sc-if value="{{ m.hasReason }}"><span style="font-size:11px;color:#6B7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ m.reason }}</span></sc-if></span>
+                </button>
+              </sc-for>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;padding:12px 14px;border-radius:10px;background:#F9FAFB"><span style="font-size:13px;color:#6B7280">Amount due</span><span style="font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:600">{{ ap.dueF }}</span></div>
+            <sc-if value="{{ ap.needsRecv }}">
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px">
+                <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:500">Amount received<input value="{{ ap.recv }}" onChange="{{ ap.onRecv }}" inputmode="decimal" placeholder="0.00" style="height:40px;border:1px solid #E5E7EB;border-radius:10px;padding:0 12px;font-size:14px;font-family:'JetBrains Mono',monospace;outline:none;min-width:0" style-focus="border-color:#2563EB"></label>
+                <sc-if value="{{ ap.needsRef }}"><label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:500">{{ ap.refLabel }}<input value="{{ ap.ref }}" onChange="{{ ap.onRef }}" placeholder="{{ ap.refPh }}" style="height:40px;border:1px solid #E5E7EB;border-radius:10px;padding:0 12px;font-size:14px;font-family:'JetBrains Mono',monospace;outline:none;min-width:0" style-focus="border-color:#2563EB"></label></sc-if>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+                <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:12px;color:#6B7280">Balance</span><span style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:600;color:{{ ap.balColor }}">{{ ap.balF }}</span></div>
+                <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:12px;color:#6B7280">Change return</span><span style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:600;color:{{ ap.changeColor }}">{{ ap.changeF }}</span></div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ ap.isCovered }}"><div style="font-size:13px;padding:10px 12px;border-radius:10px;background:#EEF2FF;border:1px solid #C7D2FE;color:#312E81;line-height:1.45">{{ ap.coverNote }}</div></sc-if>
+            <sc-if value="{{ ap.isDone }}"><div style="display:flex;gap:10px;align-items:center;padding:10px 12px;border-radius:10px;background:#F0FDF4;border:1px solid #BBF7D0;font-size:13px"><i class="icon-circle-check" style="font-size:16px;color:#15803D"></i><div style="display:flex;flex-direction:column;flex:1"><span style="font-weight:600;color:#15803D">{{ ap.doneTitle }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#374151">{{ ap.doneRef }}</span></div></div></sc-if>
+          </div>
+
+          <div style="position:{{ layout.footPos }};bottom:0;background:#FFFFFF;padding:16px 20px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;border-top:1px solid #E5E7EB">
+            <button onClick="{{ ap.collect }}" disabled="{{ ap.collectDisabled }}" style="grid-column:span 2;height:44px;border:none;background:{{ ap.collectBg }};color:#FFFFFF;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap">{{ ap.collectLabel }}</button>
+            <button onClick="{{ ap.partial }}" disabled="{{ ap.partialDisabled }}" style="grid-column:span 2;height:40px;border:1px solid #E5E7EB;background:#FFFFFF;color:{{ ap.partialFg }};border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap">Save partial payment</button>
+            <button onClick="{{ ap.print }}" disabled="{{ ap.noReceipt }}" style="height:40px;border:1px solid #E5E7EB;background:#FFFFFF;color:{{ ap.rcFg }};border-radius:10px;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap"><i class="icon-printer" style="font-size:15px"></i>Print receipt</button>
+            <button onClick="{{ ap.whatsapp }}" disabled="{{ ap.noReceipt }}" style="height:40px;border:1px solid #E5E7EB;background:#FFFFFF;color:{{ ap.rcFg }};border-radius:10px;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap"><i class="icon-message-circle" style="font-size:15px"></i>WhatsApp</button>
+            <sc-if value="{{ ap.hint }}"><span style="grid-column:span 2;font-size:12px;color:#6B7280;text-align:center">{{ ap.hint }}</span></sc-if>
+          </div>
+        </sc-if>
+        <sc-if value="{{ ap.none }}" hint-placeholder-val="{{ false }}"><div style="padding:48px 24px;text-align:center;display:flex;flex-direction:column;gap:8px;align-items:center"><i class="icon-mouse-pointer-click" style="font-size:24px;color:#9CA3AF"></i><span style="font-size:14px;font-weight:500">No active invoice</span><span style="font-size:13px;color:#6B7280">Select a patient from the queue.</span></div></sc-if>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isQueue }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;justify-content:space-between">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <h1 style="margin:0;font-size:32px;font-weight:700;letter-spacing:-0.01em">Invoice Queue</h1>
+        <p style="margin:0;font-size:14px;color:#6B7280">Unbilled charges from consultations, diagnostics and pharmacy. STAT orders first.</p>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px">
+      <sc-for list="{{ sourceKpis }}" as="k" hint-placeholder-count="5">
+        <button onClick="{{ k.pick }}" style="text-align:left;background:#FFFFFF;border:1px solid {{ k.border }};border-radius:12px;padding:20px;height:120px;display:flex;flex-direction:column;justify-content:space-between;cursor:pointer;box-shadow:0 1px 2px rgba(17,24,39,0.04)">
+          <span style="font-size:13px;color:#6B7280">{{ k.label }}</span>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:600;color:#111827">{{ k.count }}</span>
+          <span style="font-size:12px;color:#6B7280;font-family:'JetBrains Mono',monospace">{{ k.amountF }}</span>
+        </button>
+      </sc-for>
+    </div>
+    <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;display:flex;flex-direction:column;overflow:hidden">
+      <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #E5E7EB">
+        <div style="display:flex;align-items:center;gap:8px;height:40px;border:1px solid #E5E7EB;border-radius:10px;padding:0 12px;flex:1 1 280px;max-width:420px">
+          <i class="icon-search" style="font-size:16px;color:#6B7280"></i>
+          <input value="{{ search }}" onChange="{{ onSearch }}" placeholder="Search name, UHID, mobile or token" style="border:none;outline:none;flex:1;font-size:14px;background:transparent">
+        </div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;background:#F3F4F6;border-radius:10px;padding:4px"><sc-for list="{{ qTabs }}" as="t" hint-placeholder-count="7"><button onClick="{{ t.pick }}" style="height:32px;padding:0 12px;border:none;border-radius:8px;background:{{ t.bg }};color:{{ t.fg }};font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap;box-shadow:{{ t.shadow }}">{{ t.label }} <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#6B7280">{{ t.count }}</span></button></sc-for></div>
+      </div>
+      <div style="overflow-x:auto">
+        <div style="min-width:1120px">
+          <div style="display:grid;grid-template-columns:110px minmax(180px,1.6fr) minmax(200px,1.6fr) 150px 110px 80px 120px 80px;gap:16px;align-items:center;height:44px;padding:0 20px;background:#F9FAFB;border-bottom:1px solid #E5E7EB;font-size:12px;color:#6B7280;font-weight:500;position:sticky;top:0">
+            <span>Token</span><span>Patient</span><span>Charges</span><span>Payer</span><span>Status</span><span>Waiting</span><span style="text-align:right">Amount</span><span></span>
+          </div>
+          <sc-for list="{{ queueRows }}" as="p" hint-placeholder-count="8">
+            <div onClick="{{ p.open }}" style="display:grid;grid-template-columns:110px minmax(180px,1.6fr) minmax(200px,1.6fr) 150px 110px 80px 120px 80px;gap:16px;align-items:center;height:56px;padding:0 20px;border-bottom:1px solid #F3F4F6;cursor:pointer;transition:background 0.15s ease" style-hover="background:#F5F9FF">
+              <span style="font-family:'JetBrains Mono',monospace;font-size:13px">{{ p.token }}</span>
+              <div style="display:flex;flex-direction:column;min-width:0"><span style="font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.name }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#6B7280">{{ p.uhid }} · {{ p.ageSex }}</span></div>
+              <div style="display:flex;gap:6px;align-items:center;min-width:0"><span style="font-size:12px;background:#F3F4F6;border-radius:6px;padding:2px 8px;white-space:nowrap">{{ p.source }}</span><sc-if value="{{ p.stat }}"><span style="font-size:12px;background:#FEF2F2;color:#DC2626;border-radius:6px;padding:2px 8px;font-weight:500">STAT</span></sc-if><span style="font-size:13px;color:#6B7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.summary }}</span></div>
+              <span style="font-size:12px;color:{{ p.payerFg }};background:{{ p.payerBg }};border-radius:999px;padding:3px 10px;justify-self:start;white-space:nowrap">{{ p.payerType }}</span><span style="font-size:12px;font-weight:500;color:{{ p.statusFg }};background:{{ p.statusBg }};border-radius:999px;padding:3px 10px;justify-self:start;white-space:nowrap">{{ p.statusLabel }}</span>
+              <span style="font-size:13px;color:{{ p.waitColor }}">{{ p.wait }} min</span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500;text-align:right">{{ p.amountF }}</span>
+              <span style="justify-self:end;font-size:13px;color:#2563EB;font-weight:500">Open →</span>
+            </div>
+          </sc-for>
+          <sc-if value="{{ rowsEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:40px;text-align:center;color:#6B7280;font-size:14px">No charges match.</div></sc-if>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 20px;font-size:13px;color:#6B7280"><span>Showing {{ rowsCount }} of {{ queueCount }}</span><span style="display:flex;gap:8px"><button style="height:32px;padding:0 12px;border:1px solid #E5E7EB;background:#FFFFFF;border-radius:8px;color:#9CA3AF">Previous</button><button style="height:32px;padding:0 12px;border:1px solid #E5E7EB;background:#FFFFFF;border-radius:8px;color:#9CA3AF">Next</button></span></div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isWorkspace }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;justify-content:space-between">
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button onClick="{{ goQueue }}" style="align-self:flex-start;border:none;background:transparent;padding:0;color:#6B7280;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px"><i class="icon-arrow-left" style="font-size:14px"></i>Invoice Queue</button>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <h1 style="margin:0;font-size:32px;font-weight:700;letter-spacing:-0.01em">{{ pt.name }}</h1>
+          <span style="font-size:12px;color:{{ pt.payerFg }};background:{{ pt.payerBg }};border-radius:999px;padding:3px 10px">{{ pt.payer }}</span>
+          <span style="font-size:12px;font-weight:500;color:{{ pt.statusFg }};background:{{ pt.statusBg }};border-radius:999px;padding:3px 10px">{{ pt.statusLabel }}</span><sc-if value="{{ pt.senior }}"><span style="font-size:12px;color:#B45309;background:#FFFBEB;border:1px solid #FDE68A;border-radius:999px;padding:2px 10px">Senior Citizen</span></sc-if>
+        </div>
+        <p style="margin:0;font-size:14px;color:#6B7280;font-family:'JetBrains Mono',monospace;display:flex;flex-wrap:wrap;column-gap:4px;white-space:nowrap">{{ pt.uhid }} · {{ pt.ageSex }} · {{ pt.mobile }} · {{ pt.token }}</p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button onClick="{{ openDeposit }}" style="height:40px;padding:0 16px;white-space:nowrap;flex-shrink:0;border:1px solid #E5E7EB;background:#FFFFFF;color:#111827;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer" style-hover="background:#F9FAFB">Accept Deposit</button>
+        <button onClick="{{ openPay }}" disabled="{{ bill.payDisabled }}" style="height:40px;padding:0 16px;white-space:nowrap;flex-shrink:0;border:none;background:{{ bill.payBg }};color:#FFFFFF;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:8px"><i class="icon-wallet" style="font-size:16px"></i>Collect {{ bill.netF }}</button>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:16px">
+      <sc-for list="{{ ptKpis }}" as="k" hint-placeholder-count="4">
+        <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:20px;height:120px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 1px 2px rgba(17,24,39,0.04)">
+          <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;color:#6B7280">{{ k.label }}</span><i class="{{ k.icon }}" style="font-size:18px;color:#6B7280"></i></div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:600;letter-spacing:-0.02em">{{ k.value }}</div>
+          <span style="font-size:12px;color:#6B7280">{{ k.sub }}</span>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;align-items:start">
+      <div style="grid-column:span 2;min-width:0;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:16px">
+        <div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:center">
+          <div style="display:flex;align-items:center;gap:10px"><span style="font-size:16px;font-weight:600">Invoice</span><span style="font-size:12px;color:#6B7280;background:#F3F4F6;border-radius:999px;padding:2px 10px">Draft</span></div>
+          <div style="position:relative;flex:1 1 260px;max-width:360px">
+            <div style="display:flex;align-items:center;gap:8px;height:40px;border:1px solid #E5E7EB;border-radius:10px;padding:0 12px">
+              <i class="icon-plus" style="font-size:16px;color:#6B7280"></i>
+              <input value="{{ tariffQ }}" onChange="{{ onTariffQ }}" placeholder="Add service from Tariff Master" style="border:none;outline:none;flex:1;font-size:14px;background:transparent">
+            </div>
+            <sc-if value="{{ showTariff }}" hint-placeholder-val="{{ false }}">
+              <div style="position:absolute;top:44px;left:0;right:0;z-index:3;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;box-shadow:0 8px 24px rgba(17,24,39,0.08);padding:6px;display:flex;flex-direction:column">
+                <sc-for list="{{ tariffResults }}" as="t" hint-placeholder-count="4">
+                  <button onClick="{{ t.add }}" style="display:flex;justify-content:space-between;gap:12px;align-items:center;height:44px;padding:0 10px;border:none;background:transparent;border-radius:8px;cursor:pointer;text-align:left" style-hover="background:#F5F9FF"><span style="display:flex;flex-direction:column"><span style="font-size:14px">{{ t.name }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#6B7280">{{ t.code }} · {{ t.dept }}</span></span><span style="font-family:'JetBrains Mono',monospace;font-size:13px">{{ t.rateF }}</span></button>
+                </sc-for>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column">
+          <div style="display:grid;grid-template-columns:28px minmax(0,1fr) 110px 50px 110px 120px;gap:12px;align-items:center;height:40px;font-size:12px;color:#6B7280;font-weight:500;border-bottom:1px solid #E5E7EB"><span></span><span>Service</span><span>Department</span><span style="text-align:right">Qty</span><span style="text-align:right">Rate</span><span style="text-align:right">Amount</span></div>
+          <sc-for list="{{ bill.lines }}" as="l" hint-placeholder-count="3">
+            <div style="display:grid;grid-template-columns:28px minmax(0,1fr) 110px 50px 110px 120px;gap:12px;align-items:center;min-height:56px;border-bottom:1px solid #F3F4F6;opacity:{{ l.opacity }}">
+              <input type="checkbox" checked="{{ l.checked }}" onChange="{{ l.toggle }}" style="width:16px;height:16px;accent-color:#2563EB;cursor:pointer">
+              <div style="display:flex;flex-direction:column;min-width:0;padding:8px 0"><span style="font-size:14px">{{ l.name }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#6B7280">{{ l.code }} · {{ l.ref }}</span><sc-if value="{{ l.hasNote }}"><span style="font-size:12px;color:#B45309">{{ l.note }}</span></sc-if></div>
+              <span style="font-size:13px;color:#6B7280">{{ l.dept }}</span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:13px;text-align:right">{{ l.qty }}</span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:13px;text-align:right">{{ l.rateF }}</span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:14px;text-align:right;font-weight:500">{{ l.amountF }}</span>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:flex;flex-wrap:wrap;gap:24px;justify-content:space-between;align-items:flex-start">
+          <div style="display:flex;flex-direction:column;gap:10px;flex:1 1 280px;max-width:400px">
+            <label style="font-size:13px;font-weight:500">Discount</label>
+            <select value="{{ schemeVal }}" onChange="{{ onScheme }}" disabled="{{ bill.reqLocked }}" style="height:40px;border:1px solid #E5E7EB;border-radius:10px;padding:0 12px;font-size:14px;background:#FFFFFF;color:#111827">
+              <option value="0">No discount</option>
+              <option value="5">Senior Citizen scheme · 5%</option>
+              <option value="5s">Staff Family scheme · 5%</option>
+            </select>
+            <sc-if value="{{ bill.noReq }}" hint-placeholder-val="{{ true }}">
+              <button onClick="{{ openDiscount }}" style="align-self:flex-start;border:none;background:transparent;padding:0;color:#2563EB;font-size:13px;font-weight:500;cursor:pointer">Request higher discount</button>
+            </sc-if>
+            <sc-if value="{{ bill.hasReq }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;background:{{ bill.reqBg }};border:1px solid {{ bill.reqBorder }};font-size:13px">
+                <i class="{{ bill.reqIcon }}" style="font-size:16px;color:{{ bill.reqFg }}"></i>
+                <span style="flex:1;color:#111827">{{ bill.reqText }}</span>
+                <span style="font-size:12px;font-weight:600;color:{{ bill.reqFg }}">{{ bill.reqStatus }}</span>
+              </div>
+            </sc-if>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px;min-width:260px;font-size:14px">
+            <div style="display:flex;justify-content:space-between;gap:24px"><span style="color:#6B7280">Gross</span><span style="font-family:'JetBrains Mono',monospace">{{ bill.grossF }}</span></div>
+            <div style="display:flex;justify-content:space-between;gap:24px"><span style="color:#6B7280">Discount {{ bill.discLabel }}</span><span style="font-family:'JetBrains Mono',monospace;color:#15803D">− {{ bill.discF }}</span></div>
+            <div style="display:flex;justify-content:space-between;gap:24px"><span style="color:#6B7280">GST (included)</span><span style="font-family:'JetBrains Mono',monospace;color:#6B7280">{{ bill.gstF }}</span></div>
+            <div style="display:flex;justify-content:space-between;gap:24px;padding-top:10px;border-top:1px solid #E5E7EB"><span style="font-weight:600">Net payable</span><span style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:600">{{ bill.netF }}</span></div>
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;gap:8px;padding-top:16px;border-top:1px solid #E5E7EB;flex-wrap:wrap;align-items:center">
+          <sc-if value="{{ bill.pending }}" hint-placeholder-val="{{ false }}"><span style="font-size:13px;color:#B45309;margin-right:auto">Collection unlocks when the supervisor decides.</span></sc-if>
+          <button onClick="{{ saveDraft }}" style="height:40px;padding:0 16px;white-space:nowrap;flex-shrink:0;border:1px solid #E5E7EB;background:#FFFFFF;color:#111827;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer" style-hover="background:#F9FAFB">Save draft</button>
+          <button onClick="{{ openPay }}" disabled="{{ bill.payDisabled }}" style="height:40px;padding:0 20px;white-space:nowrap;flex-shrink:0;border:none;background:{{ bill.payBg }};color:#FFFFFF;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer">Collect payment</button>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
+        <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:12px">
+          <span style="font-size:16px;font-weight:600">Coverage</span>
+          <div style="display:flex;flex-direction:column;gap:8px;font-size:13px">
+            <div style="display:flex;justify-content:space-between;gap:12px"><span style="color:#6B7280">Payer</span><span style="font-weight:500">{{ pt.payer }}</span></div>
+            <div style="display:flex;justify-content:space-between;gap:12px"><span style="color:#6B7280">Category</span><span>{{ pt.category }}</span></div>
+            <div style="display:flex;justify-content:space-between;gap:12px"><span style="color:#6B7280">Eligible schemes</span><span>{{ pt.schemes }}</span></div>
+          </div>
+        </div>
+        <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:12px">
+          <span style="font-size:16px;font-weight:600">Previous invoices</span>
+          <sc-for list="{{ pt.history }}" as="h" hint-placeholder-count="2">
+            <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;padding-top:10px;border-top:1px solid #F3F4F6">
+              <div style="display:flex;flex-direction:column"><span style="font-family:'JetBrains Mono',monospace;font-size:12px">{{ h.inv }}</span><span style="font-size:12px;color:#6B7280">{{ h.date }} · {{ h.what }}</span></div>
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px"><span style="font-family:'JetBrains Mono',monospace;font-size:13px">{{ h.amt }}</span><span style="font-size:11px;color:#15803D">PAID</span></div>
+            </div>
+          </sc-for>
+          <sc-if value="{{ pt.noHistory }}"><span style="font-size:13px;color:#6B7280">First visit.</span></sc-if>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+
+  <sc-if value="{{ isIpd }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;justify-content:space-between">
+      <div style="display:flex;flex-direction:column;gap:6px"><h1 style="margin:0;font-size:32px;font-weight:700;letter-spacing:-0.01em">IPD Running Bills</h1><p style="margin:0;font-size:14px;color:#6B7280">Inpatient ledgers against deposits, interim deposit alerts and financial discharge clearance.</p></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button onClick="{{ openDeposit }}"  style="height:40px;padding:0 16px;white-space:nowrap;flex-shrink:0;border:1px solid #E5E7EB;background:#FFFFFF;color:#111827;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer" style-hover="background:#F9FAFB">Accept Deposit</button></div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:16px"><sc-for list="{{ ipdKpis }}" as="k" hint-placeholder-count="5"><div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:20px;height:120px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 1px 2px rgba(17,24,39,0.04)">
+          <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;color:#6B7280">{{ k.label }}</span><i class="{{ k.icon }}" style="font-size:18px;color:#6B7280"></i></div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:600;letter-spacing:-0.02em">{{ k.value }}</div>
+          <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px"><span style="color:#6B7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ k.sub }}</span><span style="color:{{ k.trendColor }};white-space:nowrap;font-weight:500">{{ k.trend }}</span></div>
+        </div></sc-for></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;align-items:start">
+      <div style="grid-column:span 2;min-width:0;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;overflow:hidden">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid #E5E7EB"><span style="font-size:16px;font-weight:600">Admissions</span><span style="font-size:13px;color:#6B7280">Sorted by discharge first</span></div>
+        <div style="overflow-x:auto"><div style="min-width:1000px">
+          <div style="display:grid;grid-template-columns:minmax(200px,1.5fr) minmax(160px,1.2fr) 140px minmax(150px,1fr) 120px 130px;gap:16px;align-items:center;height:44px;padding:0 20px;background:#F9FAFB;border-bottom:1px solid #E5E7EB;font-size:12px;color:#6B7280;font-weight:500"><span>Patient</span><span>Ward</span><span>Payer</span><span>Ledger vs cover</span><span style="text-align:right">Balance</span><span>Status</span></div>
+          <sc-for list="{{ admRows }}" as="a" hint-placeholder-count="6">
+            <div onClick="{{ a.select }}" style="display:grid;grid-template-columns:minmax(200px,1.5fr) minmax(160px,1.2fr) 140px minmax(150px,1fr) 120px 130px;gap:16px;align-items:center;height:64px;padding:0 20px;border-bottom:1px solid #F3F4F6;cursor:pointer;background:{{ a.rowBg }};transition:background 0.15s ease" style-hover="background:#F5F9FF">
+              <div style="display:flex;flex-direction:column;min-width:0"><span style="font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ a.name }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#6B7280;white-space:nowrap">{{ a.ip }} · {{ a.uhid }}</span></div>
+              <div style="display:flex;flex-direction:column;min-width:0"><span style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ a.ward }}</span><span style="font-size:12px;color:#6B7280">Day {{ a.day }}</span></div>
+              <span style="font-size:12px;color:{{ a.payerFg }};background:{{ a.payerBg }};border-radius:999px;padding:3px 10px;white-space:nowrap;justify-self:start">{{ a.payerShort }}</span>
+              <div style="display:flex;flex-direction:column;gap:6px"><div style="height:6px;border-radius:999px;background:#F3F4F6;overflow:hidden"><div style="height:100%;width:{{ a.barW }}%;background:{{ a.barColor }}"></div></div><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:{{ a.utilColor }}">{{ a.util }}% · {{ a.ledgerF }}</span></div>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500;text-align:right;color:{{ a.balColor }}">{{ a.balF }}</span>
+              <span style="font-size:12px;color:{{ a.statusFg }};background:{{ a.statusBg }};border-radius:999px;padding:3px 10px;white-space:nowrap;justify-self:start">{{ a.statusLabel }}</span>
+            </div>
+          </sc-for>
+        </div></div>
+      </div>
+      <sc-if value="{{ hasSel }}" hint-placeholder-val="{{ true }}">
+      <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:16px;min-width:0">
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><span style="font-size:16px;font-weight:600">{{ sel.name }}</span><span style="font-size:12px;color:{{ sel.statusFg }};background:{{ sel.statusBg }};border-radius:999px;padding:3px 10px;white-space:nowrap;justify-self:start">{{ sel.statusLabel }}</span></div>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#6B7280">{{ sel.ip }} · {{ sel.uhid }}</span>
+          <span style="font-size:13px;color:#6B7280">{{ sel.ward }} · Day {{ sel.day }} · {{ sel.consultant }}</span>
+          <sc-if value="{{ sel.hasPackage }}"><span style="font-size:12px;color:#4338CA">{{ sel.package }}</span></sc-if>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <span style="font-size:13px;font-weight:600">Ledger</span>
+          <sc-for list="{{ sel.split }}" as="x" hint-placeholder-count="4"><div style="display:flex;justify-content:space-between;gap:12px;font-size:13px"><span style="color:#6B7280">{{ x.label }}</span><span style="font-family:'JetBrains Mono',monospace">{{ x.amountF }}</span></div></sc-for>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;padding-top:12px;border-top:1px solid #E5E7EB;font-size:13px">
+          <div style="display:flex;justify-content:space-between"><span style="color:#6B7280">Gross ledger</span><span style="font-family:'JetBrains Mono',monospace">{{ sel.ledgerF }}</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#6B7280">Deposits</span><span style="font-family:'JetBrains Mono',monospace;color:#15803D">− {{ sel.depositF }}</span></div>
+          <sc-if value="{{ sel.hasTpaLine }}"><div style="display:flex;justify-content:space-between"><span style="color:#6B7280">{{ sel.tpaLabel }}</span><span style="font-family:'JetBrains Mono',monospace;color:#4338CA">{{ sel.tpaF }}</span></div></sc-if>
+          <div style="display:flex;justify-content:space-between;padding-top:8px;border-top:1px solid #F3F4F6"><span style="font-weight:600">{{ sel.balLabel }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:600;color:{{ sel.balColor }}">{{ sel.balF }}</span></div>
+        </div>
+        <sc-if value="{{ sel.showTopupAlert }}"><div style="font-size:13px;padding:10px 12px;border-radius:10px;background:#FFFBEB;border:1px solid #FDE68A;color:#92400E">Running bill is at {{ sel.util }}% of deposit. Interim deposit due.</div></sc-if>
+        <sc-if value="{{ sel.showChecklist }}">
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <span style="font-size:13px;font-weight:600">Discharge checklist</span>
+            <sc-for list="{{ sel.checklist }}" as="c" hint-placeholder-count="4"><label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer"><input type="checkbox" checked="{{ c.done }}" onChange="{{ c.toggle }}" style="width:16px;height:16px;accent-color:#2563EB">{{ c.label }}</label></sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ sel.isRunning }}"><div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button onClick="{{ sel.topUp }}" disabled="{{ sel.topupSent }}" style="flex:1;height:40px;padding:0 12px;white-space:nowrap;border:1px solid #E5E7EB;background:#FFFFFF;color:{{ sel.topupFg }};border-radius:10px;font-size:14px;font-weight:500;cursor:pointer">{{ sel.topupLabel }}</button>
+          <button onClick="{{ sel.deposit }}" style="flex:1;height:40px;padding:0 12px;white-space:nowrap;border:none;background:#2563EB;color:#FFFFFF;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer">Accept deposit</button>
+        </div></sc-if>
+        <sc-if value="{{ sel.isDischarge }}"><div style="display:flex;flex-direction:column;gap:8px">
+          <button onClick="{{ sel.settle }}" disabled="{{ sel.settleDisabled }}" style="height:40px;border:none;background:{{ sel.settleBg }};color:#FFFFFF;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap">{{ sel.settleLabel }}</button>
+          <sc-if value="{{ sel.settleDisabled }}"><span style="font-size:12px;color:#6B7280;text-align:center">Complete the checklist to settle</span></sc-if>
+        </div></sc-if>
+        <sc-if value="{{ sel.isTpa }}"><div style="display:flex;flex-direction:column;gap:10px;padding:12px;border-radius:10px;background:#EEF2FF;border:1px solid #C7D2FE;font-size:13px;color:#312E81">
+          <span>Pre-auth approved {{ sel.preauthF }}. Final approval requested from {{ sel.payerShort }}.</span>
+          <button onClick="{{ sel.recordTpa }}" style="height:40px;border:none;background:#4338CA;color:#FFFFFF;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap">Record final approval · {{ sel.tpaFinalF }}</button>
+        </div></sc-if>
+        <sc-if value="{{ sel.isCleared }}"><button onClick="{{ sel.viewPass }}" style="height:40px;border:1px solid #BBF7D0;background:#F0FDF4;color:#15803D;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer">View discharge pass</button></sc-if>
+      </div>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isReceipts }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;justify-content:space-between">
+      <div style="display:flex;flex-direction:column;gap:6px"><h1 style="margin:0;font-size:32px;font-weight:700;letter-spacing:-0.01em">Receipts &amp; Invoices</h1><p style="margin:0;font-size:14px;color:#6B7280">Every invoice issued at Counter 1 today. Reprint, resend or start a refund.</p></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"></div>
+    </div>
+    <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;overflow:hidden">
+      <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #E5E7EB">
+        <div style="display:flex;align-items:center;gap:8px;height:40px;border:1px solid #E5E7EB;border-radius:10px;padding:0 12px;flex:1 1 260px;max-width:380px"><i class="icon-search" style="font-size:16px;color:#6B7280"></i><input value="{{ rcSearch }}" onChange="{{ onRcSearch }}" placeholder="Invoice, receipt, patient or UHID" style="border:none;outline:none;flex:1;font-size:14px;background:transparent"></div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;background:#F3F4F6;border-radius:10px;padding:4px">
+          <sc-for list="{{ rcTabs }}" as="t" hint-placeholder-count="5"><button onClick="{{ t.pick }}" style="height:32px;padding:0 12px;border:none;border-radius:8px;background:{{ t.bg }};color:{{ t.fg }};font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap;box-shadow:{{ t.shadow }}">{{ t.label }} <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#6B7280">{{ t.count }}</span></button></sc-for>
+        </div>
+      </div>
+      <div style="overflow-x:auto"><div style="min-width:1100px">
+        <div style="display:grid;grid-template-columns:140px 140px 60px minmax(180px,1.4fr) 100px 110px 120px 140px;gap:16px;align-items:center;height:44px;padding:0 20px;background:#F9FAFB;border-bottom:1px solid #E5E7EB;font-size:12px;color:#6B7280;font-weight:500"><span>Invoice</span><span>Receipt</span><span>Time</span><span>Patient</span><span>Source</span><span>Tender</span><span style="text-align:right">Amount</span><span>Status</span></div>
+        <sc-for list="{{ rcRows }}" as="r" hint-placeholder-count="8">
+          <div onClick="{{ r.open }}" style="display:grid;grid-template-columns:140px 140px 60px minmax(180px,1.4fr) 100px 110px 120px 140px;gap:16px;align-items:center;height:56px;padding:0 20px;border-bottom:1px solid #F3F4F6;cursor:pointer;transition:background 0.15s ease" style-hover="background:#F5F9FF">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:12px">{{ r.inv }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#6B7280">{{ r.rcp }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#6B7280">{{ r.time }}</span>
+            <div style="display:flex;flex-direction:column;min-width:0"><span style="font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.name }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#6B7280">{{ r.uhid }}</span></div>
+            <span style="font-size:13px;color:#6B7280">{{ r.source }}</span><span style="font-size:13px">{{ r.tender }}</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500;text-align:right">{{ r.amountF }}</span>
+            <span style="font-size:12px;color:{{ r.statusFg }};background:{{ r.statusBg }};border-radius:999px;padding:3px 10px;white-space:nowrap;justify-self:start">{{ r.statusLabel }}</span>
+          </div>
+        </sc-for>
+        <sc-if value="{{ rcEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:40px;text-align:center;color:#6B7280;font-size:14px">No invoices match.</div></sc-if>
+      </div></div>
+      <div style="padding:12px 20px;font-size:13px;color:#6B7280">Showing {{ rcCount }} invoices · Shift 1</div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isRequests }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;justify-content:space-between">
+      <div style="display:flex;flex-direction:column;gap:6px"><h1 style="margin:0;font-size:32px;font-weight:700;letter-spacing:-0.01em">My Requests</h1><p style="margin:0;font-size:14px;color:#6B7280">Discount, refund and void requests you raised, with supervisor decisions.</p></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:16px"><sc-for list="{{ reqKpis }}" as="k" hint-placeholder-count="4"><div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:20px;height:120px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 1px 2px rgba(17,24,39,0.04)">
+          <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;color:#6B7280">{{ k.label }}</span><i class="{{ k.icon }}" style="font-size:18px;color:#6B7280"></i></div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:600;letter-spacing:-0.02em">{{ k.value }}</div>
+          <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px"><span style="color:#6B7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ k.sub }}</span><span style="color:{{ k.trendColor }};white-space:nowrap;font-weight:500">{{ k.trend }}</span></div>
+        </div></sc-for></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;align-items:start">
+      <div style="grid-column:span 2;min-width:0;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;overflow:hidden">
+        <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #E5E7EB">
+          <span style="font-size:16px;font-weight:600">Requests</span>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;background:#F3F4F6;border-radius:10px;padding:4px"><sc-for list="{{ reqTabs }}" as="t" hint-placeholder-count="4"><button onClick="{{ t.pick }}" style="height:32px;padding:0 12px;border:none;border-radius:8px;background:{{ t.bg }};color:{{ t.fg }};font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap;box-shadow:{{ t.shadow }}">{{ t.label }} <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#6B7280">{{ t.count }}</span></button></sc-for></div>
+        </div>
+        <div style="overflow-x:auto"><div style="min-width:840px"><sc-for list="{{ reqRows }}" as="r" hint-placeholder-count="5">
+          <div style="display:grid;grid-template-columns:90px minmax(240px,1.6fr) minmax(160px,1fr) 110px 150px;gap:16px;align-items:center;min-height:64px;padding:10px 20px;border-bottom:1px solid #F3F4F6">
+            <span style="font-size:12px;font-weight:500;color:{{ r.typeFg }};background:{{ r.typeBg }};border-radius:6px;padding:3px 8px;justify-self:start">{{ r.type }}</span>
+            <div style="display:flex;flex-direction:column;min-width:0;gap:2px"><span style="font-size:14px;font-weight:500">{{ r.detail }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#6B7280;white-space:nowrap">{{ r.id }} · {{ r.at }}</span><sc-if value="{{ r.hasReason }}"><span style="font-size:12px;color:#DC2626">{{ r.reason }}</span></sc-if></div>
+            <div style="display:flex;flex-direction:column;min-width:0"><span style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.patient }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#6B7280;white-space:nowrap">{{ r.inv }}</span></div>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500;text-align:right">{{ r.amountF }}</span>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px"><span style="font-size:12px;color:{{ r.statusFg }};background:{{ r.statusBg }};border-radius:999px;padding:3px 10px;white-space:nowrap;">{{ r.statusLabel }}</span>
+              <sc-if value="{{ r.canWithdraw }}"><button onClick="{{ r.withdraw }}" style="border:none;background:transparent;padding:0;color:#6B7280;font-size:12px;cursor:pointer">Withdraw</button></sc-if>
+              <sc-if value="{{ r.canDisburse }}"><button onClick="{{ r.disburse }}" style="border:none;background:transparent;padding:0;color:#2563EB;font-size:12px;font-weight:500;cursor:pointer">Disburse →</button></sc-if>
+            </div>
+          </div>
+        </sc-for>
+        </div></div><sc-if value="{{ reqEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:40px;text-align:center;color:#6B7280;font-size:14px">Nothing here.</div></sc-if>
+      </div>
+      <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:12px;min-width:0">
+        <span style="font-size:16px;font-weight:600">Ready to disburse</span>
+        <span style="font-size:13px;color:#6B7280">Approved refunds. Cash is paid from your drawer against a signed voucher; card and UPI reverse through the gateway.</span>
+        <sc-for list="{{ disbList }}" as="r" hint-placeholder-count="1">
+          <div style="display:flex;flex-direction:column;gap:10px;padding-top:12px;border-top:1px solid #F3F4F6">
+            <div style="display:flex;justify-content:space-between;gap:8px"><span style="font-size:14px;font-weight:500">{{ r.patient }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600">{{ r.amountF }}</span></div>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#6B7280">{{ r.id }} · to {{ r.tender }}</span>
+            <button onClick="{{ r.disburse }}" style="height:40px;border:none;background:#2563EB;color:#FFFFFF;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap">{{ r.disburseLabel }}</button>
+          </div>
+        </sc-for>
+        <sc-if value="{{ disbEmpty }}" hint-placeholder-val="{{ false }}"><span style="font-size:13px;color:#6B7280;padding-top:12px;border-top:1px solid #F3F4F6">No approved refunds waiting.</span></sc-if>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isShift }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;justify-content:space-between">
+      <div style="display:flex;flex-direction:column;gap:6px"><h1 style="margin:0;font-size:32px;font-weight:700;letter-spacing:-0.01em">Counter Shift</h1><p style="margin:0;font-size:14px;color:#6B7280">Counter 1 · OPD Main Lobby · Morning shift, opened 08:00 by Ritu Verma.</p></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button onClick="{{ openDeposit }}"  style="height:40px;padding:0 16px;white-space:nowrap;flex-shrink:0;border:1px solid #E5E7EB;background:#FFFFFF;color:#111827;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer" style-hover="background:#F9FAFB">Accept Deposit</button><button onClick="{{ openClosing }}" disabled="{{ shiftSubmitted }}" style="height:40px;padding:0 16px;white-space:nowrap;flex-shrink:0;border:none;background:{{ closeBtnBg }};color:#FFFFFF;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer">Submit closing</button></div>
+    </div>
+    <sc-if value="{{ shiftSubmitted }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:12px;background:{{ closingBanner.bg }};border:1px solid {{ closingBanner.border }};font-size:14px"><i class="icon-clock" style="font-size:18px;color:{{ closingBanner.fg }}"></i><span style="flex:1">{{ closingBanner.text }}</span><span style="font-family:'JetBrains Mono',monospace;font-weight:600;color:{{ closingBanner.fg }}">{{ closingBanner.var }}</span></div></sc-if>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:16px"><sc-for list="{{ shiftKpis }}" as="k" hint-placeholder-count="5"><div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:20px;height:120px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 1px 2px rgba(17,24,39,0.04)">
+          <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;color:#6B7280">{{ k.label }}</span><i class="{{ k.icon }}" style="font-size:18px;color:#6B7280"></i></div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:600;letter-spacing:-0.02em">{{ k.value }}</div>
+          <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px"><span style="color:#6B7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ k.sub }}</span><span style="color:{{ k.trendColor }};white-space:nowrap;font-weight:500">{{ k.trend }}</span></div>
+        </div></sc-for></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;align-items:start">
+      <div style="grid-column:span 2;min-width:0;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;overflow:hidden">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid #E5E7EB"><span style="font-size:16px;font-weight:600">Shift register</span><span style="font-size:13px;color:#6B7280">Latest first</span></div>
+        <div style="overflow-x:auto"><div style="min-width:640px">
+          <div style="display:grid;grid-template-columns:60px 150px minmax(0,1.5fr) 100px 120px;gap:16px;align-items:center;height:44px;padding:0 20px;background:#F9FAFB;border-bottom:1px solid #E5E7EB;font-size:12px;color:#6B7280;font-weight:500"><span>Time</span><span>Reference</span><span>Detail</span><span>Tender</span><span style="text-align:right">Amount</span></div>
+          <sc-for list="{{ regRows }}" as="r" hint-placeholder-count="8">
+            <div style="display:grid;grid-template-columns:60px 150px minmax(0,1.5fr) 100px 120px;gap:16px;align-items:center;height:56px;padding:0 20px;border-bottom:1px solid #F3F4F6">
+              <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#6B7280">{{ r.t }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px">{{ r.ref }}</span><span style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.what }}</span>
+              <span style="display:flex;align-items:center;gap:6px;font-size:13px"><span style="width:8px;height:8px;border-radius:2px;background:{{ r.color }}"></span>{{ r.tender }}</span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500;text-align:right;color:{{ r.amtColor }}">{{ r.amtF }}</span>
+            </div>
+          </sc-for>
+        </div></div>
+        <div style="padding:12px 20px;font-size:13px;color:#6B7280">+ {{ regEarlier }} earlier transactions this shift</div>
+      </div>
+      <div style="background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:12px;min-width:0">
+        <span style="font-size:16px;font-weight:600">Previous shifts</span>
+        <sc-for list="{{ shiftHistory }}" as="x" hint-placeholder-count="3">
+          <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;padding-top:12px;border-top:1px solid #F3F4F6">
+            <div style="display:flex;flex-direction:column"><span style="font-size:14px;font-weight:500">{{ x.when }}</span><span style="font-size:12px;color:#6B7280">{{ x.total }} collected · {{ x.by }}</span></div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:{{ x.varColor }}">{{ x.variance }}</span><span style="font-size:11px;color:#6B7280">{{ x.status }}</span></div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+  </main>
+</div>
+</div>
+
+<sc-if value="{{ drawerPay }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed;inset:0;z-index:20;display:flex;justify-content:flex-end">
+    <div onClick="{{ closeDrawer }}" style="position:absolute;inset:0;background:rgba(17,24,39,0.24);animation:fadeIn 0.15s ease"></div>
+    <div style="position:relative;width:560px;max-width:100%;height:100%;background:#FFFFFF;border-left:1px solid #E5E7EB;box-shadow:-8px 0 32px rgba(17,24,39,0.08);display:flex;flex-direction:column;animation:slideIn 0.2s ease">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:20px 24px;border-bottom:1px solid #E5E7EB">
+        <div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:20px;font-weight:600">Collect payment</span><span style="font-size:13px;color:#6B7280">{{ pt.name }} · <span style="font-family:'JetBrains Mono',monospace">{{ pt.uhid }}</span></span></div>
+        <button onClick="{{ closeDrawer }}" style="width:36px;height:36px;border:none;background:transparent;border-radius:10px;cursor:pointer;color:#6B7280"><i class="icon-x" style="font-size:18px"></i></button>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:24px">
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-end">
+            <div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:13px;color:#6B7280">Amount due</span><span style="font-family:'JetBrains Mono',monospace;font-size:32px;font-weight:600;letter-spacing:-0.02em">{{ bill.netF }}</span></div>
+            <span style="font-size:12px;font-weight:600;color:{{ pay.remFg }};background:{{ pay.remBg }};border-radius:999px;padding:4px 10px;font-family:'JetBrains Mono',monospace">{{ pay.remLabel }}</span>
+          </div>
+          <div style="display:flex;height:10px;border-radius:999px;overflow:hidden;background:#F3F4F6">
+            <sc-for list="{{ pay.segments }}" as="s" hint-placeholder-count="1"><div style="width:{{ s.pct }}%;background:{{ s.color }};transition:width 0.2s ease"></div></sc-for>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <sc-for list="{{ pay.rows }}" as="t" hint-placeholder-count="1">
+            <div style="border:1px solid #E5E7EB;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;align-items:center;gap:10px">
+                <span style="width:10px;height:10px;border-radius:3px;background:{{ t.color }}"></span>
+                <span style="font-size:14px;font-weight:600;flex:1">{{ t.mode }}</span>
+                <sc-if value="{{ t.removable }}"><button onClick="{{ t.remove }}" style="border:none;background:transparent;color:#6B7280;font-size:13px;cursor:pointer">Remove</button></sc-if>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
+                <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:500">Amount
+                  <input value="{{ t.amount }}" onChange="{{ t.onAmount }}" inputmode="decimal" style="height:40px;border:1px solid #E5E7EB;border-radius:10px;padding:0 12px;font-size:14px;font-family:'JetBrains Mono',monospace;outline:none" style-focus="border-color:#2563EB">
+                </label>
+                <sc-if value="{{ t.isCash }}">
+                  <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:500">Cash received
+                    <input value="{{ t.ref1 }}" onChange="{{ t.onRef1 }}" inputmode="decimal" placeholder="0.00" style="height:40px;border:1px solid #E5E7EB;border-radius:10px;padding:0 12px;font-size:14px;font-family:'JetBrains Mono',monospace;outline:none" style-focus="border-color:#2563EB">
+                  </label>
+                </sc-if>
+                <sc-if value="{{ t.isCard }}">
+                  <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:500">Terminal TID
+                    <input value="{{ t.ref1 }}" onChange="{{ t.onRef1 }}" placeholder="EDC-01" style="height:40px;border:1px solid #E5E7EB;border-radius:10px;padding:0 12px;font-size:14px;font-family:'JetBrains Mono',monospace;outline:none" style-focus="border-color:#2563EB">
+                  </label>
+                  <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:500">Auth code
+                    <input value="{{ t.ref2 }}" onChange="{{ t.onRef2 }}" placeholder="6 digits" style="height:40px;border:1px solid #E5E7EB;border-radius:10px;padding:0 12px;font-size:14px;font-family:'JetBrains Mono',monospace;outline:none" style-focus="border-color:#2563EB">
+                  </label>
+                </sc-if>
+                <sc-if value="{{ t.isUpi }}">
+                  <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:500">UTR / reference
+                    <input value="{{ t.ref1 }}" onChange="{{ t.onRef1 }}" placeholder="12 digits" style="height:40px;border:1px solid #E5E7EB;border-radius:10px;padding:0 12px;font-size:14px;font-family:'JetBrains Mono',monospace;outline:none" style-focus="border-color:#2563EB">
+                  </label>
+                </sc-if>
+              </div>
+              <sc-if value="{{ t.hasHint }}"><span style="font-size:13px;color:{{ t.hintColor }}">{{ t.hint }}</span></sc-if>
+              <sc-if value="{{ t.isUpi }}"><button onClick="{{ t.sendQr }}" style="align-self:flex-start;height:36px;padding:0 12px;border:1px solid #C7D2FE;background:#EEF2FF;color:#4338CA;border-radius:10px;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px"><i class="icon-qr-code" style="font-size:16px"></i>{{ t.qrLabel }}</button></sc-if>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <span style="font-size:13px;color:#6B7280">Add tender</span>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">
+            <sc-for list="{{ pay.addable }}" as="m" hint-placeholder-count="3">
+              <button onClick="{{ m.add }}" style="height:36px;padding:0 14px;border:1px solid #E5E7EB;background:#FFFFFF;border-radius:10px;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px" style-hover="background:#F9FAFB"><i class="icon-plus" style="font-size:14px;color:#6B7280"></i>{{ m.mode }}</button>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;padding:16px 24px;border-top:1px solid #E5E7EB">
+        <span style="font-size:13px;color:#6B7280">{{ pay.blocker }}</span>
+        <div style="display:flex;gap:8px">
+          <button onClick="{{ closeDrawer }}" style="height:40px;padding:0 16px;white-space:nowrap;flex-shrink:0;border:1px solid #E5E7EB;background:#FFFFFF;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer">Cancel</button>
+          <button onClick="{{ confirmPay }}" disabled="{{ pay.disabled }}" style="height:40px;padding:0 20px;white-space:nowrap;flex-shrink:0;border:none;background:{{ pay.btnBg }};color:#FFFFFF;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer">Confirm &amp; issue receipt</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ drawerDiscount }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed;inset:0;z-index:20;display:flex;justify-content:flex-end">
+    <div onClick="{{ closeDrawer }}" style="position:absolute;inset:0;background:rgba(17,24,39,0.24);animation:fadeIn 0.15s ease"></div>
+    <div style="position:relative;width:560px;max-width:100%;height:100%;background:#FFFFFF;border-left:1px solid #E5E7EB;box-shadow:-8px 0 32px rgba(17,24,39,0.08);display:flex;flex-direction:column;animation:slideIn 0.2s ease">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:20px 24px;border-bottom:1px solid #E5E7EB">
+        <div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:20px;font-weight:600">Request discount</span><span style="font-size:13px;color:#6B7280">Sent to Billing Supervisor for approval</span></div>
+        <button onClick="{{ closeDrawer }}" style="width:36px;height:36px;border:none;background:transparent;border-radius:10px;cursor:pointer;color:#6B7280"><i class="icon-x" style="font-size:18px"></i></button>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:16px">
+        <div style="display:flex;justify-content:space-between;font-size:14px;padding:12px 16px;background:#F9FAFB;border-radius:10px"><span style="color:#6B7280">Bill gross</span><span style="font-family:'JetBrains Mono',monospace">{{ bill.grossF }}</span></div>
+        <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:500">Discount (%)
+          <input value="{{ reqPct }}" onChange="{{ onReqPct }}" inputmode="decimal" style="height:40px;border:1px solid #E5E7EB;border-radius:10px;padding:0 12px;font-size:14px;font-family:'JetBrains Mono',monospace;outline:none" style-focus="border-color:#2563EB">
+          <span style="font-size:12px;font-weight:400;color:{{ disc.limitColor }}">{{ disc.limitText }}</span>
+        </label>
+        <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:500">Reason
+          <select value="{{ reqReason }}" onChange="{{ onReqReason }}" style="height:40px;border:1px solid #E5E7EB;border-radius:10px;padding:0 12px;font-size:14px;background:#FFFFFF">
+            <option value="">Select reason</option>
+            <option value="Senior Citizen (extended)">Senior Citizen (extended)</option>
+            <option value="Financial hardship">Financial hardship</option>
+            <option value="Staff referral">Staff referral</option>
+            <option value="Repeat visit within 7 days">Repeat visit within 7 days</option>
+          </select>
+        </label>
+        <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:500">Note for supervisor
+          <textarea value="{{ reqNote }}" onChange="{{ onReqNote }}" rows="3" placeholder="Context the supervisor needs" style="border:1px solid #E5E7EB;border-radius:10px;padding:10px 12px;font-size:14px;resize:vertical;outline:none"></textarea>
+        </label>
+        <div style="display:flex;justify-content:space-between;font-size:14px;padding:12px 16px;border:1px solid #E5E7EB;border-radius:10px"><span style="color:#6B7280">Discount value</span><span style="font-family:'JetBrains Mono',monospace;color:#15803D">− {{ disc.valueF }}</span></div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;padding:16px 24px;border-top:1px solid #E5E7EB">
+        <button onClick="{{ closeDrawer }}" style="height:40px;padding:0 16px;white-space:nowrap;flex-shrink:0;border:1px solid #E5E7EB;background:#FFFFFF;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer">Cancel</button>
+        <button onClick="{{ submitDiscount }}" disabled="{{ disc.disabled }}" style="height:40px;padding:0 20px;white-space:nowrap;flex-shrink:0;border:none;background:{{ disc.btnBg }};color:#FFFFFF;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer">Send for approval</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ hasReceipt }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(17,24,39,0.32);animation:fadeIn 0.15s ease">
+    <div style="background:#FFFFFF;border-radius:12px;width:760px;max-width:100%;max-height:100%;overflow:auto;display:flex;flex-wrap:wrap;box-shadow:0 24px 48px rgba(17,24,39,0.16)">
+      <div style="flex:1 1 340px;background:#F3F4F6;padding:24px;display:flex;justify-content:center">
+        <div style="width:302px;background:#FFFFFF;padding:20px 16px;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.6;color:#111827;display:flex;flex-direction:column;gap:8px;box-shadow:0 1px 3px rgba(17,24,39,0.08)">
+          <div style="text-align:center;display:flex;flex-direction:column"><b style="font-size:13px">NORTH HOSPITAL</b><span>OPD Main Lobby · Counter 1</span><span>GSTIN 27AABCN1234F1Z5</span></div>
+          <div style="border-top:1px dashed #9CA3AF"></div>
+          <div style="display:flex;justify-content:space-between"><span>{{ receipt.rcp }}</span><span>{{ receipt.time }}</span></div>
+          <div>{{ receipt.inv }}</div>
+          <div>{{ receipt.patient }} · {{ receipt.uhid }}</div>
+          <div style="border-top:1px dashed #9CA3AF"></div>
+          <sc-for list="{{ receipt.lines }}" as="l" hint-placeholder-count="2"><div style="display:flex;justify-content:space-between;gap:8px"><span>{{ l.name }}</span><span>{{ l.amountF }}</span></div></sc-for>
+          <div style="border-top:1px dashed #9CA3AF"></div>
+          <div style="display:flex;justify-content:space-between"><span>Discount</span><span>-{{ receipt.discF }}</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600"><span>TOTAL PAID</span><span>{{ receipt.netF }}</span></div>
+          <sc-for list="{{ receipt.tenders }}" as="t" hint-placeholder-count="1"><div style="display:flex;justify-content:space-between;color:#6B7280"><span>{{ t.mode }}</span><span>{{ t.amountF }}</span></div></sc-for>
+          <div style="border-top:1px dashed #9CA3AF"></div>
+          <div style="text-align:center;color:#6B7280">Cashier: Ritu Verma</div>
+        </div>
+      </div>
+      <div style="flex:1 1 300px;padding:24px;display:flex;flex-direction:column;gap:16px">
+        <div style="display:flex;align-items:center;gap:10px"><span style="width:32px;height:32px;border-radius:50%;background:#F0FDF4;color:#15803D;display:flex;align-items:center;justify-content:center"><i class="icon-check" style="font-size:18px"></i></span><span style="font-size:20px;font-weight:600">Payment recorded</span></div>
+        <div style="display:flex;flex-direction:column;gap:8px;font-size:13px">
+          <div style="display:flex;justify-content:space-between"><span style="color:#6B7280">Invoice</span><span style="font-family:'JetBrains Mono',monospace">{{ receipt.inv }}</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#6B7280">Receipt</span><span style="font-family:'JetBrains Mono',monospace">{{ receipt.rcp }}</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#6B7280">Status</span><span style="color:#15803D;font-weight:600">PAID</span></div>
+        </div>
+        <sc-if value="{{ receipt.hasGate }}"><div style="font-size:13px;padding:10px 12px;border-radius:10px;background:#F0FDF4;border:1px solid #BBF7D0;color:#15803D">{{ receipt.gate }}</div></sc-if>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <button onClick="{{ printReceipt }}" style="height:40px;border:1px solid #E5E7EB;background:#FFFFFF;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px" style-hover="background:#F9FAFB"><i class="icon-printer" style="font-size:16px"></i>Print 80mm</button>
+          <button onClick="{{ sendWhatsapp }}" style="height:40px;border:1px solid #E5E7EB;background:#FFFFFF;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px" style-hover="background:#F9FAFB"><i class="icon-message-circle" style="font-size:16px"></i>Send on WhatsApp</button>
+          <button onClick="{{ sendEmail }}" style="height:40px;border:1px solid #E5E7EB;background:#FFFFFF;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px" style-hover="background:#F9FAFB"><i class="icon-mail" style="font-size:16px"></i>Email A4 receipt</button>
+        </div>
+        <button onClick="{{ doneReceipt }}" style="margin-top:auto;height:40px;border:none;background:#2563EB;color:#FFFFFF;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer" style-hover="background:#1D4ED8">Next patient</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+
+<sc-if value="{{ drawerDeposit }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed;inset:0;z-index:20;display:flex;justify-content:flex-end">
+    <div onClick="{{ closeDrawer }}" style="position:absolute;inset:0;background:rgba(17,24,39,0.24);animation:fadeIn 0.15s ease"></div>
+    <div style="position:relative;width:560px;max-width:100%;height:100%;background:#FFFFFF;border-left:1px solid #E5E7EB;box-shadow:-8px 0 32px rgba(17,24,39,0.08);display:flex;flex-direction:column;animation:slideIn 0.2s ease">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:20px 24px;border-bottom:1px solid #E5E7EB">
+        <div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:20px;font-weight:600">{{ dep.title }}</span><span style="font-size:13px;color:#6B7280">{{ dep.sub }}</span></div>
+        <button onClick="{{ closeDrawer }}" style="width:36px;height:36px;border:none;background:transparent;border-radius:10px;cursor:pointer;color:#6B7280"><i class="icon-x" style="font-size:18px"></i></button>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:20px">
+  <sc-if value="{{ dep.isSettle }}"><div style="display:flex;flex-direction:column;gap:4px;padding:16px;border-radius:12px;background:#F9FAFB"><span style="font-size:13px;color:#6B7280">Final balance · {{ dep.admName }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:32px;font-weight:600">{{ dep.amountF }}</span></div></sc-if>
+  <sc-if value="{{ dep.isDeposit }}">
+    <sc-if value="{{ dep.isWallet }}"><div style="display:flex;justify-content:space-between;gap:12px;font-size:14px;padding:12px 16px;background:#F9FAFB;border-radius:10px"><span style="color:#6B7280">Patient advance wallet</span><span style="font-weight:500">{{ dep.walletName }}</span></div></sc-if><sc-if value="{{ dep.isAdm }}"><label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:500">Admission<select value="{{ dep.ip }}" onChange="{{ dep.onIp }}" style="height:40px;border:1px solid #E5E7EB;border-radius:10px;padding:0 12px;font-size:14px;background:#FFFFFF"><option value="">Select admitted patient</option><sc-for list="{{ dep.options }}" as="o" hint-placeholder-count="4"><option value="{{ o.ip }}">{{ o.label }}</option></sc-for></select></label></sc-if>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px">
+      <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:500">Purpose<select value="{{ dep.purpose }}" onChange="{{ dep.onPurpose }}" style="height:40px;border:1px solid #E5E7EB;border-radius:10px;padding:0 12px;font-size:14px;background:#FFFFFF"><option value="Interim top-up">Interim top-up</option><option value="Admission deposit">Admission deposit</option><option value="Surgery deposit">Surgery deposit</option></select></label>
+      <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:500">Amount (₹)<input value="{{ dep.amount }}" onChange="{{ dep.onAmount }}" placeholder="0.00" inputmode="decimal" style="height:40px;border:1px solid #E5E7EB;border-radius:10px;padding:0 12px;font-size:14px;font-family:'JetBrains Mono',monospace;outline:none;width:100%;min-width:0" style-focus="border-color:#2563EB"></label>
+    </div>
+    <sc-if value="{{ dep.hasSuggest }}"><span style="font-size:12px;color:#6B7280;margin-top:-12px">{{ dep.suggest }}</span></sc-if>
+  </sc-if>
+  <div style="display:flex;flex-direction:column;gap:8px"><span style="font-size:13px;font-weight:500">Tender</span>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><sc-for list="{{ dep.modes }}" as="m" hint-placeholder-count="3"><button onClick="{{ m.pick }}" style="height:40px;padding:0 16px;border:1px solid {{ m.border }};background:{{ m.bg }};color:{{ m.fg }};border-radius:10px;font-size:14px;font-weight:500;cursor:pointer">{{ m.mode }}</button></sc-for></div>
+  </div>
+  <sc-if value="{{ dep.needsRef }}"><label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:500">{{ dep.refLabel }}<input value="{{ dep.ref }}" onChange="{{ dep.onRef }}" placeholder="{{ dep.refPh }}"  style="height:40px;border:1px solid #E5E7EB;border-radius:10px;padding:0 12px;font-size:14px;font-family:'JetBrains Mono',monospace;outline:none;width:100%;min-width:0" style-focus="border-color:#2563EB"></label></sc-if></div>
+      <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;padding:16px 24px;border-top:1px solid #E5E7EB"><span style="font-size:13px;color:#6B7280">{{ dep.blocker }}</span><div style="display:flex;gap:8px"><button onClick="{{ closeDrawer }}" style="height:40px;padding:0 16px;border:1px solid #E5E7EB;background:#FFFFFF;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap">Cancel</button><button onClick="{{ confirmDeposit }}" disabled="{{ dep.disabled }}" style="height:40px;padding:0 20px;border:none;background:{{ dep.btnBg }};color:#FFFFFF;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap">{{ dep.cta }}</button></div></div>
+    </div>
+  </div>
+</sc-if>
+<sc-if value="{{ drawerClosing }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed;inset:0;z-index:20;display:flex;justify-content:flex-end">
+    <div onClick="{{ closeDrawer }}" style="position:absolute;inset:0;background:rgba(17,24,39,0.24);animation:fadeIn 0.15s ease"></div>
+    <div style="position:relative;width:560px;max-width:100%;height:100%;background:#FFFFFF;border-left:1px solid #E5E7EB;box-shadow:-8px 0 32px rgba(17,24,39,0.08);display:flex;flex-direction:column;animation:slideIn 0.2s ease">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:20px 24px;border-bottom:1px solid #E5E7EB">
+        <div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:20px;font-weight:600">Submit counter closing</span><span style="font-size:13px;color:#6B7280">Counter 1 · Morning shift · Sent to Vikramaditya Rao for sign-off</span></div>
+        <button onClick="{{ closeDrawer }}" style="width:36px;height:36px;border:none;background:transparent;border-radius:10px;cursor:pointer;color:#6B7280"><i class="icon-x" style="font-size:18px"></i></button>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:20px">
+  <div style="display:flex;flex-direction:column;gap:10px">
+    <span style="font-size:14px;font-weight:600">Cash denominations</span>
+    <div style="display:grid;grid-template-columns:80px minmax(0,1fr) 120px;gap:8px 12px;align-items:center;font-size:12px;color:#6B7280"><span>Note</span><span>Count</span><span style="text-align:right">Subtotal</span></div>
+    <sc-for list="{{ cl.denoms }}" as="d" hint-placeholder-count="7">
+      <div style="display:grid;grid-template-columns:80px minmax(0,1fr) 120px;gap:12px;align-items:center">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:14px">{{ d.label }}</span>
+        <input value="{{ d.count }}" onChange="{{ d.onChange }}" inputmode="numeric" placeholder="{{ d.ph }}" style="height:40px;border:1px solid #E5E7EB;border-radius:10px;padding:0 12px;font-size:14px;font-family:'JetBrains Mono',monospace;outline:none;min-width:0" style-focus="border-color:#2563EB">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:14px;text-align:right">{{ d.subF }}</span>
+      </div>
+    </sc-for>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px">
+    <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:500">EDC batch total (₹)<input value="{{ cl.edc }}" onChange="{{ cl.onEdc }}" placeholder="0.00" inputmode="decimal" style="height:40px;border:1px solid #E5E7EB;border-radius:10px;padding:0 12px;font-size:14px;font-family:'JetBrains Mono',monospace;outline:none;width:100%;min-width:0" style-focus="border-color:#2563EB"></label>
+    <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:500">UPI settlement total (₹)<input value="{{ cl.upi }}" onChange="{{ cl.onUpi }}" placeholder="0.00" inputmode="decimal" style="height:40px;border:1px solid #E5E7EB;border-radius:10px;padding:0 12px;font-size:14px;font-family:'JetBrains Mono',monospace;outline:none;width:100%;min-width:0" style-focus="border-color:#2563EB"></label>
+  </div>
+  <div style="display:flex;flex-direction:column;border:1px solid #E5E7EB;border-radius:12px;overflow:hidden">
+    <div style="display:grid;grid-template-columns:minmax(0,1fr) 110px 110px 100px;gap:12px;padding:10px 16px;background:#F9FAFB;font-size:12px;color:#6B7280;font-weight:500"><span>Tender</span><span style="text-align:right">System</span><span style="text-align:right">Counted</span><span style="text-align:right">Variance</span></div>
+    <sc-for list="{{ cl.rows }}" as="r" hint-placeholder-count="3"><div style="display:grid;grid-template-columns:minmax(0,1fr) 110px 110px 100px;gap:12px;padding:12px 16px;border-top:1px solid #F3F4F6;font-size:13px;align-items:center"><span>{{ r.label }}</span><span style="font-family:'JetBrains Mono',monospace;text-align:right">{{ r.sysF }}</span><span style="font-family:'JetBrains Mono',monospace;text-align:right">{{ r.cntF }}</span><span style="font-family:'JetBrains Mono',monospace;text-align:right;font-weight:600;color:{{ r.varColor }}">{{ r.varF }}</span></div></sc-for>
+  </div>
+  <sc-if value="{{ cl.needNote }}"><label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:500">Variance explanation<textarea value="{{ cl.note }}" onChange="{{ cl.onNote }}" rows="3" placeholder="Required when any tender does not match" style="border:1px solid #E5E7EB;border-radius:10px;padding:10px 12px;font-size:14px;resize:vertical;outline:none"></textarea></label></sc-if></div>
+      <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;padding:16px 24px;border-top:1px solid #E5E7EB"><span style="font-size:13px;color:#6B7280">{{ cl.blocker }}</span><div style="display:flex;gap:8px"><button onClick="{{ closeDrawer }}" style="height:40px;padding:0 16px;border:1px solid #E5E7EB;background:#FFFFFF;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap">Cancel</button><button onClick="{{ submitClosing }}" disabled="{{ cl.disabled }}" style="height:40px;padding:0 20px;border:none;background:{{ cl.btnBg }};color:#FFFFFF;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap">Submit for sign-off</button></div></div>
+    </div>
+  </div>
+</sc-if>
+<sc-if value="{{ drawerReceipt }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed;inset:0;z-index:20;display:flex;justify-content:flex-end">
+    <div onClick="{{ closeDrawer }}" style="position:absolute;inset:0;background:rgba(17,24,39,0.24);animation:fadeIn 0.15s ease"></div>
+    <div style="position:relative;width:560px;max-width:100%;height:100%;background:#FFFFFF;border-left:1px solid #E5E7EB;box-shadow:-8px 0 32px rgba(17,24,39,0.08);display:flex;flex-direction:column;animation:slideIn 0.2s ease">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:20px 24px;border-bottom:1px solid #E5E7EB">
+        <div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:20px;font-weight:600">Invoice detail</span><span style="font-size:13px;color:#6B7280">{{ rd.inv }}</span></div>
+        <button onClick="{{ closeDrawer }}" style="width:36px;height:36px;border:none;background:transparent;border-radius:10px;cursor:pointer;color:#6B7280"><i class="icon-x" style="font-size:18px"></i></button>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:20px">
+  <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px"><div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:13px;color:#6B7280">{{ rd.name }} · <span style="font-family:'JetBrains Mono',monospace">{{ rd.uhid }}</span></span><span style="font-family:'JetBrains Mono',monospace;font-size:32px;font-weight:600">{{ rd.amountF }}</span></div><span style="font-size:12px;color:{{ rd.statusFg }};background:{{ rd.statusBg }};border-radius:999px;padding:3px 10px;white-space:nowrap;justify-self:start">{{ rd.statusLabel }}</span></div>
+  <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;font-size:13px">
+    <div style="display:flex;flex-direction:column;gap:2px"><span style="color:#6B7280">Invoice</span><span style="font-family:'JetBrains Mono',monospace">{{ rd.inv }}</span></div>
+    <div style="display:flex;flex-direction:column;gap:2px"><span style="color:#6B7280">Receipt</span><span style="font-family:'JetBrains Mono',monospace">{{ rd.rcp }}</span></div>
+    <div style="display:flex;flex-direction:column;gap:2px"><span style="color:#6B7280">Issued</span><span>Today {{ rd.time }} · Counter 1</span></div>
+    <div style="display:flex;flex-direction:column;gap:2px"><span style="color:#6B7280">Tender</span><span>{{ rd.tender }}</span></div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:8px"><span style="font-size:13px;font-weight:600">Items</span>
+    <sc-for list="{{ rd.lines }}" as="l" hint-placeholder-count="2"><div style="display:flex;justify-content:space-between;gap:12px;font-size:13px;padding:8px 0;border-top:1px solid #F3F4F6"><span>{{ l.name }}</span><span style="font-family:'JetBrains Mono',monospace">{{ l.amountF }}</span></div></sc-for>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:8px"><span style="font-size:13px;font-weight:600">Delivery</span>
+    <sc-for list="{{ rd.delivery }}" as="d" hint-placeholder-count="3"><div style="display:flex;align-items:center;gap:10px;font-size:13px"><i class="{{ d.icon }}" style="font-size:16px;color:{{ d.color }}"></i><span style="flex:1">{{ d.label }}</span><span style="color:{{ d.color }}">{{ d.state }}</span></div></sc-for>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <button onClick="{{ rd.reprint }}" style="height:40px;padding:0 14px;border:1px solid #E5E7EB;background:#FFFFFF;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:8px"><i class="icon-printer" style="font-size:16px"></i>Reprint</button>
+    <button onClick="{{ rd.whatsapp }}" style="height:40px;padding:0 14px;border:1px solid #E5E7EB;background:#FFFFFF;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:8px"><i class="icon-message-circle" style="font-size:16px"></i>WhatsApp</button>
+    <button onClick="{{ rd.email }}" style="height:40px;padding:0 14px;border:1px solid #E5E7EB;background:#FFFFFF;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:8px"><i class="icon-mail" style="font-size:16px"></i>Email</button>
+  </div></div>
+      <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;padding:16px 24px;border-top:1px solid #E5E7EB"><span style="font-size:13px;color:#6B7280">{{ rd.refundHint }}</span><button onClick="{{ rd.startRefund }}" disabled="{{ rd.refundDisabled }}" style="height:40px;padding:0 16px;border:1px solid #FECACA;background:#FFFFFF;color:{{ rd.refundFg }};border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap">Start refund</button></div>
+    </div>
+  </div>
+</sc-if>
+<sc-if value="{{ drawerRefund }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed;inset:0;z-index:20;display:flex;justify-content:flex-end">
+    <div onClick="{{ closeDrawer }}" style="position:absolute;inset:0;background:rgba(17,24,39,0.24);animation:fadeIn 0.15s ease"></div>
+    <div style="position:relative;width:560px;max-width:100%;height:100%;background:#FFFFFF;border-left:1px solid #E5E7EB;box-shadow:-8px 0 32px rgba(17,24,39,0.08);display:flex;flex-direction:column;animation:slideIn 0.2s ease">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:20px 24px;border-bottom:1px solid #E5E7EB">
+        <div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:20px;font-weight:600">Request refund</span><span style="font-size:13px;color:#6B7280">{{ rf.inv }} · {{ rf.name }}</span></div>
+        <button onClick="{{ closeDrawer }}" style="width:36px;height:36px;border:none;background:transparent;border-radius:10px;cursor:pointer;color:#6B7280"><i class="icon-x" style="font-size:18px"></i></button>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:20px">
+  <div style="display:flex;flex-direction:column;gap:8px"><span style="font-size:13px;font-weight:500">Items to refund</span>
+    <sc-for list="{{ rf.lines }}" as="l" hint-placeholder-count="2"><label style="display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid {{ l.border }};border-radius:10px;cursor:pointer;font-size:14px"><input type="checkbox" checked="{{ l.checked }}" onChange="{{ l.toggle }}" style="width:16px;height:16px;accent-color:#2563EB"><span style="flex:1">{{ l.name }}</span><span style="font-family:'JetBrains Mono',monospace">{{ l.amountF }}</span></label></sc-for>
+  </div>
+  <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:500">Reason<select value="{{ rf.reason }}" onChange="{{ rf.onReason }}" style="height:40px;border:1px solid #E5E7EB;border-radius:10px;padding:0 12px;font-size:14px;background:#FFFFFF"><option value="">Select reason</option><option value="Test cancelled by doctor">Test cancelled by doctor</option><option value="Doctor unavailable">Doctor unavailable</option><option value="Medication returned">Medication returned</option><option value="Billed in error">Billed in error</option></select></label>
+  <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:500">Justification<textarea value="{{ rf.note }}" onChange="{{ rf.onNote }}" rows="3" placeholder="What happened and what you verified" style="border:1px solid #E5E7EB;border-radius:10px;padding:10px 12px;font-size:14px;resize:vertical;outline:none"></textarea></label>
+  <div style="display:flex;justify-content:space-between;font-size:14px;padding:12px 16px;background:#F9FAFB;border-radius:10px"><span style="color:#6B7280">Refund to {{ rf.tender }}</span><span style="font-family:'JetBrains Mono',monospace;font-weight:600">{{ rf.amountF }}</span></div></div>
+      <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;padding:16px 24px;border-top:1px solid #E5E7EB"><span style="font-size:13px;color:#6B7280">{{ rf.blocker }}</span><div style="display:flex;gap:8px"><button onClick="{{ closeDrawer }}" style="height:40px;padding:0 16px;border:1px solid #E5E7EB;background:#FFFFFF;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap">Cancel</button><button onClick="{{ submitRefund }}" disabled="{{ rf.disabled }}" style="height:40px;padding:0 20px;border:none;background:{{ rf.btnBg }};color:#FFFFFF;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap">Send for approval</button></div></div>
+    </div>
+  </div>
+</sc-if>
+<sc-if value="{{ hasPass }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(17,24,39,0.32);animation:fadeIn 0.15s ease">
+    <div style="background:#FFFFFF;border-radius:12px;width:440px;max-width:100%;padding:24px;display:flex;flex-direction:column;gap:20px;box-shadow:0 24px 48px rgba(17,24,39,0.16)">
+      <div style="display:flex;align-items:center;gap:10px"><span style="width:32px;height:32px;border-radius:50%;background:#F0FDF4;color:#15803D;display:flex;align-items:center;justify-content:center"><i class="icon-shield-check" style="font-size:18px"></i></span><span style="font-size:20px;font-weight:600">Financial discharge cleared</span></div>
+      <div style="display:flex;gap:16px;align-items:center;padding:16px;border:1px solid #E5E7EB;border-radius:12px">
+        <div style="width:112px;height:112px;flex:0 0 112px;border-radius:8px;background:repeating-linear-gradient(45deg,#F3F4F6 0 6px,#E5E7EB 6px 12px);display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:11px;color:#6B7280">pass QR</div>
+        <div style="display:flex;flex-direction:column;gap:4px;min-width:0"><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600">{{ pass.no }}</span><span style="font-size:14px;font-weight:500">{{ pass.name }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#6B7280">{{ pass.ip }} · {{ pass.uhid }}</span><span style="font-size:12px;color:#6B7280">{{ pass.ward }}</span><span style="font-size:12px;color:#15803D;font-weight:500">Balance ₹0.00 · {{ pass.time }}</span></div>
+      </div>
+      <div style="font-size:13px;color:#6B7280;line-height:1.5">Ward nursing and hospital security now see this admission as CLEARED.</div>
+      <div style="display:flex;gap:8px"><button onClick="{{ printPass }}" style="flex:1;height:40px;border:1px solid #E5E7EB;background:#FFFFFF;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px"><i class="icon-printer" style="font-size:16px"></i>Print pass</button><button onClick="{{ closePass }}" style="flex:1;height:40px;border:none;background:#2563EB;color:#FFFFFF;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer">Done</button></div>
+    </div>
+  </div>
+</sc-if>
+<sc-if value="{{ hasToast }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed;right:24px;bottom:24px;z-index:40;background:#111827;color:#FFFFFF;border-radius:10px;padding:12px 16px;font-size:14px;display:flex;align-items:center;gap:10px;box-shadow:0 8px 24px rgba(17,24,39,0.2);animation:slideIn 0.2s ease;max-width:420px"><i class="icon-info" style="font-size:16px"></i>{{ toast }}</div>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  static Q = [ { "uhid": "NH-251907", "name": "Arjun Mehta", "age": 34, "sex": "M", "mobile": "99870 22311", "token": "LAB-117", "source": "Lab", "encounter": "OPD", "payerType": "Self Pay", "payer": "Self Pay", "stat": true, "wait": 3, "lines": [ { "code": "LAB-HAE-001", "name": "Complete Blood Count", "dept": "Pathology", "ref": "ORD-55120", "rate": 350, "qty": 1, "note": "No fasting" }, { "code": "LAB-BIO-014", "name": "HbA1c", "dept": "Pathology", "ref": "ORD-55120", "rate": 550, "qty": 1 }, { "code": "LAB-BIO-020", "name": "Lipid Profile", "dept": "Pathology", "ref": "ORD-55120", "rate": 700, "qty": 1, "note": "10–12 hr fasting required" } ], "history": [ { "inv": "INV-2610-00098", "date": "Today 09:40", "what": "CBC", "amt": "₹350.00" } ], "dupWarn": { "line": 0, "text": "Complete Blood Count already billed on INV-2610-00098 today at 09:40." } }, { "uhid": "NH-221460", "name": "Lata Menon", "age": 57, "sex": "F", "mobile": "98330 41276", "token": "IP-26-0398", "source": "IPD", "encounter": "IPD · ICU-03", "payerType": "TPA", "payer": "Star Health", "stat": true, "wait": 4, "lines": [ { "code": "PRC-CVC-01", "name": "Central line insertion", "dept": "Procedure", "ref": "OT-NOTE-2231", "rate": 6500, "qty": 1 }, { "code": "LAB-ABG-01", "name": "Arterial Blood Gas × 2", "dept": "Pathology", "ref": "ORD-55102", "rate": 1800, "qty": 1 } ], "history": [], "insPending": "Enhancement of ₹8,300 requested from Star Health at 10:20. Claim CLM-SH-40918.", "insAmt": 8300 }, { "uhid": "NH-240118", "name": "Kamala Iyer", "age": 68, "sex": "F", "mobile": "98201 44107", "token": "OPD-042", "source": "OPD", "encounter": "OPD", "payerType": "Self Pay", "payer": "Self Pay", "senior": true, "wait": 6, "lines": [ { "code": "CON-CAR-01", "name": "Consultation · Dr. Anil Menon", "dept": "Cardiology", "ref": "APT-88213", "rate": 800, "qty": 1 } ], "history": [ { "inv": "INV-2609-03321", "date": "12 Sep", "what": "Consultation", "amt": "₹800.00" }, { "inv": "INV-2608-02190", "date": "04 Aug", "what": "ECG, Lipid", "amt": "₹1,150.00" } ] }, { "uhid": "NH-218876", "name": "Baldev Singh", "age": 72, "sex": "M", "mobile": "98110 56233", "token": "DISP-8812", "source": "Pharmacy", "encounter": "OPD", "payerType": "Government Scheme", "payer": "CGHS · Card verified", "senior": true, "wait": 11, "lines": [ { "code": "PH-MET-500", "name": "Metformin 500mg × 60", "dept": "Pharmacy", "ref": "DISP-8812", "rate": 186.5, "qty": 1, "gst": 12 }, { "code": "PH-ATO-10", "name": "Atorvastatin 10mg × 30", "dept": "Pharmacy", "ref": "DISP-8812", "rate": 248, "qty": 1, "gst": 12 }, { "code": "PH-TEL-40", "name": "Telmisartan 40mg × 30", "dept": "Pharmacy", "ref": "DISP-8812", "rate": 850, "qty": 1, "gst": 12 } ], "history": [ { "inv": "INV-2609-02877", "date": "02 Sep", "what": "Pharmacy", "amt": "₹1,284.50" } ] }, { "uhid": "NH-230554", "name": "Farhan Qureshi", "age": 45, "sex": "M", "mobile": "90040 71822", "token": "RAD-031", "source": "Radiology", "encounter": "OPD", "payerType": "Self Pay", "payer": "Self Pay", "wait": 9, "lines": [ { "code": "RAD-XR-002", "name": "X-Ray Chest PA", "dept": "Radiology", "ref": "ORD-55098", "rate": 650, "qty": 1 } ], "history": [ { "inv": "INV-2609-03110", "date": "14 Sep", "what": "Consultation, Lab", "amt": "₹2,400.00" } ], "outstanding": { "inv": "INV-2609-03110", "date": "14 Sep", "amt": 1200 } }, { "uhid": "NH-245019", "name": "Suresh Patil", "age": 61, "sex": "M", "mobile": "98500 12764", "token": "IP-26-0412", "source": "IPD", "encounter": "IPD · GW-14", "payerType": "Self Pay", "payer": "Self Pay", "wait": 5, "advance": 3200, "lines": [ { "code": "PRC-DRS-02", "name": "Bedside dressing · major", "dept": "Procedure", "ref": "WARD-REQ-771", "rate": 1200, "qty": 1 }, { "code": "LAB-BIO-009", "name": "Kidney Function Test", "dept": "Pathology", "ref": "ORD-55117", "rate": 600, "qty": 1 }, { "code": "PH-INJ-CEF", "name": "Ceftriaxone 1g inj × 4", "dept": "Pharmacy", "ref": "WARD-ISS-3390", "rate": 880, "qty": 1, "gst": 12 } ], "history": [], "dtx": [ { "d": "28 Sep", "ref": "DEP-2610-00031", "label": "Admission deposit", "amt": 25000 }, { "d": "03 Oct", "ref": "DEP-2610-00041", "label": "Interim top-up", "amt": 10000 }, { "d": "To date", "ref": "Running bill", "label": "Utilised against ledger", "amt": -31800 } ] }, { "uhid": "NH-252210", "name": "Sneha Kulkarni", "age": 29, "sex": "F", "mobile": "97690 10045", "token": "OPD-045", "source": "OPD", "encounter": "OPD", "payerType": "Corporate", "payer": "Infosys", "credit": 400, "creditLimit": 25000, "wait": 4, "lines": [ { "code": "CON-DER-01", "name": "Consultation · Dr. Rhea Shah", "dept": "Dermatology", "ref": "APT-88230", "rate": 600, "qty": 1 }, { "code": "LAB-BIO-020", "name": "Lipid Profile", "dept": "Pathology", "ref": "ORD-55133", "rate": 700, "qty": 1 } ], "history": [] }, { "uhid": "NH-249931", "name": "Priya Nair", "age": 41, "sex": "F", "mobile": "98925 70318", "token": "LAB-121", "source": "Lab", "encounter": "OPD", "payerType": "Insurance", "payer": "HDFC Ergo · OPD cover", "wait": 2, "lines": [ { "code": "LAB-END-003", "name": "Thyroid Profile (T3, T4, TSH)", "dept": "Pathology", "ref": "ORD-55131", "rate": 600, "qty": 1 }, { "code": "LAB-BIO-031", "name": "Vitamin D (25-OH)", "dept": "Pathology", "ref": "ORD-55131", "rate": 1200, "qty": 1 } ], "history": [], "insPending": "OPD cover request sent to HDFC Ergo at 10:58. Claim CLM-HE-77120.", "insAmt": 1800 }, { "uhid": "NH-238412", "name": "Meera Joshi", "age": 55, "sex": "F", "mobile": "98700 61245", "token": "RAD-034", "source": "Radiology", "encounter": "OPD", "payerType": "Self Pay", "payer": "Self Pay", "wait": 7, "status": "PARTIAL", "paid": 500, "lines": [ { "code": "RAD-USG-010", "name": "USG Whole Abdomen", "dept": "Radiology", "ref": "ORD-55140", "rate": 1400, "qty": 1, "note": "6 hr fasting, full bladder" } ], "history": [ { "inv": "INV-2606-00981", "date": "28 Jun", "what": "Consultation", "amt": "₹800.00" } ] }, { "uhid": "NH-253118", "name": "Deepak Rawat", "age": 48, "sex": "M", "mobile": "94220 81733", "token": "OPD-049", "source": "OPD", "encounter": "OPD", "payerType": "Corporate", "payer": "ONGC", "credit": 48500, "creditLimit": 50000, "wait": 2, "lines": [ { "code": "CON-CAR-01", "name": "Consultation · Dr. Anil Menon", "dept": "Cardiology", "ref": "APT-88247", "rate": 800, "qty": 1 }, { "code": "CAR-ECG-01", "name": "ECG 12-lead", "dept": "Cardiology", "ref": "ORD-55149", "rate": 350, "qty": 1 } ], "history": [] }, { "uhid": "NH-253040", "name": "Rohan Das", "age": 8, "sex": "M", "mobile": "90290 33410", "token": "OPD-047", "source": "OPD", "encounter": "OPD", "payerType": "Self Pay", "payer": "Self Pay", "wait": 1, "lines": [ { "code": "CON-PED-01", "name": "Consultation · Dr. Kavita Rao", "dept": "Paediatrics", "ref": "APT-88241", "rate": 700, "qty": 1 } ], "history": [ { "inv": "INV-2609-03544", "date": "28 Sep", "what": "Consultation", "amt": "₹700.00" } ], "refund": "RFD-2610-00013 · ₹700.00 for the 28 Sep visit is awaiting supervisor approval." }, { "uhid": "NH-244950", "name": "Sanjay Kapoor", "age": 50, "sex": "M", "mobile": "98191 20447", "token": "OPD-050", "source": "OPD", "encounter": "OPD", "payerType": "Self Pay", "payer": "Staff family credit account", "creditAcct": true, "credit": 10000, "creditLimit": 10000, "wait": 0, "lines": [ { "code": "CON-ORT-01", "name": "Consultation · Dr. Mehul Shah", "dept": "Orthopaedics", "ref": "APT-88252", "rate": 800, "qty": 1 }, { "code": "RAD-XR-014", "name": "X-Ray Knee AP/Lat", "dept": "Radiology", "ref": "ORD-55152", "rate": 750, "qty": 1 } ], "history": [] } ];
+  static PSTAT = { PENDING: ['Pending', '#B45309', '#FFFBEB'], PARTIAL: ['Partial', '#C2410C', '#FFF7ED'], PAID: ['Paid', '#15803D', '#F0FDF4'], INSURANCE: ['Insurance', '#4338CA', '#EEF2FF'], CORPORATE: ['Corporate', '#4338CA', '#EEF2FF'], CREDIT: ['Credit', '#0369A1', '#F0F9FF'], CANCELLED: ['Cancelled', '#DC2626', '#FEF2F2'] };
+  static PAYER = { 'Self Pay': ['#374151', '#F3F4F6'], Insurance: ['#4338CA', '#EEF2FF'], TPA: ['#4338CA', '#EEF2FF'], Corporate: ['#4338CA', '#EEF2FF'], 'Government Scheme': ['#0369A1', '#F0F9FF'] };
+  static TARIFF = [
+    { code: 'LAB-HAE-001', name: 'Complete Blood Count', dept: 'Pathology', rate: 350 },
+    { code: 'LAB-BIO-020', name: 'Lipid Profile', dept: 'Pathology', rate: 700 },
+    { code: 'LAB-BIO-014', name: 'HbA1c', dept: 'Pathology', rate: 550 },
+    { code: 'LAB-BIO-008', name: 'Liver Function Test', dept: 'Pathology', rate: 650 },
+    { code: 'LAB-BIO-009', name: 'Kidney Function Test', dept: 'Pathology', rate: 600 },
+    { code: 'CAR-ECG-01', name: 'ECG 12-lead', dept: 'Cardiology', rate: 350 },
+    { code: 'CAR-ECH-01', name: '2D Echocardiography', dept: 'Cardiology', rate: 2200 },
+    { code: 'RAD-XR-002', name: 'X-Ray Chest PA', dept: 'Radiology', rate: 650 }
+  ];
+  static COLORS = { Cash: '#16A34A', Card: '#2563EB', UPI: '#4338CA', Netbanking: '#0EA5E9', Cheque: '#6B7280' };
+  static ADM = [
+    { ip: 'IP-26-0389', uhid: 'NH-207731', name: 'Gopal Krishnan', ward: 'Semi-Private · SP-11', day: 6, consultant: 'Dr. S. Bhat', payer: 'General', deposit: 30000, ledger: 42380, status: 'MEDICALLY_DISCHARGED', check: [false, true, false, false],
+      split: [['Bed & nursing', 16800], ['Doctor visits', 7200], ['Pharmacy', 9480], ['Lab & imaging', 6400], ['Consumables', 2500]] },
+    { ip: 'IP-26-0398', uhid: 'NH-221460', name: 'Lata Menon', ward: 'ICU · ICU-03', day: 5, consultant: 'Dr. P. Kulkarni', payer: 'Star Health · TPA', deposit: 50000, ledger: 118400, preauth: 90000, tpaFinal: 61200, status: 'AWAITING_TPA', check: [true, true, true, true],
+      split: [['ICU bed & nursing', 52000], ['Doctor visits', 18500], ['Pharmacy', 27900], ['Lab & imaging', 14200], ['Consumables', 5800]] },
+    { ip: 'IP-26-0410', uhid: 'NH-252871', name: 'Anjali Verma', ward: 'Maternity · MW-05', day: 2, consultant: 'Dr. N. Sethi', payer: 'General', package: 'Package · Normal Delivery ₹45,000', deposit: 45000, ledger: 47150, status: 'MEDICALLY_DISCHARGED', check: [true, true, true, false],
+      split: [['Normal Delivery package', 45000], ['Excluded · Neonatal vaccines', 2150]] },
+    { ip: 'IP-26-0412', uhid: 'NH-245019', name: 'Suresh Patil', ward: 'General · GW-14', day: 3, consultant: 'Dr. A. Menon', payer: 'General', deposit: 25000, ledger: 21800, status: 'RUNNING',
+      split: [['Bed & nursing', 7500], ['Doctor visits', 3600], ['Pharmacy', 6200], ['Lab & imaging', 3500], ['Consumables', 1000]] },
+    { ip: 'IP-26-0405', uhid: 'NH-249112', name: 'Imran Shaikh', ward: 'Private · PR-207', day: 2, consultant: 'Dr. R. Iyer', payer: 'General', deposit: 40000, ledger: 18650, status: 'RUNNING',
+      split: [['Bed & nursing', 9000], ['Doctor visits', 2400], ['Pharmacy', 4150], ['Lab & imaging', 3100]] },
+    { ip: 'IP-26-0415', uhid: 'NH-253118', name: 'Deepak Rawat', ward: 'General · GW-22', day: 1, consultant: 'Dr. A. Menon', payer: 'ONGC · Corporate', deposit: 25000, ledger: 6200, status: 'RUNNING',
+      split: [['Bed & nursing', 2500], ['Doctor visits', 1200], ['Lab & imaging', 2500]] }
+  ];
+  static RC = [
+    { inv: 'INV-2610-00142', rcp: 'RCP-2610-00142', time: '11:52', name: 'Vandana Rao', uhid: 'NH-250077', source: 'OPD', tender: 'UPI', amount: 800, status: 'PAID', lines: [['Consultation · Dr. Anil Menon', 800]], wa: true },
+    { inv: 'INV-2610-00141', rcp: 'RCP-2610-00141', time: '11:47', name: 'Harish Gupta', uhid: 'NH-247310', source: 'Lab', tender: 'Card', amount: 1600, status: 'PAID', lines: [['Complete Blood Count', 350], ['Liver Function Test', 650], ['Kidney Function Test', 600]], wa: true, em: true },
+    { inv: 'INV-2610-00140', rcp: 'RCP-2610-00140', time: '11:40', name: 'Sunita Pawar', uhid: 'NH-239905', source: 'Pharmacy', tender: 'Cash', amount: 642.5, status: 'PAID', lines: [['Amlodipine 5mg × 30', 142.5], ['Pantoprazole 40mg × 30', 500]] },
+    { inv: 'INV-2610-00139', rcp: 'RCP-2610-00139', time: '11:31', name: 'Mohit Bansal', uhid: 'NH-251660', source: 'Radiology', tender: 'UPI', amount: 1400, status: 'PAID', lines: [['USG Whole Abdomen', 1400]], wa: true },
+    { inv: 'INV-2610-00138', rcp: 'RCP-2610-00138', time: '11:18', name: 'Ayesha Khan', uhid: 'NH-244018', source: 'Lab', tender: 'Cash', amount: 550, status: 'PAID', lines: [['HbA1c', 550]] },
+    { inv: 'INV-2610-00137', rcp: 'RCP-2610-00137', time: '11:02', name: 'Ramesh Iyer', uhid: 'NH-236671', source: 'OPD', tender: 'Cash', amount: 900, status: 'PAID', lines: [['Consultation · Dr. Vivek Joshi', 900]] },
+    { inv: 'INV-2610-00136', rcp: 'RCP-2610-00136', time: '10:48', name: 'Kiran Desai', uhid: 'NH-252004', source: 'OPD', tender: 'Card', amount: 600, status: 'CANCELLED', lines: [['Consultation · Dr. Rhea Shah', 600]] },
+    { inv: 'INV-2610-00135', rcp: 'RCP-2610-00135', time: '10:30', name: 'Nikhil Joshi', uhid: 'NH-248803', source: 'OPD + Lab', tender: 'Cash + UPI', amount: 2350, status: 'PAID', lines: [['Consultation · Dr. Anil Menon', 800], ['ECG 12-lead', 350], ['2D Echocardiography', 1200]], wa: true }
+  ];
+  static REG = [
+    { t: '11:52', ref: 'RCP-2610-00142', what: 'Vandana Rao · OPD consultation', tender: 'UPI', amt: 800 },
+    { t: '11:47', ref: 'RCP-2610-00141', what: 'Harish Gupta · Lab', tender: 'Card', amt: 1600 },
+    { t: '11:40', ref: 'RCP-2610-00140', what: 'Sunita Pawar · Pharmacy', tender: 'Cash', amt: 642.5 },
+    { t: '11:31', ref: 'RCP-2610-00139', what: 'Mohit Bansal · Radiology', tender: 'UPI', amt: 1400 },
+    { t: '11:20', ref: 'DEP-2610-00041', what: 'Suresh Patil · Interim top-up', tender: 'Card', amt: 10000 },
+    { t: '11:18', ref: 'RCP-2610-00138', what: 'Ayesha Khan · Lab', tender: 'Cash', amt: 550 },
+    { t: '11:02', ref: 'RCP-2610-00137', what: 'Ramesh Iyer · OPD consultation', tender: 'Cash', amt: 900 },
+    { t: '08:02', ref: 'FLOAT', what: 'Opening float declared', tender: 'Cash', amt: 5000 }
+  ];
+  static extraState() {
+    return { adm: Component.ADM.map(a => ({ ...a, check: a.check ? [...a.check] : null })), selAdm: 'IP-26-0389', issued: [], rcStatus: {}, rcFilter: 'All', rcSearch: '', rcSel: null,
+      reqList: [
+        { id: 'RFD-2610-00011', type: 'Refund', inv: 'INV-2610-00138', patient: 'Ayesha Khan', amount: 550, detail: 'HbA1c · Test cancelled by doctor', at: '10:42', status: 'PENDING', tender: 'Cash' },
+        { id: 'RFD-2610-00009', type: 'Refund', inv: 'INV-2610-00137', patient: 'Ramesh Iyer', amount: 900, detail: 'Consultation · Doctor unavailable', at: '09:15', status: 'APPROVED', tender: 'Cash' },
+        { id: 'DSC-2610-00031', type: 'Discount', inv: 'INV-2610-00118', patient: 'Shobha Kulkarni', amount: 240, detail: '10% · Financial hardship', at: '09:02', status: 'APPROVED' },
+        { id: 'VOD-2610-00004', type: 'Void', inv: 'INV-2610-00102', patient: 'Ajay Thakur', amount: 700, detail: 'Duplicate bill', at: '08:40', status: 'REJECTED', reason: 'Original already settled by UPI — raise a refund instead' }
+      ],
+      reqTab: 'All', rfSeq: 12, cnSeq: 18, depSeq: 42, passSeq: 27, cashRefunds: 0, register: [], shift: { status: 'OPEN' },
+      cl: { d500: '', d200: '', d100: '', d50: '', d20: '', d10: '', coins: '', edc: '', upi: '', note: '' },
+      dep: { ip: '', purpose: 'Interim top-up', amount: '', mode: 'Cash', ref: '' }, depSettle: null, pass: null, rf: null };
+  }
+
+  state = { ...Component.extraState(), screen: 'dashboard', queue: Component.Q, uhid: 'NH-251907', pst: {}, paid: {}, adv: {}, credit: {}, done: {}, insOk: {}, outCleared: {}, dtx: {}, qf: 'All', pin: { method: null, recv: '', ref: '', useAdv: false }, extra: {}, off: {}, scheme: {}, req: {}, drawer: null,
+    tenders: [], receipt: null, toast: null, search: '', filter: 'All', tariffQ: '', invoices: 142, served: 118,
+    mix: { Cash: 42080, Card: 82010, UPI: 60200 }, seq: 143, reqPct: '15', reqReason: '', reqNote: '', qrSent: {} };
+
+  fmt(n) { return '₹' + (Math.round(n * 100) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  toast(msg) { clearTimeout(this._t); this.setState({ toast: msg }); this._t = setTimeout(() => this.setState({ toast: null }), 3200); }
+  componentWillUnmount() { clearTimeout(this._t); clearTimeout(this._a); }
+  patient(uhid) { return this.state.queue.find(p => p.uhid === uhid) || Component.Q.find(p => p.uhid === uhid); }
+  allLines(p) { return [...p.lines, ...(this.state.extra[p.uhid] || [])]; }
+  amount(p) { return p.lines.reduce((s, l) => s + l.rate * l.qty, 0); }
+
+  bill(p) {
+    const off = this.state.off[p.uhid] || {};
+    const lines = this.allLines(p).map((l, i) => ({ ...l, i, checked: !off[i] }));
+    const inc = lines.filter(l => l.checked);
+    const gross = inc.reduce((s, l) => s + l.rate * l.qty, 0);
+    const req = this.state.req[p.uhid];
+    const schemePct = parseFloat(this.state.scheme[p.uhid] || '0') || 0;
+    const pct = req && req.status === 'APPROVED' ? req.pct : schemePct;
+    const disc = Math.round(gross * pct) / 100;
+    const gst = inc.filter(l => l.gst).reduce((s, l) => s + (l.rate * l.qty * (1 - pct / 100)) * l.gst / (100 + l.gst), 0);
+    return { lines, inc, gross, pct, disc, gst, net: gross - disc, req };
+  }
+
+  open(uhid) { this.setState({ screen: 'workspace', uhid, tariffQ: '' }); }
+
+  now() { return new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }); }
+  updAdm(ip, patch) { this.setState(st => ({ adm: st.adm.map(x => x.ip === ip ? { ...x, ...(typeof patch === 'function' ? patch(x) : patch) } : x) })); }
+  makePass(a) { const n = this.state.passSeq; this.setState({ passSeq: n + 1, pass: { no: 'FDP-2610-' + String(n).padStart(5, '0'), name: a.name, ip: a.ip, uhid: a.uhid, ward: a.ward, time: this.now() } }); }
+  admCalc(a) {
+    const tpa = a.tpa || 0, cover = a.deposit + (a.tpa ? a.tpa : (a.preauth || 0));
+    const util = Math.round(a.ledger / cover * 100), bal = a.ledger - a.deposit - tpa - (a.paid || 0);
+    return { util, bal, cover };
+  }
+  moreVals(fmt, p) {
+    const s = this.state, sc = s.screen;
+    const on = k => sc === k || (k === 'queue' && sc === 'workspace');
+    const nv = {}; ['dash:dashboard', 'queue:queue', 'ipd:ipd', 'rc:receipts', 'req:requests', 'shift:shift'].forEach(x => { const [k, v] = x.split(':'); nv[k + 'Bg'] = on(v) ? '#EFF6FF' : 'transparent'; nv[k + 'Fg'] = on(v) ? '#2563EB' : '#374151'; });
+    const crumb = { dashboard: 'Dashboard', queue: 'Invoice Queue', workspace: p ? 'Patient · ' + p.uhid : 'Patient', ipd: 'IPD Running Bills', receipts: 'Receipts & Invoices', requests: 'My Requests', shift: 'Counter Shift' }[sc];
+    const go = v => () => this.setState({ screen: v });
+    const STAT = { RUNNING: ['Running', '#374151', '#F3F4F6'], MEDICALLY_DISCHARGED: ['Discharge today', '#B45309', '#FFFBEB'], AWAITING_TPA: ['Awaiting TPA', '#4338CA', '#EEF2FF'], CLEARED: ['Cleared', '#15803D', '#F0FDF4'] };
+    const order = { MEDICALLY_DISCHARGED: 0, AWAITING_TPA: 1, RUNNING: 2, CLEARED: 3 };
+    const CHECK = ['Pending lab reports confirmed', 'Pharmacy ward returns credited', 'OT / procedure lines posted', 'Room-rent clock stopped'];
+
+    // ---------- IPD
+    const admRows = [...s.adm].sort((a, b) => order[a.status] - order[b.status]).map(a => {
+      const c = this.admCalc(a), stt = STAT[a.status], spon = a.payer !== 'General';
+      const balTxt = a.status === 'CLEARED' ? fmt(0) : a.status === 'AWAITING_TPA' ? 'Pending TPA' : (c.bal >= 0 ? fmt(c.bal) : '+' + fmt(-c.bal));
+      return { ...a, util: c.util, barW: Math.min(100, c.util), barColor: c.util < 80 ? '#2563EB' : c.util <= 100 ? '#F59E0B' : '#DC2626', utilColor: c.util >= 80 ? '#B45309' : '#6B7280',
+        ledgerF: fmt(a.ledger), balF: balTxt, balColor: a.status === 'CLEARED' ? '#15803D' : c.bal > 0 && a.status !== 'AWAITING_TPA' ? '#111827' : '#6B7280',
+        statusLabel: stt[0], statusFg: stt[1], statusBg: stt[2], payerShort: a.payer.split(' · ')[0], payerFg: spon ? '#4338CA' : '#374151', payerBg: spon ? '#EEF2FF' : '#F3F4F6',
+        rowBg: s.selAdm === a.ip ? '#F5F9FF' : '#FFFFFF', select: () => this.setState({ selAdm: a.ip }) };
+    });
+    const sa = s.adm.find(a => a.ip === s.selAdm);
+    let sel = {};
+    if (sa) {
+      const c = this.admCalc(sa), stt = STAT[sa.status];
+      const checkDone = !sa.check || sa.check.every(Boolean);
+      const bal = c.bal;
+      sel = { ...sa, util: c.util, statusLabel: stt[0], statusFg: stt[1], statusBg: stt[2], hasPackage: !!sa.package, payerShort: sa.payer.split(' · ')[0],
+        split: sa.split.map(([l, v]) => ({ label: l, amountF: fmt(v) })), ledgerF: fmt(sa.ledger), depositF: fmt(sa.deposit + (sa.paid || 0)),
+        hasTpaLine: !!sa.preauth, tpaLabel: sa.tpa ? 'TPA final approval' : 'TPA pre-auth (not final)', tpaF: sa.tpa ? '− ' + fmt(sa.tpa) : fmt(sa.preauth || 0),
+        balLabel: sa.status === 'CLEARED' ? 'Settled' : sa.status === 'AWAITING_TPA' ? 'Patient share' : (bal >= 0 ? 'Balance due' : 'Excess deposit'),
+        balF: sa.status === 'CLEARED' ? fmt(0) : sa.status === 'AWAITING_TPA' ? 'After TPA' : fmt(Math.abs(bal)),
+        balColor: sa.status === 'CLEARED' ? '#15803D' : bal > 0 ? '#111827' : '#15803D',
+        showTopupAlert: sa.status === 'RUNNING' && c.util >= 80, isRunning: sa.status === 'RUNNING', isDischarge: sa.status === 'MEDICALLY_DISCHARGED', isTpa: sa.status === 'AWAITING_TPA', isCleared: sa.status === 'CLEARED',
+        showChecklist: sa.status === 'MEDICALLY_DISCHARGED' && !!sa.check,
+        checklist: (sa.check || []).map((d, i) => ({ label: CHECK[i], done: d, toggle: () => this.updAdm(sa.ip, x => ({ check: x.check.map((v, j) => j === i ? !v : v) })) })),
+        topupSent: !!sa.topupSent, topupLabel: sa.topupSent ? 'Top-up requested' : 'Request top-up', topupFg: sa.topupSent ? '#9CA3AF' : '#111827',
+        topUp: () => { this.updAdm(sa.ip, { topupSent: true }); this.toast('Interim deposit request sent to ' + sa.name + '’s attendant by SMS'); },
+        deposit: () => this.setState({ drawer: 'deposit', depSettle: null, dep: { ip: sa.ip, purpose: 'Interim top-up', amount: '', mode: 'Cash', ref: '' } }),
+        settleLabel: bal > 0 ? 'Collect ' + fmt(bal) + ' & issue clearance' : bal < 0 ? 'Issue clearance · refund ' + fmt(-bal) : 'Issue clearance',
+        settleDisabled: !checkDone, settleBg: checkDone ? '#2563EB' : '#93C5FD',
+        settle: () => {
+          if (bal > 0) { this.setState({ drawer: 'deposit', depSettle: sa.ip, dep: { ip: sa.ip, purpose: 'Final settlement', amount: String(bal), mode: 'Cash', ref: '' } }); return; }
+          this.updAdm(sa.ip, { status: 'CLEARED' });
+          if (bal < 0) { const n = s.rfSeq; this.setState(st => ({ rfSeq: n + 1, reqList: [{ id: 'RFD-2610-' + String(n).padStart(5, '0'), type: 'Refund', inv: sa.ip, patient: sa.name, amount: -bal, detail: 'Excess IPD deposit', at: this.now(), status: 'PENDING', tender: 'Cash' }, ...st.reqList] })); }
+          this.makePass(sa);
+        },
+        preauthF: fmt(sa.preauth || 0), tpaFinalF: fmt(sa.tpaFinal || 0),
+        recordTpa: () => { this.updAdm(sa.ip, { tpa: sa.tpaFinal, status: 'MEDICALLY_DISCHARGED' }); this.toast('TPA final approval ' + fmt(sa.tpaFinal) + ' recorded · patient share now due'); },
+        viewPass: () => this.makePass(sa) };
+    }
+    const active = s.adm.filter(a => a.status !== 'CLEARED');
+    const ipdKpis = [
+      { label: 'Admitted', value: String(active.length), sub: 'Running ledgers', trend: '', trendColor: '#6B7280', icon: 'icon-bed-double' },
+      { label: 'Over 80% deposit', value: String(s.adm.filter(a => a.status === 'RUNNING' && this.admCalc(a).util >= 80).length), sub: 'Top-up needed', trend: 'Alert', trendColor: '#B45309', icon: 'icon-triangle-alert' },
+      { label: 'Discharge today', value: String(s.adm.filter(a => a.status === 'MEDICALLY_DISCHARGED' || a.status === 'AWAITING_TPA').length), sub: 'Medically discharged', trend: '', trendColor: '#6B7280', icon: 'icon-log-out' },
+      { label: 'Awaiting TPA', value: String(s.adm.filter(a => a.status === 'AWAITING_TPA').length), sub: 'Final approval', trend: '', trendColor: '#4338CA', icon: 'icon-shield' },
+      { label: 'Deposits held', value: fmt(active.reduce((t, a) => t + a.deposit, 0)).replace('.00', ''), sub: 'Across active admissions', trend: '', trendColor: '#6B7280', icon: 'icon-piggy-bank' }
+    ];
+
+    // ---------- deposit drawer
+    const d = s.dep, isSettle = !!s.depSettle, dAmt = parseFloat(d.amount) || 0, dAdm = s.adm.find(a => a.ip === (s.depSettle || d.ip));
+    let dBlock = '';
+    if (!isSettle && !d.ip && !d.wallet) dBlock = 'Select an admission';
+    else if (dAmt <= 0) dBlock = 'Enter an amount';
+    else if (d.mode === 'Card' && !/^\d{6}$/.test(d.ref)) dBlock = 'Enter 6-digit auth code';
+    else if (d.mode === 'UPI' && !/^\d{12}$/.test(d.ref)) dBlock = 'Enter 12-digit UTR';
+    const setDep = k => e => { const v = e.target.value; this.setState(st => ({ dep: { ...st.dep, [k]: v } })); };
+    const sugg = dAdm && !isSettle ? Math.max(0, Math.ceil((dAdm.ledger * 1.25 - dAdm.deposit) / 1000) * 1000) : 0;
+    const dep = { isSettle, isDeposit: !isSettle, title: isSettle ? 'Final settlement' : 'Accept deposit', sub: isSettle ? 'Clears the financial discharge gate' : 'Issues an advance deposit receipt',
+      isWallet: !isSettle && !!d.wallet, isAdm: !isSettle && !d.wallet, walletName: d.wallet ? (this.patient(d.wallet) || {}).name + ' · ' + d.wallet : '', admName: dAdm ? dAdm.name : '', amountF: fmt(dAmt), ip: d.ip, purpose: d.purpose, amount: d.amount, ref: d.ref,
+      options: s.adm.filter(a => a.status !== 'CLEARED').map(a => ({ ip: a.ip, label: a.name + ' · ' + a.ip + ' · ' + a.ward })),
+      onIp: setDep('ip'), onPurpose: setDep('purpose'), onAmount: setDep('amount'), onRef: setDep('ref'),
+      hasSuggest: sugg > 0, suggest: 'Suggested ' + fmt(sugg) + ' to cover 125% of the current ledger',
+      modes: ['Cash', 'Card', 'UPI'].map(m => ({ mode: m, border: d.mode === m ? '#2563EB' : '#E5E7EB', bg: d.mode === m ? '#EFF6FF' : '#FFFFFF', fg: d.mode === m ? '#2563EB' : '#111827', pick: () => this.setState(st => ({ dep: { ...st.dep, mode: m, ref: '' } })) })),
+      needsRef: d.mode !== 'Cash', refLabel: d.mode === 'Card' ? 'Card auth code' : 'UPI UTR', refPh: d.mode === 'Card' ? '6 digits' : '12 digits',
+      blocker: dBlock, disabled: !!dBlock, btnBg: dBlock ? '#93C5FD' : '#2563EB', cta: isSettle ? 'Collect & clear' : 'Issue deposit receipt' };
+    const confirmDeposit = () => {
+      const t = this.now(), mix = { ...s.mix }; mix[d.mode] = (mix[d.mode] || 0) + dAmt;
+      if (!isSettle && d.wallet) { const wp = this.patient(d.wallet), no = 'DEP-2610-' + String(s.depSeq).padStart(5, '0'), cur = s.adv[d.wallet] ?? wp.advance ?? 0;
+        this.setState(st => ({ drawer: null, depSeq: st.depSeq + 1, mix, adv: { ...st.adv, [d.wallet]: cur + dAmt }, dtx: { ...st.dtx, [d.wallet]: [{ d: 'Today ' + t, ref: no, label: d.purpose, amt: dAmt }, ...(st.dtx[d.wallet] || [])] }, register: [{ t, ref: no, what: wp.name + ' · ' + d.purpose, tender: d.mode, amt: dAmt }, ...st.register] }));
+        this.toast(no + ' issued · advance balance ' + fmt(cur + dAmt)); return; }
+      if (isSettle) {
+        this.setState(st => ({ drawer: null, depSettle: null, mix, register: [{ t, ref: dAdm.ip, what: dAdm.name + ' · IPD final settlement', tender: d.mode, amt: dAmt }, ...st.register] }));
+        this.updAdm(dAdm.ip, x => ({ status: 'CLEARED', paid: (x.paid || 0) + dAmt })); this.makePass(dAdm); return;
+      }
+      const no = 'DEP-2610-' + String(s.depSeq).padStart(5, '0');
+      this.setState(st => ({ drawer: null, depSeq: st.depSeq + 1, mix, register: [{ t, ref: no, what: dAdm.name + ' · ' + d.purpose, tender: d.mode, amt: dAmt }, ...st.register] }));
+      this.updAdm(dAdm.ip, x => ({ deposit: x.deposit + dAmt, topupSent: false }));
+      this.toast(no + ' issued · ' + fmt(dAmt) + ' added to ' + dAdm.name + '’s deposit');
+    };
+
+    // ---------- receipts
+    const RS = { PAID: ['Paid', '#15803D', '#F0FDF4'], REFUND_REQUESTED: ['Refund requested', '#B45309', '#FFFBEB'], REFUNDED: ['Refunded', '#374151', '#F3F4F6'], CANCELLED: ['Cancelled', '#DC2626', '#FEF2F2'] };
+    const rcStatusOf = r => s.rcStatus[r.inv] || (s.reqList.some(q => q.inv === r.inv && q.type === 'Refund' && (q.status === 'PENDING' || q.status === 'APPROVED')) ? 'REFUND_REQUESTED' : r.status);
+    const allRc = [...s.issued, ...Component.RC].map(r => ({ ...r, st: rcStatusOf(r) }));
+    const tabKeys = [['All', null], ['Paid', 'PAID'], ['Refund requested', 'REFUND_REQUESTED'], ['Refunded', 'REFUNDED'], ['Cancelled', 'CANCELLED']];
+    const rq = s.rcSearch.trim().toLowerCase();
+    const rcRows = allRc.filter(r => (s.rcFilter === 'All' || r.st === tabKeys.find(t => t[0] === s.rcFilter)[1]) && (!rq || [r.inv, r.rcp, r.name, r.uhid].join(' ').toLowerCase().includes(rq)))
+      .map(r => ({ ...r, amountF: fmt(r.amount), statusLabel: RS[r.st][0], statusFg: RS[r.st][1], statusBg: RS[r.st][2], open: () => this.setState({ rcSel: r.inv, drawer: 'receipt' }) }));
+    const tabStyle = a => ({ bg: a ? '#FFFFFF' : 'transparent', fg: a ? '#111827' : '#6B7280', shadow: a ? '0 1px 2px rgba(17,24,39,0.08)' : 'none' });
+    const rcTabs = tabKeys.map(([l, k]) => ({ label: l, count: k ? allRc.filter(r => r.st === k).length : allRc.length, ...tabStyle(s.rcFilter === l), pick: () => this.setState({ rcFilter: l }) }));
+    const rr = allRc.find(r => r.inv === s.rcSel);
+    let rd = { lines: [], delivery: [] };
+    if (rr) {
+      const canRefund = rr.st === 'PAID';
+      rd = { ...rr, amountF: fmt(rr.amount), statusLabel: RS[rr.st][0], statusFg: RS[rr.st][1], statusBg: RS[rr.st][2],
+        lines: rr.lines.map(([n, v]) => ({ name: n, amountF: fmt(v) })),
+        delivery: [{ icon: 'icon-printer', label: '80mm thermal print', state: 'Printed ' + rr.time, color: '#15803D' },
+          { icon: 'icon-message-circle', label: 'WhatsApp PDF', state: rr.wa ? 'Delivered' : 'Not sent', color: rr.wa ? '#15803D' : '#6B7280' },
+          { icon: 'icon-mail', label: 'Email A4 GST receipt', state: rr.em ? 'Delivered' : 'Not sent', color: rr.em ? '#15803D' : '#6B7280' }],
+        reprint: () => this.toast('Reprint sent · marked DUPLICATE'),
+        whatsapp: () => this.toast('Receipt PDF sent on WhatsApp'), email: () => this.toast('A4 GST receipt emailed'),
+        refundDisabled: !canRefund, refundFg: canRefund ? '#DC2626' : '#D1D5DB',
+        refundHint: canRefund ? 'Refunds need supervisor approval' : rr.st === 'CANCELLED' ? 'Cancelled invoices cannot be refunded' : 'A refund is already in progress',
+        startRefund: () => this.setState({ drawer: 'refund', rf: { inv: rr.inv, name: rr.name, tender: rr.tender.split(' + ')[0], lines: rr.lines, sel: Object.fromEntries(rr.lines.map((_, i) => [i, rr.lines.length === 1])), reason: '', note: '' } }) };
+    }
+    let rf = { lines: [] };
+    if (s.rf) {
+      const amt = s.rf.lines.reduce((t, l, i) => t + (s.rf.sel[i] ? l[1] : 0), 0);
+      const blk = amt <= 0 ? 'Select at least one item' : !s.rf.reason ? 'Select a reason' : s.rf.note.trim().length < 5 ? 'Add a justification' : '';
+      rf = { ...s.rf, amountF: fmt(amt), blocker: blk, disabled: !!blk, btnBg: blk ? '#93C5FD' : '#2563EB',
+        lines: s.rf.lines.map(([n, v], i) => ({ name: n, amountF: fmt(v), checked: !!s.rf.sel[i], border: s.rf.sel[i] ? '#2563EB' : '#E5E7EB', toggle: () => this.setState(st => ({ rf: { ...st.rf, sel: { ...st.rf.sel, [i]: !st.rf.sel[i] } } })) })),
+        onReason: e => { const v = e.target.value; this.setState(st => ({ rf: { ...st.rf, reason: v } })); },
+        onNote: e => { const v = e.target.value; this.setState(st => ({ rf: { ...st.rf, note: v } })); } };
+      rf._amt = amt;
+    }
+    const submitRefund = () => {
+      const n = s.rfSeq, id = 'RFD-2610-' + String(n).padStart(5, '0'), names = s.rf.lines.filter((_, i) => s.rf.sel[i]).map(l => l[0].split(' · ')[0]).join(', ');
+      this.setState(st => ({ drawer: null, rfSeq: n + 1, reqList: [{ id, type: 'Refund', inv: st.rf.inv, patient: st.rf.name, amount: rf._amt, detail: names + ' · ' + st.rf.reason, at: this.now(), status: 'PENDING', tender: st.rf.tender }, ...st.reqList] }));
+      this.toast(id + ' sent to Vikramaditya Rao');
+      setTimeout(() => { this.setState(st => ({ reqList: st.reqList.map(q => q.id === id ? { ...q, status: 'APPROVED' } : q) })); this.toast(id + ' approved · ready to disburse in My Requests'); }, 5000);
+    };
+
+    // ---------- requests
+    const discReqs = Object.entries(s.req).map(([uhid, r], i) => {
+      const pp = this.patient(uhid), g = this.allLines(pp).reduce((t, l) => t + l.rate * l.qty, 0);
+      return { id: 'DSC-2610-' + String(32 + i).padStart(5, '0'), type: 'Discount', inv: 'Draft · ' + pp.uhid, patient: pp.name, amount: g * r.pct / 100, detail: r.pct + '% · ' + r.reason, at: r.at, status: r.status };
+    });
+    const allReq = [...discReqs, ...s.reqList];
+    const QS = { PENDING: ['Pending', '#B45309', '#FFFBEB'], APPROVED: ['Approved', '#15803D', '#F0FDF4'], REJECTED: ['Rejected', '#DC2626', '#FEF2F2'], DISBURSED: ['Disbursed', '#374151', '#F3F4F6'], WITHDRAWN: ['Withdrawn', '#6B7280', '#F3F4F6'] };
+    const TS = { Refund: ['#B45309', '#FFFBEB'], Discount: ['#2563EB', '#EFF6FF'], Void: ['#DC2626', '#FEF2F2'] };
+    const disburse = q => () => {
+      const cn = 'CN-2610-' + String(s.cnSeq).padStart(5, '0'), cash = q.tender === 'Cash';
+      this.setState(st => ({ cnSeq: st.cnSeq + 1, cashRefunds: st.cashRefunds + (cash ? q.amount : 0), rcStatus: { ...st.rcStatus, [q.inv]: 'REFUNDED' },
+        reqList: st.reqList.map(x => x.id === q.id ? { ...x, status: 'DISBURSED' } : x),
+        register: [{ t: this.now(), ref: cn, what: q.patient + ' · Refund ' + q.id, tender: q.tender, amt: -q.amount }, ...st.register] }));
+      this.toast(cash ? cn + ' issued · pay ' + fmt(q.amount) + ' from drawer against signed voucher' : cn + ' issued · ' + q.tender + ' reversal initiated');
+    };
+    const isApprovedRefund = q => q.type === 'Refund' && q.status === 'APPROVED';
+    const reqMatch = { All: () => true, Pending: q => q.status === 'PENDING', Approved: q => q.status === 'APPROVED' || q.status === 'DISBURSED', Rejected: q => q.status === 'REJECTED' };
+    const reqRows = allReq.filter(reqMatch[s.reqTab]).map(q => ({ ...q, amountF: fmt(q.amount), statusLabel: QS[q.status][0], statusFg: QS[q.status][1], statusBg: QS[q.status][2],
+      typeFg: TS[q.type][0], typeBg: TS[q.type][1], hasReason: !!q.reason, canWithdraw: q.status === 'PENDING' && q.type !== 'Discount', canDisburse: isApprovedRefund(q),
+      withdraw: () => this.setState(st => ({ reqList: st.reqList.map(x => x.id === q.id ? { ...x, status: 'WITHDRAWN' } : x) })), disburse: disburse(q) }));
+    const reqTabs = Object.keys(reqMatch).map(k => ({ label: k, count: allReq.filter(reqMatch[k]).length, ...tabStyle(s.reqTab === k), pick: () => this.setState({ reqTab: k }) }));
+    const pendingReq = allReq.filter(q => q.status === 'PENDING');
+    const disbList = allReq.filter(isApprovedRefund).map(q => ({ ...q, amountF: fmt(q.amount), disburse: disburse(q), disburseLabel: q.tender === 'Cash' ? 'Pay ' + fmt(q.amount) + ' from drawer' : 'Initiate ' + q.tender + ' reversal' }));
+    const reqKpis = [
+      { label: 'Pending', value: String(pendingReq.length), sub: fmt(pendingReq.reduce((t, q) => t + q.amount, 0)) + ' in review', trend: '', trendColor: '#B45309', icon: 'icon-clock' },
+      { label: 'Ready to disburse', value: String(disbList.length), sub: 'Approved refunds', trend: disbList.length ? 'Action' : '', trendColor: '#2563EB', icon: 'icon-hand-coins' },
+      { label: 'Approved today', value: String(allReq.filter(q => q.status === 'APPROVED' || q.status === 'DISBURSED').length), sub: 'By Vikramaditya Rao', trend: '', trendColor: '#15803D', icon: 'icon-circle-check' },
+      { label: 'Rejected', value: String(allReq.filter(q => q.status === 'REJECTED').length), sub: 'Read the reason', trend: '', trendColor: '#DC2626', icon: 'icon-circle-x' }
+    ];
+    const recentReq = allReq.filter(q => q.status !== 'WITHDRAWN').slice(0, 3).map(q => ({ title: q.type + ' · ' + q.patient, sub: q.id + ' · ' + fmt(q.amount) + ' · ' + q.at, status: QS[q.status][0], color: QS[q.status][1], bg: QS[q.status][2] }));
+
+    // ---------- shift
+    const cashExp = 5000 + s.mix.Cash - s.cashRefunds;
+    const regAll = [...s.register, ...Component.REG];
+    const regRows = regAll.slice(0, 10).map(r => ({ ...r, color: Component.COLORS[r.tender] || '#6B7280', amtF: (r.amt < 0 ? '− ' : '') + fmt(Math.abs(r.amt)), amtColor: r.amt < 0 ? '#DC2626' : '#111827' }));
+    const c = s.cl, num = v => parseFloat(v) || 0;
+    const DEN = [[500, 'd500'], [200, 'd200'], [100, 'd100'], [50, 'd50'], [20, 'd20'], [10, 'd10']];
+    const cashCount = DEN.reduce((t, [v, k]) => t + v * (parseInt(c[k]) || 0), 0) + num(c.coins);
+    const setCl = k => e => { const v = e.target.value; this.setState(st => ({ cl: { ...st.cl, [k]: v } })); };
+    const vr = [['Cash', cashExp, cashCount, true], ['Card (EDC)', s.mix.Card, num(c.edc), c.edc !== ''], ['UPI', s.mix.UPI, num(c.upi), c.upi !== '']];
+    const anyVar = vr.some(([, a, b, e]) => e && Math.round((b - a) * 100) !== 0);
+    const entered = cashCount > 0 && c.edc !== '' && c.upi !== '';
+    const clBlock = !entered ? 'Enter cash count, EDC and UPI totals' : anyVar && c.note.trim().length < 5 ? 'Explain the variance' : '';
+    const cl = { denoms: [...DEN.map(([v, k]) => ({ label: '₹' + v, count: c[k], ph: '0', subF: fmt(v * (parseInt(c[k]) || 0)), onChange: setCl(k) })), { label: 'Coins', count: c.coins, ph: '₹ amount', subF: fmt(num(c.coins)), onChange: setCl('coins') }],
+      edc: c.edc, upi: c.upi, note: c.note, onEdc: setCl('edc'), onUpi: setCl('upi'), onNote: setCl('note'),
+      rows: vr.map(([l, a, b, e]) => { const v = Math.round((b - a) * 100) / 100; return { label: l, sysF: fmt(a), cntF: e ? fmt(b) : '—', varF: e ? (v > 0 ? '+' : v < 0 ? '−' : '') + fmt(Math.abs(v)) : '—', varColor: !e ? '#9CA3AF' : v === 0 ? '#15803D' : '#DC2626' }; }),
+      needNote: entered && anyVar, blocker: clBlock, disabled: !!clBlock, btnBg: clBlock ? '#93C5FD' : '#2563EB' };
+    const totalVar = vr.reduce((t, [, a, b]) => t + (b - a), 0);
+    const submitted = s.shift.status === 'CLOSING_SUBMITTED';
+    const shiftKpis = [
+      { label: 'Opening float', value: fmt(5000), sub: 'Declared 08:02', trend: '', trendColor: '#6B7280', icon: 'icon-coins' },
+      { label: 'Cash expected', value: fmt(cashExp), sub: 'Float + cash − refunds', trend: cashExp > 50000 ? 'Above ₹50K' : '', trendColor: '#B45309', icon: 'icon-banknote' },
+      { label: 'Card', value: fmt(s.mix.Card), sub: 'EDC-01', trend: '', trendColor: '#6B7280', icon: 'icon-credit-card' },
+      { label: 'UPI', value: fmt(s.mix.UPI), sub: 'Dynamic QR', trend: '', trendColor: '#6B7280', icon: 'icon-qr-code' },
+      { label: 'Refunds paid', value: fmt(s.cashRefunds), sub: 'From drawer', trend: '', trendColor: '#6B7280', icon: 'icon-undo-2' }
+    ];
+    const shiftChip = submitted ? { top: 'Closing submitted · awaiting sign-off', side: 'Closing submitted', fg: '#B45309', bg: '#FFFBEB', border: '#FDE68A' } : { top: 'Shift open · Float ₹5,000.00', side: 'Shift open · OPD Main Lobby', fg: '#15803D', bg: '#F0FDF4', border: '#BBF7D0' };
+
+    return {
+      crumb, nav: nv, goIpd: go('ipd'), goReceipts: go('receipts'), goRequests: go('requests'), goShift: go('shift'),
+      isIpd: sc === 'ipd', isReceipts: sc === 'receipts', isRequests: sc === 'requests', isShift: sc === 'shift',
+      ipdKpis, admRows, hasSel: !!sa, sel,
+      openDeposit: () => this.setState({ drawer: 'deposit', depSettle: null, dep: { ip: '', purpose: 'Interim top-up', amount: '', mode: 'Cash', ref: '' } }),
+      drawerDeposit: s.drawer === 'deposit', dep, confirmDeposit,
+      hasPass: !!s.pass, pass: s.pass || {}, closePass: () => this.setState({ pass: null }), printPass: () => this.toast('Discharge pass sent to IPD desk printer'),
+      rcRows, rcTabs, rcEmpty: rcRows.length === 0, rcCount: rcRows.length, rcSearch: s.rcSearch, onRcSearch: e => this.setState({ rcSearch: e.target.value }),
+      drawerReceipt: s.drawer === 'receipt' && !!rr, rd, drawerRefund: s.drawer === 'refund' && !!s.rf, rf, submitRefund,
+      reqRows, reqTabs, reqKpis, reqEmpty: reqRows.length === 0, disbList, disbEmpty: disbList.length === 0, reqPendingCount: pendingReq.length || null, requests: recentReq,
+      shiftKpis, regRows, regEarlier: Math.max(0, 136 - s.register.length), shiftSubmitted: submitted, closeBtnBg: submitted ? '#93C5FD' : '#2563EB', shiftChip,
+      closingBanner: { text: 'Closing submitted at ' + (s.shift.at || '') + ' · awaiting sign-off from Vikramaditya Rao', var: 'Variance ' + (s.shift.var > 0 ? '+' : s.shift.var < 0 ? '−' : '') + fmt(Math.abs(s.shift.var || 0)), fg: s.shift.var ? '#DC2626' : '#B45309', bg: '#FFFBEB', border: '#FDE68A' },
+      shiftHistory: [
+        { when: '02 Oct · Morning', total: '₹2,04,880', by: 'Signed off by V. Rao', variance: '₹0.00', varColor: '#15803D', status: 'Closed' },
+        { when: '01 Oct · Morning', total: '₹1,96,410', by: 'Signed off by V. Rao', variance: '−₹100.00', varColor: '#DC2626', status: 'Closed with variance' },
+        { when: '30 Sep · Morning', total: '₹1,88,050', by: 'Signed off by V. Rao', variance: '₹0.00', varColor: '#15803D', status: 'Closed' }
+      ],
+      openClosing: () => this.setState({ drawer: 'closing' }), drawerClosing: s.drawer === 'closing', cl,
+      closeCounter: () => this.setState({ screen: 'shift', drawer: submitted ? null : 'closing' }),
+      submitClosing: () => { this.setState({ drawer: null, shift: { status: 'CLOSING_SUBMITTED', at: this.now(), var: Math.round(totalVar * 100) / 100 } }); this.toast('Closing sent to Vikramaditya Rao for sign-off'); }
+    };
+  }
+static CTRS = [['C1', 'Counter 1', 'OPD Main Lobby', 'Ritu Verma'], ['C2', 'Counter 2', 'OPD Main Lobby', 'Amit Sharma'], ['C3', 'Counter 3', 'Diagnostics', 'Neha Gupta'], ['C4', 'Counter 4', 'Pharmacy', 'Rahul Iyer'], ['C5', 'Counter 5', 'IPD Desk', 'Pooja Nair'], ['C6', 'Counter 6', 'Emergency', 'Sameer Khan']];
+  goWs(url, id) { this.setState({ swOpen: false }); try { localStorage.setItem('hms.billing.wsctx', JSON.stringify({ role: 'supervisor', counter: id, at: Date.now() })); } catch (e) {} setTimeout(() => { window.location.href = url; }, 120); }
+  componentDidMount() { try { const q = new URLSearchParams(window.location.search); let as = q.get('as'), id = q.get('counter');
+      if (!as) { const c = JSON.parse(localStorage.getItem('hms.billing.wsctx') || 'null'); if (c && c.role === 'supervisor' && Date.now() - c.at < 15000) { as = 'supervisor'; id = c.counter; } }
+      if (as === 'supervisor') this.setState({ supCtx: id && Component.CTRS.some(x => x[0] === id) ? id : 'C1' }); } catch (e) {}
+    this._rs = () => { const w = window.innerWidth >= 1240; if (w !== this.state.wide) this.setState({ wide: w }); }; window.addEventListener('resize', this._rs); this._rs(); }
+  componentWillUnmount() { clearTimeout(this._t); clearTimeout(this._a); window.removeEventListener('resize', this._rs); }
+  statusOf(p) { return this.state.pst[p.uhid] || p.status || 'PENDING'; }
+  isOpen(p) { const st = this.statusOf(p); return st === 'PENDING' || st === 'PARTIAL'; }
+  catOf(l) { if (l.dept === 'Pharmacy') return 'Pharmacy'; if (l.dept === 'Pathology') return 'Lab'; if (l.dept === 'Radiology') return 'Radiology'; if (l.dept === 'Outstanding') return 'Previous balance'; if (l.code.startsWith('CON')) return 'Consultation'; return 'Procedure'; }
+  cashierVals(fmt) {
+    const s = this.state, P = Component.PSTAT, PY = Component.PAYER, now = this.now();
+    const net = p => this.bill(p).net;
+    const open = s.queue.filter(p => this.isOpen(p));
+    const sorted = [...s.queue].sort((a, b) => (this.isOpen(a) ? 0 : 1) - (this.isOpen(b) ? 0 : 1) || (b.stat ? 1 : 0) - (a.stat ? 1 : 0) || b.wait - a.wait);
+    const insT = ['Insurance', 'TPA', 'Government Scheme'];
+    const QF = { All: () => true, Pending: p => this.statusOf(p) === 'PENDING', Partial: p => this.statusOf(p) === 'PARTIAL', Insurance: p => insT.includes(p.payerType), Corporate: p => p.payerType === 'Corporate', STAT: p => !!p.stat, 'High Value': p => net(p) >= 5000 };
+    const q = s.search.trim().toLowerCase();
+    const match = p => QF[s.qf](p) && (!q || [p.name, p.uhid, p.mobile, p.token].join(' ').toLowerCase().includes(q));
+    const tabStyle = a => ({ bg: a ? '#FFFFFF' : 'transparent', fg: a ? '#111827' : '#6B7280', shadow: a ? '0 1px 2px rgba(17,24,39,0.08)' : 'none' });
+    const qTabs = Object.keys(QF).map(k => ({ label: k, count: s.queue.filter(QF[k]).length, ...tabStyle(s.qf === k), pick: () => this.setState({ qf: k }) }));
+    const alertsOf = p => !!(p.dupWarn || (p.insPending && !s.insOk[p.uhid]) || (p.outstanding && !s.outCleared[p.uhid]) || p.refund || (p.payerType === 'Corporate' && net(p) > (s.credit[p.uhid] ?? p.credit)));
+    const row = p => { const st = P[this.statusOf(p)], py = PY[p.payerType];
+      return { ...p, amountF: fmt(Math.max(0, net(p) - (s.paid[p.uhid] ?? p.paid ?? 0))), statusLabel: st[0], statusFg: st[1], statusBg: st[2], payerFg: py[0], payerBg: py[1], hasPayerName: p.payer !== p.payerType && p.payer !== 'Self Pay',
+        ageSex: p.age + ' ' + p.sex, summary: p.lines.map(l => l.name.split(' · ')[0]).join(', '), waitColor: p.wait > 8 ? '#B45309' : '#6B7280', hasAlert: this.isOpen(p) && alertsOf(p),
+        rowBg: s.uhid === p.uhid ? '#F5F9FF' : '#FFFFFF', opacity: this.isOpen(p) ? 1 : 0.6,
+        select: () => this.setState({ uhid: p.uhid, pin: { method: null, recv: '', ref: '', useAdv: false } }), open: () => this.open(p.uhid) }; };
+    const dashRows = sorted.filter(match).map(row);
+    const queueRows = sorted.filter(p => match(p) && (s.filter === 'All' || p.source === s.filter)).map(row);
+    const collected = Object.values(s.mix).reduce((a, b) => a + b, 0);
+    const shiftSt = s.shift.status === 'CLOSING_SUBMITTED' ? 'Closing Pending' : s.shift.status === 'CLOSED' ? 'Closed' : 'Open';
+    const counter = {
+      states: [['Open', '#16A34A'], ['Closing Pending', '#F59E0B'], ['Closed', '#9CA3AF']].map(([l, c]) => ({ label: l, dot: shiftSt === l ? c : '#D1D5DB', ...tabStyle(shiftSt === l) })),
+      metrics: [['Opening float', fmt(5000), 500], ['Cash collected today', fmt(s.mix.Cash), 500], ['UPI collection', fmt(s.mix.UPI), 500], ['Card collection', fmt(s.mix.Card), 500], ['Current shift total', fmt(collected), 700]].map(([l, v, w]) => ({ label: l, value: v, weight: w }))
+    };
+    const kpis = [
+      { label: 'Invoices Today', value: String(s.invoices), sub: 'OPD 98 · Diag 36 · IPD 8', trend: '+14%', trendColor: '#15803D', icon: 'icon-file-text' },
+      { label: 'Collections Today', value: fmt(collected).replace('.00', ''), sub: 'Current shift', trend: 'Shift 1', trendColor: '#2563EB', icon: 'icon-wallet' },
+      { label: 'Pending Bills', value: String(open.length), sub: open.filter(x => x.stat).length + ' STAT · ' + open.filter(x => this.statusOf(x) === 'PARTIAL').length + ' partial', trend: open.filter(x => x.wait > 8).length + ' waiting > 8m', trendColor: '#B45309', icon: 'icon-clock' },
+      { label: 'Refund Requests', value: '2', sub: '₹1,450 in review', trend: 'Review', trendColor: '#6B7280', icon: 'icon-undo-2' },
+      { label: 'Patients Served', value: String(s.served), sub: 'Avg 3.4 min', trend: 'Within SLA', trendColor: '#15803D', icon: 'icon-users' }
+    ];
+    const sourceKpis = ['All', 'OPD', 'Lab', 'Radiology', 'Pharmacy'].map(src => { const list = src === 'All' ? open : open.filter(p => p.source === src);
+      return { label: src === 'All' ? 'All pending' : src, count: list.length, amountF: fmt(list.reduce((a, p) => a + net(p), 0)), border: s.filter === src ? '#2563EB' : '#E5E7EB', pick: () => this.setState({ filter: src }) }; });
+
+    // ---------- active panel
+    const p = s.uhid ? this.patient(s.uhid) : null;
+    let ap = { has: false, none: true, alerts: [], cats: [], tx: [], methods: [] };
+    if (p) {
+      const b = this.bill(p), status = this.statusOf(p), stt = P[status], py = PY[p.payerType], pin = s.pin;
+      const paid = s.paid[p.uhid] ?? p.paid ?? 0, adv = s.adv[p.uhid] ?? p.advance ?? 0, credit = s.credit[p.uhid] ?? p.credit ?? 0;
+      const isOpen = this.isOpen(p), insPending = !!p.insPending && !s.insOk[p.uhid];
+      const base = Math.max(0, Math.round((b.net - paid) * 100) / 100);
+      const advUsed = pin.useAdv ? Math.min(adv, base) : 0, due = Math.round((base - advUsed) * 100) / 100;
+      const discPending = !!(b.req && b.req.status === 'PENDING');
+      const def = p.payerType === 'Corporate' ? 'Corporate' : insT.includes(p.payerType) ? 'Insurance' : p.creditAcct ? 'Credit Account' : 'Cash';
+      const avail = {
+        Cash: [true, ''], UPI: [true, ''], Card: [true, ''],
+        Insurance: !insT.includes(p.payerType) ? [false, 'Not covered'] : insPending ? [false, 'Approval pending'] : [true, p.payer.split(' · ')[0]],
+        Corporate: p.payerType !== 'Corporate' ? [false, 'No MOU'] : due > credit ? [false, 'Limit exceeded'] : [true, p.payer],
+        'Credit Account': !p.creditAcct ? [false, 'No account'] : due > credit ? [false, 'Over limit'] : [true, fmt(credit) + ' left']
+      };
+      let method = pin.method || def; if (!avail[method][0]) method = 'Cash';
+      const covered = ['Insurance', 'Corporate', 'Credit Account'].includes(method);
+      const recv = parseFloat(pin.recv) || 0, isCash = method === 'Cash';
+      const refOk = method === 'Card' ? /^\d{6}$/.test(pin.ref) : method === 'UPI' ? /^\d{12}$/.test(pin.ref) : true;
+      const setPin = k => e => { const v = e.target.value; this.setState(st => ({ pin: { ...st.pin, [k]: v } })); };
+      const cats = ['Consultation', 'Lab', 'Radiology', 'Pharmacy', 'Procedure', 'Previous balance'].map(c => { const v = b.inc.filter(l => this.catOf(l) === c).reduce((t, l) => t + l.rate * l.qty, 0); return { label: c + ' charges', v, amountF: fmt(v), color: v ? '#111827' : '#9CA3AF', labelColor: v ? '#374151' : '#9CA3AF' }; }).filter(c => c.v || c.label !== 'Previous balance charges');
+      const alerts = [];
+      if (insPending) alerts.push({ icon: 'icon-shield-alert', title: 'Insurance approval pending', text: p.insPending, fg: '#4338CA', bg: '#EEF2FF', border: '#C7D2FE', actionLabel: 'Check status',
+        action: () => { this.toast('Checking with ' + p.payer.split(' · ')[0] + '…'); setTimeout(() => { this.setState(st => ({ insOk: { ...st.insOk, [p.uhid]: true } })); this.toast(p.payer.split(' · ')[0] + ' approved ' + fmt(p.insAmt) + ' · insurance settlement unlocked'); }, 1800); } });
+      if (p.payerType === 'Corporate' && base > credit) alerts.push({ icon: 'icon-octagon-alert', title: 'Corporate limit exceeded', text: p.payer + ' credit available ' + fmt(credit) + ' of ' + fmt(p.creditLimit) + '. Collect ' + fmt(base - credit) + ' from the patient or ask the supervisor for an override.', fg: '#DC2626', bg: '#FEF2F2', border: '#FECACA' });
+      if (p.outstanding && !s.outCleared[p.uhid]) alerts.push({ icon: 'icon-circle-alert', title: 'Outstanding balance', text: fmt(p.outstanding.amt) + ' unpaid on ' + p.outstanding.inv + ' from ' + p.outstanding.date + '.', fg: '#B45309', bg: '#FFFBEB', border: '#FDE68A', actionLabel: 'Add to bill',
+        action: () => { this.setState(st => ({ outCleared: { ...st.outCleared, [p.uhid]: true }, extra: { ...st.extra, [p.uhid]: [...(st.extra[p.uhid] || []), { code: 'PREV-BAL', name: 'Previous balance · ' + p.outstanding.inv, dept: 'Outstanding', ref: p.outstanding.inv, rate: p.outstanding.amt, qty: 1 }] } })); this.toast('Previous balance added to this invoice'); } });
+      if (p.refund) alerts.push({ icon: 'icon-undo-2', title: 'Refund requested', text: p.refund, fg: '#374151', bg: '#F9FAFB', border: '#E5E7EB' });
+      if (p.dupWarn && !(s.off[p.uhid] || {})[p.dupWarn.line]) alerts.push({ icon: 'icon-copy', title: 'Duplicate invoice warning', text: p.dupWarn.text, fg: '#DC2626', bg: '#FEF2F2', border: '#FECACA', actionLabel: 'Remove line',
+        action: () => { this.setState(st => ({ off: { ...st.off, [p.uhid]: { ...(st.off[p.uhid] || {}), [p.dupWarn.line]: true } } })); this.toast('Duplicate line removed from this invoice'); } });
+      if (discPending) alerts.push({ icon: 'icon-clock', title: 'Discount pending approval', text: b.req.pct + '% · ' + b.req.reason + ' · sent to Vikramaditya Rao at ' + b.req.at + '.', fg: '#B45309', bg: '#FFFBEB', border: '#FDE68A' });
+      const tx = [...(s.dtx[p.uhid] || []), ...(p.dtx || [])].map(t => ({ ...t, amtF: (t.amt < 0 ? '− ' : '+ ') + fmt(Math.abs(t.amt)), color: t.amt < 0 ? '#6B7280' : '#15803D' }));
+      if (s.done[p.uhid] && s.done[p.uhid].advUsed) tx.unshift({ d: 'Today', ref: s.done[p.uhid].rcp, label: 'Advance adjusted', amtF: '− ' + fmt(s.done[p.uhid].advUsed), color: '#6B7280' });
+
+      let block = '';
+      if (!isOpen) block = 'Invoice settled';
+      else if (discPending) block = 'Waiting for discount approval';
+      else if (due <= 0 && advUsed > 0) block = '';
+      else if (due <= 0) block = 'Nothing due';
+      else if (covered) block = avail[method][0] ? '' : avail[method][1];
+      else if (!refOk) block = method === 'Card' ? 'Enter 6-digit auth code' : 'Enter 12-digit UPI UTR';
+      else if (isCash ? recv < due : Math.abs(recv - due) > 0.004) block = recv > 0 && recv < due ? 'Received is less than due · save as partial?' : (isCash ? 'Enter amount received' : 'Amount must equal amount due');
+      const canPartial = isOpen && !discPending && !covered && recv > 0 && recv < due && refOk;
+      const done = s.done[p.uhid];
+
+      const settle = (amount, newStatus, isPartial) => {
+        const n = s.seq, inv = 'INV-2610-' + String(n).padStart(5, '0'), rcp = 'RCP-2610-' + String(n).padStart(5, '0');
+        const mix = { ...s.mix }; if (['Cash', 'UPI', 'Card'].includes(method)) mix[method] = (mix[method] || 0) + amount;
+        const gate = b.inc.some(l => l.dept === 'Pathology' || l.dept === 'Radiology') ? ' · diagnostics unlocked' : b.inc.some(l => l.dept === 'Pharmacy') ? ' · pharmacy release notified' : b.inc.some(l => l.code.startsWith('CON')) ? ' · doctor queue updated' : '';
+        this.setState(st => ({ seq: n + 1, mix, invoices: st.invoices + (isPartial ? 0 : 1), served: st.served + (isPartial ? 0 : 1),
+          pst: { ...st.pst, [p.uhid]: newStatus }, paid: { ...st.paid, [p.uhid]: isPartial ? paid + amount : b.net },
+          adv: { ...st.adv, [p.uhid]: adv - (isPartial ? 0 : advUsed) }, credit: covered && method !== 'Insurance' ? { ...st.credit, [p.uhid]: credit - amount } : st.credit,
+          done: { ...st.done, [p.uhid]: { inv, rcp, title: (isPartial ? 'Partial payment · ' : (covered ? method + ' · ' : 'Paid · ')) + fmt(amount + (isPartial ? 0 : advUsed)), method, amount, advUsed: isPartial ? 0 : advUsed, time: now, balance: isPartial ? due - amount : 0 } },
+          pin: { method: null, recv: '', ref: '', useAdv: false },
+          issued: [{ inv, rcp, time: now, name: p.name, uhid: p.uhid, source: p.source, tender: method + (advUsed && !isPartial ? ' + Advance' : ''), amount: amount + (isPartial ? 0 : advUsed), status: 'PAID', lines: b.inc.map(l => [l.name, l.rate * l.qty]) }, ...st.issued],
+          register: ['Cash', 'UPI', 'Card'].includes(method) ? [{ t: now, ref: rcp, what: p.name + (isPartial ? ' · Partial' : ' · ' + p.source), tender: method, amt: amount }, ...st.register] : st.register }));
+        this.toast(isPartial ? 'Partial payment ' + fmt(amount) + ' recorded · balance ' + fmt(due - amount) : rcp + ' issued' + gate);
+      };
+      const isDone = !!done;
+      ap = { has: true, none: false, ...p, ageSex: p.age + ' yrs · ' + (p.sex === 'F' ? 'Female' : 'Male'), statusLabel: stt[0], statusFg: stt[1], statusBg: stt[2],
+        payerLabel: p.payerType === 'Self Pay' ? (p.creditAcct ? 'Self Pay · Credit a/c' : 'Self Pay') : p.payerType + ' · ' + p.payer.split(' · ')[0], payerFg: py[0], payerBg: py[1],
+        alerts, hasAlerts: alerts.length > 0, cats, subF: fmt(b.gross), discF: fmt(b.disc), discLabel: b.pct ? '(' + b.pct + '%)' : '', discPending, canReqDisc: isOpen && !b.req && b.gross > 0,
+        reqDiscount: () => this.setState({ drawer: 'discount', reqPct: '15', reqReason: p.senior ? 'Senior Citizen (extended)' : '', reqNote: '' }),
+        taxF: fmt(b.gst), hasPaid: paid > 0 && isOpen, paidF: fmt(paid), totalF: fmt(isOpen ? base : b.net), openFull: () => this.open(p.uhid),
+        advF: fmt(adv), creditF: credit ? fmt(credit) : '—', useAdv: !!pin.useAdv, advDisabled: adv <= 0 || !isOpen, advCursor: adv > 0 && isOpen ? 'pointer' : 'default', advColor: adv > 0 && isOpen ? '#111827' : '#9CA3AF',
+        advUseF: advUsed ? '− ' + fmt(advUsed) : '', toggleAdv: () => this.setState(st => ({ pin: { ...st.pin, useAdv: !st.pin.useAdv, recv: '' } })),
+        tx, hasTx: tx.length > 0,
+        addDeposit: () => this.setState({ drawer: 'deposit', depSettle: null, dep: p.encounter.startsWith('IPD') && s.adm.some(a => a.uhid === p.uhid) ? { ip: s.adm.find(a => a.uhid === p.uhid).ip, purpose: 'Interim top-up', amount: '', mode: 'Cash', ref: '' } : { ip: '', wallet: p.uhid, purpose: 'Advance deposit', amount: '', mode: 'Cash', ref: '' } }),
+        methods: ['Cash', 'UPI', 'Card', 'Insurance', 'Corporate', 'Credit Account'].map(m => { const [ok, why] = avail[m], on = m === method && isOpen;
+          return { label: m, reason: ok ? (['Cash', 'UPI', 'Card'].includes(m) ? '' : why) : why, hasReason: !['Cash', 'UPI', 'Card'].includes(m), disabled: !ok || !isOpen, opacity: ok && isOpen ? 1 : 0.5, cursor: ok && isOpen ? 'pointer' : 'not-allowed',
+            border: on ? '#2563EB' : '#E5E7EB', bg: on ? '#EFF6FF' : '#FFFFFF', ring: on ? '#2563EB' : '#D1D5DB', dot: on ? '#2563EB' : 'transparent',
+            pick: () => this.setState(st => ({ pin: { ...st.pin, method: m, recv: m === 'UPI' || m === 'Card' ? String(due) : '', ref: '' } })) }; }),
+        dueF: fmt(isOpen ? due : 0), needsRecv: isOpen && !covered && due > 0, recv: pin.recv, onRecv: setPin('recv'), needsRef: method === 'Card' || method === 'UPI', ref: pin.ref, onRef: setPin('ref'),
+        refLabel: method === 'Card' ? 'Card auth code' : 'UPI UTR', refPh: method === 'Card' ? '6 digits' : '12 digits',
+        balF: fmt(Math.max(0, due - recv)), balColor: due - recv > 0.004 ? '#B45309' : '#15803D',
+        changeF: isCash && recv > due ? fmt(recv - due) : fmt(0), changeColor: isCash && recv > due ? '#15803D' : '#9CA3AF',
+        isCovered: isOpen && covered && due > 0, coverNote: method === 'Insurance' ? fmt(due) + ' billed to ' + p.payer.split(' · ')[0] + ' under the approved claim. No collection at counter.' : method === 'Corporate' ? fmt(due) + ' charged to ' + p.payer + ' credit. Balance after: ' + fmt(credit - due) + '.' : fmt(due) + ' posted to the staff credit account. Balance after: ' + fmt(credit - due) + '.',
+        isDone, doneTitle: done ? done.title : '', doneRef: done ? done.rcp + ' · ' + done.inv + ' · ' + done.time + (done.balance ? ' · balance ' + fmt(done.balance) : '') : '',
+        collectLabel: !isOpen ? stt[0] : due <= 0 && advUsed > 0 ? 'Settle from advance' : covered ? 'Bill to ' + method + ' · ' + fmt(due) : 'Collect payment · ' + fmt(due),
+        collectDisabled: !!block, collectBg: block ? '#93C5FD' : '#2563EB',
+        collect: () => { if (block) return; if (due <= 0) { settle(0, 'PAID', false); return; } settle(due, method === 'Insurance' ? 'INSURANCE' : method === 'Corporate' ? 'CORPORATE' : method === 'Credit Account' ? 'CREDIT' : 'PAID', false); },
+        partialDisabled: !canPartial, partialFg: canPartial ? '#111827' : '#9CA3AF', partial: () => canPartial && settle(recv, 'PARTIAL', true),
+        noReceipt: !isDone, rcFg: isDone ? '#111827' : '#9CA3AF', hint: isOpen ? block : '',
+        print: () => done && this.setState({ receipt: { inv: done.inv, rcp: done.rcp, time: done.time, patient: p.name, uhid: p.uhid, lines: b.inc.map(l => ({ name: l.name.split(' · ')[0], amountF: fmt(l.rate * l.qty) })), discF: fmt(b.disc), netF: fmt(done.amount + (done.advUsed || 0)), tenders: [{ mode: done.method, amountF: fmt(done.amount) }, ...(done.advUsed ? [{ mode: 'Advance', amountF: fmt(done.advUsed) }] : [])], hasGate: false } }),
+        whatsapp: () => this.toast('Receipt ' + (done ? done.rcp : '') + ' sent on WhatsApp to ' + p.mobile) };
+    }
+    return { queueCount: open.length, queueEmpty: open.length === 0, kpis, sourceKpis, queueRows, rowsEmpty: queueRows.length === 0, rowsCount: queueRows.length,
+      dashRows, dashEmpty: dashRows.length === 0, qTabs, counter, ap,
+      layout: s.wide ? { pos: 'sticky', maxH: 'calc(100vh - 104px)', ovf: 'auto', footPos: 'sticky', panelMax: '460px' } : { pos: 'static', maxH: 'none', ovf: 'visible', footPos: 'static', panelMax: '100%' },
+      doneReceipt: () => this.setState(s.screen === 'dashboard' ? { receipt: null } : { receipt: null, screen: 'queue', uhid: null }) };
+  }
+  wsVals() { const s = this.state, sup = !!s.supCtx, cid = s.supCtx || 'C1', c = Component.CTRS.find(x => x[0] === cid);
+    const back = () => this.goWs('Billing Supervisor Workspace.dc.html?from=counter&counter=' + cid, cid);
+    return { ctx: { isSup: sup, counterName: c[1], cashier: c[3], user: sup ? 'Vikramaditya Rao' : 'Ritu Verma', role: sup ? 'Billing Supervisor · counter mode' : 'Senior Cashier', ini: sup ? 'VR' : 'RV', avBg: sup ? '#FFFBEB' : '#EFF6FF', avFg: sup ? '#B45309' : '#2563EB', back },
+      sw: { show: sup, open: !!s.swOpen, toggle: () => this.setState({ swOpen: !s.swOpen }), close: () => this.setState({ swOpen: false }), prefix: 'Viewing as Supervisor', current: c[1], bd: '#FDE68A', bg: '#FFFBEB', fg: '#B45309',
+        items: [{ label: '← Supervisor Dashboard', sub: 'Return to approvals, closing, receivables', icon: 'icon-layout-dashboard', iconFg: '#B45309', active: false, bg: '#FFFFFF', divider: 'none', go: back },
+          ...Component.CTRS.map((x, i) => ({ label: x[1] + ' · ' + x[2], sub: x[3] + '’s shift', icon: 'icon-monitor', iconFg: '#6B7280', active: x[0] === cid, bg: x[0] === cid ? '#F5F9FF' : '#FFFFFF', divider: i === 0 ? '1px solid #F3F4F6' : 'none',
+            go: () => { this.setState({ swOpen: false, supCtx: x[0] }); this.toast('Switched to ' + x[1] + ' · logged in audit stream'); } }))] } }; }
+  renderVals() {
+    const s = this.state, fmt = n => this.fmt(n);
+    const sponsored = p => p.payerType !== 'Self Pay';
+    const payerStyle = p => sponsored(p) ? { fg: '#4338CA', bg: '#EEF2FF' } : { fg: '#374151', bg: '#F3F4F6' };
+    const qRow = p => {
+      const ps = payerStyle(p), amt = this.amount(p);
+      return { ...p, ageSex: p.age + ' ' + p.sex, amountF: fmt(amt), isSponsored: sponsored(p), payerFg: ps.fg, payerBg: ps.bg,
+        summary: p.lines.map(l => l.name.split(' · ')[0]).join(', '), waitColor: p.wait > 8 ? '#B45309' : '#6B7280', open: () => this.open(p.uhid) };
+    };
+    const sorted = [...s.queue].sort((a, b) => (b.stat ? 1 : 0) - (a.stat ? 1 : 0) || b.wait - a.wait);
+    const q = s.search.trim().toLowerCase();
+    const rows = sorted.filter(p => (s.filter === 'All' || (s.filter === 'STAT' ? p.stat : p.source === s.filter)) &&
+      (!q || [p.name, p.uhid, p.mobile, p.token].join(' ').toLowerCase().includes(q))).map(qRow);
+    const collected = Object.values(s.mix).reduce((a, b) => a + b, 0);
+    const mixTotal = collected || 1;
+
+    const srcK = ['All', 'OPD', 'Lab', 'Radiology', 'Pharmacy'].map(src => {
+      const list = src === 'All' ? s.queue : s.queue.filter(p => p.source === src);
+      return { label: src === 'All' ? 'All pending' : src, count: list.length, amountF: fmt(list.reduce((a, p) => a + this.amount(p), 0)),
+        border: s.filter === src ? '#2563EB' : '#E5E7EB', pick: () => this.setState({ filter: src }) };
+    });
+
+    const reqs = Object.entries(s.req).map(([uhid, r]) => {
+      const p = this.patient(uhid);
+      const st = { PENDING: ['#B45309', '#FFFBEB', 'Pending'], APPROVED: ['#15803D', '#F0FDF4', 'Approved'] }[r.status];
+      return { title: r.pct + '% discount · ' + p.name, sub: r.reason + ' · ' + r.at, status: st[2], color: st[0], bg: st[1] };
+    });
+    const requests = [...reqs, { title: 'Refund · Cancelled HbA1c', sub: 'RFD-2610-00011 · ₹550.00 · 10:42', status: 'Pending', color: '#B45309', bg: '#FFFBEB' },
+      { title: 'Refund · Doctor unavailable', sub: 'RFD-2610-00009 · ₹900.00 · 09:15', status: 'Approved', color: '#15803D', bg: '#F0FDF4' }];
+
+    let pt = {}, bill = { lines: [] }, ptKpis = [], pay = { rows: [], segments: [], addable: [] }, disc = {};
+    const p = s.uhid ? this.patient(s.uhid) : null;
+    if (p) {
+      const ps = payerStyle(p), b = this.bill(p), r = b.req;
+      pt = { ...p, ...(() => { const st = Component.PSTAT[this.statusOf(p)]; return { statusLabel: st[0], statusFg: st[1], statusBg: st[2] }; })(), ageSex: p.age + ' yrs · ' + p.sex, payerFg: ps.fg, payerBg: ps.bg, category: sponsored(p) ? 'Sponsored' : (p.senior ? 'Senior Citizen' : 'General'),
+        schemes: p.senior ? 'Senior Citizen 5%' : '—', noHistory: !p.history.length };
+      const pending = r && r.status === 'PENDING';
+      bill = {
+        lines: b.lines.map(l => ({ ...l, rateF: fmt(l.rate), amountF: fmt(l.rate * l.qty), opacity: l.checked ? 1 : 0.45, hasNote: !!l.note,
+          toggle: () => this.setState(st => ({ off: { ...st.off, [p.uhid]: { ...(st.off[p.uhid] || {}), [l.i]: l.checked } } })) })),
+        grossF: fmt(b.gross), discF: fmt(b.disc), gstF: fmt(b.gst), netF: fmt(b.net), discLabel: b.pct ? '(' + b.pct + '%)' : '',
+        pending, hasReq: !!r, noReq: !r, reqLocked: !!r,
+        reqText: r ? r.pct + '% · ' + r.reason : '', reqStatus: r ? (pending ? 'Awaiting Vikramaditya Rao' : 'Approved') : '',
+        reqIcon: pending ? 'icon-clock' : 'icon-circle-check', reqFg: pending ? '#B45309' : '#15803D', reqBg: pending ? '#FFFBEB' : '#F0FDF4', reqBorder: pending ? '#FDE68A' : '#BBF7D0',
+        payDisabled: pending || b.net <= 0, payBg: pending || b.net <= 0 ? '#93C5FD' : '#2563EB'
+      };
+      ptKpis = [
+        { label: 'Unbilled charges', value: fmt(b.gross), sub: b.inc.length + ' of ' + b.lines.length + ' lines selected', icon: 'icon-file-plus' },
+        { label: 'Outstanding', value: fmt(0), sub: 'No pending balance', icon: 'icon-circle-alert' },
+        { label: 'Deposit balance', value: fmt(0), sub: 'No active deposit', icon: 'icon-piggy-bank' },
+        { label: 'Coverage', value: sponsored(p) ? 'Covered' : 'Self-pay', sub: p.payer, icon: 'icon-shield-check' }
+      ];
+      const net = Math.round(b.net * 100) / 100;
+      const sum = s.tenders.reduce((a, t) => a + (parseFloat(t.amount) || 0), 0);
+      const rem = Math.round((net - sum) * 100) / 100;
+      const set = (id, k) => e => { const v = e.target.value; this.setState(st => ({ tenders: st.tenders.map(t => t.id === id ? { ...t, [k]: v } : t) })); };
+      let blocker = '';
+      const rowsP = s.tenders.map(t => {
+        const amt = parseFloat(t.amount) || 0, got = parseFloat(t.ref1) || 0;
+        let hint = '', hintColor = '#6B7280';
+        if (t.mode === 'Cash' && t.ref1) { if (got >= amt) { hint = 'Return change ' + fmt(got - amt); hintColor = '#15803D'; } else { hint = 'Received is less than amount'; hintColor = '#DC2626'; } }
+        if (t.mode === 'Card' && !/^\d{6}$/.test(t.ref2)) blocker = blocker || 'Enter 6-digit card auth code';
+        if (t.mode === 'UPI' && !/^\d{12}$/.test(t.ref1)) blocker = blocker || 'Enter 12-digit UPI UTR';
+        if (t.mode === 'Cash' && t.ref1 && got < amt) blocker = blocker || 'Cash received is short';
+        return { ...t, color: Component.COLORS[t.mode], isCash: t.mode === 'Cash', isCard: t.mode === 'Card', isUpi: t.mode === 'UPI', removable: s.tenders.length > 1,
+          hint, hintColor, hasHint: !!hint, qrLabel: s.qrSent[t.id] ? 'QR shown on customer display' : 'Show dynamic QR · ' + fmt(amt),
+          onAmount: set(t.id, 'amount'), onRef1: set(t.id, 'ref1'), onRef2: set(t.id, 'ref2'),
+          remove: () => this.setState(st => ({ tenders: st.tenders.filter(x => x.id !== t.id) })),
+          sendQr: () => { this.setState(st => ({ qrSent: { ...st.qrSent, [t.id]: true } })); this.toast('Dynamic UPI QR for ' + fmt(amt) + ' sent to customer display'); } };
+      });
+      if (rem !== 0) blocker = rem > 0 ? fmt(rem) + ' still unallocated' : 'Allocated exceeds amount due';
+      const used = s.tenders.map(t => t.mode);
+      pay = {
+        rows: rowsP, blocker,
+        segments: s.tenders.map(t => ({ pct: Math.max(0, Math.min(100, (parseFloat(t.amount) || 0) / (net || 1) * 100)), color: Component.COLORS[t.mode] })),
+        remLabel: rem === 0 ? 'Fully allocated' : (rem > 0 ? 'Remaining ' + fmt(rem) : 'Over by ' + fmt(-rem)),
+        remFg: rem === 0 ? '#15803D' : (rem > 0 ? '#B45309' : '#DC2626'), remBg: rem === 0 ? '#F0FDF4' : (rem > 0 ? '#FFFBEB' : '#FEF2F2'),
+        addable: ['Cash', 'Card', 'UPI', 'Netbanking', 'Cheque'].filter(m => !used.includes(m)).map(m => ({ mode: m,
+          add: () => this.setState(st => ({ tenders: [...st.tenders, { id: Date.now(), mode: m, amount: rem > 0 ? String(rem) : '0', ref1: '', ref2: '' }] })) })),
+        disabled: !!blocker, btnBg: blocker ? '#93C5FD' : '#2563EB'
+      };
+      const rp = parseFloat(s.reqPct) || 0;
+      const over = rp > 20 || b.gross * rp / 100 > 10000;
+      disc = { valueF: fmt(b.gross * rp / 100),
+        limitText: rp <= 5 ? 'Within policy schemes — use the scheme selector instead.' : (over ? 'Above supervisor limit (20% or ₹10,000) — will escalate to Billing Admin.' : 'Within supervisor limit (20% or ₹10,000).'),
+        limitColor: over ? '#B45309' : '#6B7280', disabled: rp <= 5 || rp > 100 || !s.reqReason, btnBg: rp <= 5 || rp > 100 || !s.reqReason ? '#93C5FD' : '#2563EB' };
+    }
+
+    const tariffResults = s.tariffQ.trim().length > 0 ? Component.TARIFF.filter(t => (t.name + t.code).toLowerCase().includes(s.tariffQ.trim().toLowerCase())).slice(0, 5).map(t => ({
+      ...t, rateF: fmt(t.rate), add: () => { this.setState(st => ({ tariffQ: '', extra: { ...st.extra, [st.uhid]: [...(st.extra[st.uhid] || []), { ...t, ref: 'Added at counter', qty: 1 }] } })); this.toast(t.name + ' added'); } })) : [];
+
+    const rc = s.receipt;
+    const crumbs = { dashboard: 'Dashboard', queue: 'Invoice Queue', workspace: p ? 'Patient · ' + p.uhid : 'Patient' };
+    const nav = k => s.screen === k || (k === 'queue' && s.screen === 'workspace');
+
+    return {
+      crumb: crumbs[s.screen], isDashboard: s.screen === 'dashboard', isQueue: s.screen === 'queue', isWorkspace: s.screen === 'workspace' && !!p,
+      nav: { dashBg: nav('dashboard') ? '#EFF6FF' : 'transparent', dashFg: nav('dashboard') ? '#2563EB' : '#374151', queueBg: nav('queue') ? '#EFF6FF' : 'transparent', queueFg: nav('queue') ? '#2563EB' : '#374151' },
+      goDashboard: () => this.setState({ screen: 'dashboard' }), goQueue: () => this.setState({ screen: 'queue' }),
+      notReady: () => this.toast('Deposit and counter closing screens come in the next pass'),
+      queueCount: s.queue.length, queueEmpty: s.queue.length === 0,
+      kpis: [
+        { label: 'Invoices Today', value: String(s.invoices), sub: 'OPD 98 · Diag 36 · IPD 8', trend: '+14%', trendColor: '#15803D', icon: 'icon-file-text' },
+        { label: 'Collections Today', value: fmt(collected).replace('.00', ''), sub: 'Current shift', trend: 'Shift 1', trendColor: '#2563EB', icon: 'icon-wallet' },
+        { label: 'Pending Bills', value: String(s.queue.length), sub: s.queue.filter(x => x.stat).length + ' STAT', trend: s.queue.filter(x => x.wait > 8).length + ' waiting > 8m', trendColor: '#B45309', icon: 'icon-clock' },
+        { label: 'Refund Requests', value: '2', sub: '₹1,450 in review', trend: 'Review', trendColor: '#6B7280', icon: 'icon-undo-2' },
+        { label: 'Patients Served', value: String(s.served), sub: 'Avg 3.4 min', trend: 'Within SLA', trendColor: '#15803D', icon: 'icon-users' }
+      ],
+      nextUp: sorted.slice(0, 6).map(qRow), collectedF: fmt(collected),
+      tenderMix: Object.entries(s.mix).map(([k, v]) => ({ label: k, amountF: fmt(v), pct: v / mixTotal * 100, color: Component.COLORS[k] })),
+      requests,
+      sourceKpis: srcK, queueRows: rows, rowsEmpty: rows.length === 0, rowsCount: rows.length, filter: s.filter === 'All' ? 'All sources' : s.filter,
+      search: s.search, onSearch: e => this.setState({ search: e.target.value }),
+      pt, bill, ptKpis, pay, disc,
+      tariffQ: s.tariffQ, onTariffQ: e => this.setState({ tariffQ: e.target.value }), showTariff: tariffResults.length > 0, tariffResults,
+      schemeVal: p ? (s.scheme[p.uhid] || '0') : '0',
+      onScheme: e => { const v = e.target.value; this.setState(st => ({ scheme: { ...st.scheme, [st.uhid]: v } })); },
+      openDiscount: () => this.setState({ drawer: 'discount', reqPct: '15', reqReason: p && p.senior ? 'Senior Citizen (extended)' : '', reqNote: '' }),
+      reqPct: s.reqPct, reqReason: s.reqReason, reqNote: s.reqNote,
+      onReqPct: e => this.setState({ reqPct: e.target.value }), onReqReason: e => this.setState({ reqReason: e.target.value }), onReqNote: e => this.setState({ reqNote: e.target.value }),
+      submitDiscount: () => {
+        const uhid = s.uhid, pct = parseFloat(s.reqPct);
+        const at = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
+        this.setState(st => ({ drawer: null, scheme: { ...st.scheme, [uhid]: '0' }, req: { ...st.req, [uhid]: { pct, reason: st.reqReason, status: 'PENDING', at } } }));
+        this.toast('Discount request sent to Vikramaditya Rao');
+        this._a = setTimeout(() => { this.setState(st => ({ req: { ...st.req, [uhid]: { ...st.req[uhid], status: 'APPROVED' } } })); this.toast(pct + '% discount approved by Vikramaditya Rao'); }, 4000);
+      },
+      saveDraft: () => this.toast('Draft saved to ' + (p ? p.name : '') + '’s account'),
+      openPay: () => { if (!p) return; const b = this.bill(p); this.setState({ drawer: 'pay', qrSent: {}, tenders: [{ id: 1, mode: 'Cash', amount: String(Math.round(b.net * 100) / 100), ref1: '', ref2: '' }] }); },
+      closeDrawer: () => this.setState({ drawer: null }),
+      drawerPay: s.drawer === 'pay' && !!p, drawerDiscount: s.drawer === 'discount' && !!p,
+      confirmPay: () => {
+        const b = this.bill(p), n = s.seq, mix = { ...s.mix };
+        s.tenders.forEach(t => { if (mix[t.mode] !== undefined) mix[t.mode] += parseFloat(t.amount) || 0; else mix[t.mode] = parseFloat(t.amount) || 0; });
+        const hasLab = b.inc.some(l => l.dept === 'Pathology' || l.dept === 'Radiology'), hasPh = b.inc.some(l => l.dept === 'Pharmacy'), hasCon = b.inc.some(l => l.code.startsWith('CON'));
+        const gate = hasLab ? 'Sample collection unlocked in Lab' : hasPh ? 'Pharmacy notified: release medicines against this receipt' : hasCon ? 'Doctor queue updated: token ready for consultation' : '';
+        this.setState(st => ({ drawer: null, seq: n + 1, invoices: st.invoices + 1, served: st.served + 1, mix, pst: { ...st.pst, [p.uhid]: 'PAID' }, paid: { ...st.paid, [p.uhid]: b.net }, done: { ...st.done, [p.uhid]: { inv: 'INV-2610-' + String(n).padStart(5, '0'), rcp: 'RCP-2610-' + String(n).padStart(5, '0'), title: 'Paid · ' + fmt(b.net), method: st.tenders.map(t => t.mode).join(' + '), amount: b.net, time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }) } },
+          issued: [{ inv: 'INV-2610-' + String(n).padStart(5, '0'), rcp: 'RCP-2610-' + String(n).padStart(5, '0'), time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }), name: p.name, uhid: p.uhid, source: p.source, tender: st.tenders.map(t => t.mode).join(' + '), amount: b.net, status: 'PAID', lines: b.inc.map(l => [l.name, l.rate * l.qty]) }, ...st.issued],
+          register: [...st.tenders.map(t => ({ t: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }), ref: 'RCP-2610-' + String(n).padStart(5, '0'), what: p.name + ' · ' + p.source, tender: t.mode, amt: parseFloat(t.amount) || 0 })), ...st.register],
+          receipt: { inv: 'INV-2610-' + String(n).padStart(5, '0'), rcp: 'RCP-2610-' + String(n).padStart(5, '0'), time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }),
+            patient: p.name, uhid: p.uhid, lines: b.inc.map(l => ({ name: l.name.split(' · ')[0], amountF: fmt(l.rate * l.qty) })), discF: fmt(b.disc), netF: fmt(b.net),
+            tenders: st.tenders.map(t => ({ mode: t.mode, amountF: fmt(parseFloat(t.amount) || 0) })), gate, hasGate: !!gate } }));
+      },
+      hasReceipt: !!rc, receipt: rc || { lines: [], tenders: [] },
+      printReceipt: () => this.toast('Sent to Counter 1 thermal printer'),
+      sendWhatsapp: () => this.toast('Receipt PDF sent on WhatsApp'),
+      sendEmail: () => this.toast('A4 GST receipt emailed'),
+      doneReceipt: () => this.setState({ receipt: null, screen: 'queue', uhid: null }),
+      hasToast: !!s.toast, toast: s.toast,
+      ...this.moreVals(fmt, p),
+      ...this.cashierVals(fmt),
+      ...this.wsVals()
+    };
+  }
+}
+</script>
+</body>
+</html>

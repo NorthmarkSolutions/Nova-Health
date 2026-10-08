@@ -373,6 +373,7 @@ export const CashierReceiptModal: React.FC<CashierReceiptModalProps> = ({
                   [QR VALID]
                 </div>
                 <div style={{ fontSize: '10px' }}>Auth: {receiptData.verification_hash}</div>
+                {receiptData.assisted_note && <div style={{ fontSize: '10px', marginTop: '4px' }}>{receiptData.assisted_note}</div>}
                 <div style={{ fontSize: '10px', marginTop: '4px', fontWeight: 600 }}>
                   {receiptData.footer_note}
                 </div>
