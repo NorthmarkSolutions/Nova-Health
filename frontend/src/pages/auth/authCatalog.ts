@@ -29,7 +29,12 @@ export type StaffCadre =
   | 'insurance_coordinator'
   | 'accounts_admin'
   | 'finance_manager'
-  | 'internal_auditor';
+  | 'internal_auditor'
+  | 'accounts_executive'
+  | 'accounts_supervisor'
+  | 'accounts_manager'
+  | 'finance_controller'
+  | 'cfo';
 
 export interface CadreMeta {
   key: StaffCadre;
@@ -138,6 +143,41 @@ export const CADRE_METADATA: Record<StaffCadre, CadreMeta> = {
     iconKey: 'FileText',
     badgeColor: '#8b5cf6',
   },
+  accounts_executive: {
+    key: 'accounts_executive',
+    label: 'Accounts Executive',
+    pluralLabel: 'Executive (Maker)',
+    iconKey: 'Receipt',
+    badgeColor: '#0284c7',
+  },
+  accounts_supervisor: {
+    key: 'accounts_supervisor',
+    label: 'Accounts Supervisor',
+    pluralLabel: 'Supervisor (Checker)',
+    iconKey: 'UserCheck',
+    badgeColor: '#2563eb',
+  },
+  accounts_manager: {
+    key: 'accounts_manager',
+    label: 'Accounts Manager',
+    pluralLabel: 'Accounts Manager',
+    iconKey: 'FileSpreadsheet',
+    badgeColor: '#059669',
+  },
+  finance_controller: {
+    key: 'finance_controller',
+    label: 'Finance Controller',
+    pluralLabel: 'Finance Controller',
+    iconKey: 'ShieldCheck',
+    badgeColor: '#7c3aed',
+  },
+  cfo: {
+    key: 'cfo',
+    label: 'Chief Financial Officer',
+    pluralLabel: 'CFO Office',
+    iconKey: 'TrendingUp',
+    badgeColor: '#dc2626',
+  },
   accounts_admin: {
     key: 'accounts_admin',
     label: 'Chief Accounts Officer',
@@ -155,7 +195,7 @@ export const CADRE_METADATA: Record<StaffCadre, CadreMeta> = {
   internal_auditor: {
     key: 'internal_auditor',
     label: 'Internal Financial Auditor',
-    pluralLabel: 'Auditor',
+    pluralLabel: 'Auditors',
     iconKey: 'ScrollText',
     badgeColor: '#d97706',
   },
@@ -693,49 +733,94 @@ export const DEPARTMENT_LOGIN_NODES: DepartmentNode[] = [
     defaultRoute: '/accounts',
     demoAccounts: [
       {
-        id: 'demo-acc-adm',
-        employeeId: 'EMP-ACC-ADM',
-        name: 'Kavita Sundaram',
-        designation: 'Chief Accounts Officer & Financial Controller',
-        role: RoleType.FINANCE_MANAGER,
-        cadre: 'accounts_admin',
-        email: 'accounts.admin@northhospital.com',
+        id: 'demo-acc-ae',
+        employeeId: 'EMP-ACC-AE',
+        name: 'Priya Nair',
+        designation: 'Accounts Executive & Voucher Maker',
+        role: RoleType.ACCOUNTS_EXECUTIVE,
+        cadre: 'accounts_executive',
+        email: 'priya.nair@northhospital.com',
         targetRoute: '/accounts',
-        badge: 'Accounts Admin',
+        badge: 'Maker · AE-01',
+        departmentId: 'dept-accounts',
+        departmentCode: 'ACCOUNTS',
+        departmentName: 'Accounts & Financial Governance',
+        avatarInitials: 'PN',
+      },
+      {
+        id: 'demo-acc-as',
+        employeeId: 'EMP-ACC-AS',
+        name: 'Rahul Menon',
+        designation: 'Accounts Supervisor & First Checker',
+        role: RoleType.ACCOUNTS_SUPERVISOR,
+        cadre: 'accounts_supervisor',
+        email: 'rahul.menon@northhospital.com',
+        targetRoute: '/accounts',
+        badge: 'Checker · AS-01',
+        departmentId: 'dept-accounts',
+        departmentCode: 'ACCOUNTS',
+        departmentName: 'Accounts & Financial Governance',
+        avatarInitials: 'RM',
+      },
+      {
+        id: 'demo-acc-am',
+        employeeId: 'EMP-ACC-AM',
+        name: 'Kavita Shah',
+        designation: 'Accounts Manager (Receivables & Payables Control)',
+        role: RoleType.ACCOUNTS_MANAGER,
+        cadre: 'accounts_manager',
+        email: 'kavita.shah@northhospital.com',
+        targetRoute: '/accounts',
+        badge: 'Ops Control · AM-01',
         departmentId: 'dept-accounts',
         departmentCode: 'ACCOUNTS',
         departmentName: 'Accounts & Financial Governance',
         avatarInitials: 'KS',
       },
       {
+        id: 'demo-acc-fc',
+        employeeId: 'EMP-ACC-FC',
+        name: 'Anil Verma',
+        designation: 'Finance Controller & Chief Accounts Officer',
+        role: RoleType.FINANCE_CONTROLLER,
+        cadre: 'finance_controller',
+        email: 'anil.verma@northhospital.com',
+        targetRoute: '/accounts',
+        badge: 'Controller · FC-01',
+        departmentId: 'dept-accounts',
+        departmentCode: 'ACCOUNTS',
+        departmentName: 'Accounts & Financial Governance',
+        avatarInitials: 'AV',
+      },
+      {
+        id: 'demo-acc-cfo',
+        employeeId: 'EMP-ACC-CFO',
+        name: 'Meera Rao',
+        designation: 'Chief Financial Officer (CFO & Board Strategy)',
+        role: RoleType.CFO,
+        cadre: 'cfo',
+        email: 'meera.rao@northhospital.com',
+        targetRoute: '/accounts',
+        badge: 'CFO · Board Strategy',
+        departmentId: 'dept-accounts',
+        departmentCode: 'ACCOUNTS',
+        departmentName: 'Accounts & Financial Governance',
+        avatarInitials: 'MR',
+      },
+      {
         id: 'demo-acc-aud',
         employeeId: 'EMP-ACC-AUD',
         name: 'Arun Mehta',
-        designation: 'Senior Internal Financial Auditor',
-        role: RoleType.INTERNAL_AUDITOR,
+        designation: 'Senior Financial Auditor (Sharma & Associates)',
+        role: RoleType.AUDITOR,
         cadre: 'internal_auditor',
         email: 'auditor@northhospital.com',
-        targetRoute: '/accounts/audit',
-        badge: 'Internal Auditor',
+        targetRoute: '/accounts',
+        badge: 'Statutory Auditor · AUD',
         departmentId: 'dept-accounts',
         departmentCode: 'ACCOUNTS',
         departmentName: 'Accounts & Financial Governance',
         avatarInitials: 'AM',
-      },
-      {
-        id: 'demo-acc-tax',
-        employeeId: 'EMP-ACC-01',
-        name: 'Suresh Nair',
-        designation: 'Senior Tax & Revenue Accountant',
-        role: RoleType.FINANCE_MANAGER,
-        cadre: 'finance_manager',
-        email: 'accounts.admin@northhospital.com',
-        targetRoute: '/accounts/tax',
-        badge: 'Tax & GST',
-        departmentId: 'dept-accounts',
-        departmentCode: 'ACCOUNTS',
-        departmentName: 'Accounts & Financial Governance',
-        avatarInitials: 'SN',
       },
     ],
   },
@@ -1089,13 +1174,53 @@ export function findDemoStaffByCredential(identifier: string): DemoStaffAccount 
     return DEPARTMENT_LOGIN_NODES.find((d) => d.id === 'dept-billing')?.demoAccounts.find((a) => a.id === 'demo-bill-tpa');
   }
   if (
-    query === 'kavita' ||
-    query === 'kavita sundaram' ||
-    query === 'accounts.admin@northhospital.com' ||
-    query === 'emp-acc-adm' ||
-    query === 'accounts admin'
+    query === 'priya' ||
+    query === 'priya nair' ||
+    query === 'priya.nair@northhospital.com' ||
+    query === 'emp-acc-ae' ||
+    query === 'accounts executive' ||
+    query === 'maker'
   ) {
-    return DEPARTMENT_LOGIN_NODES.find((d) => d.id === 'dept-accounts')?.demoAccounts.find((a) => a.id === 'demo-acc-adm');
+    return DEPARTMENT_LOGIN_NODES.find((d) => d.id === 'dept-accounts')?.demoAccounts.find((a) => a.id === 'demo-acc-ae');
+  }
+  if (
+    query === 'rahul' ||
+    query === 'rahul menon' ||
+    query === 'rahul.menon@northhospital.com' ||
+    query === 'emp-acc-as' ||
+    query === 'accounts supervisor' ||
+    query === 'checker'
+  ) {
+    return DEPARTMENT_LOGIN_NODES.find((d) => d.id === 'dept-accounts')?.demoAccounts.find((a) => a.id === 'demo-acc-as');
+  }
+  if (
+    query === 'kavita' ||
+    query === 'kavita shah' ||
+    query === 'kavita.shah@northhospital.com' ||
+    query === 'emp-acc-am' ||
+    query === 'accounts manager'
+  ) {
+    return DEPARTMENT_LOGIN_NODES.find((d) => d.id === 'dept-accounts')?.demoAccounts.find((a) => a.id === 'demo-acc-am');
+  }
+  if (
+    query === 'anil' ||
+    query === 'anil verma' ||
+    query === 'anil.verma@northhospital.com' ||
+    query === 'emp-acc-fc' ||
+    query === 'finance controller' ||
+    query === 'controller'
+  ) {
+    return DEPARTMENT_LOGIN_NODES.find((d) => d.id === 'dept-accounts')?.demoAccounts.find((a) => a.id === 'demo-acc-fc');
+  }
+  if (
+    query === 'meera' ||
+    query === 'meera rao' ||
+    query === 'meera.rao@northhospital.com' ||
+    query === 'emp-acc-cfo' ||
+    query === 'cfo' ||
+    query === 'chief financial officer'
+  ) {
+    return DEPARTMENT_LOGIN_NODES.find((d) => d.id === 'dept-accounts')?.demoAccounts.find((a) => a.id === 'demo-acc-cfo');
   }
   if (
     query === 'arun' ||
@@ -1106,15 +1231,6 @@ export function findDemoStaffByCredential(identifier: string): DemoStaffAccount 
     query === 'auditor'
   ) {
     return DEPARTMENT_LOGIN_NODES.find((d) => d.id === 'dept-accounts')?.demoAccounts.find((a) => a.id === 'demo-acc-aud');
-  }
-  if (
-    query === 'suresh' ||
-    query === 'suresh nair' ||
-    query === 'emp-acc-01' ||
-    query === 'tax' ||
-    query === 'tax accountant'
-  ) {
-    return DEPARTMENT_LOGIN_NODES.find((d) => d.id === 'dept-accounts')?.demoAccounts.find((a) => a.id === 'demo-acc-tax');
   }
   return undefined;
 }
@@ -1138,7 +1254,11 @@ export function getCadrePluralLabel(cadreKey: StaffCadre, deptId?: string): stri
     if (cadreKey === 'insurance_coordinator') return 'IPD & TPA';
   }
   if (deptId === 'dept-accounts') {
-    if (cadreKey === 'accounts_admin' || cadreKey === 'admin') return 'Accounts Admin';
+    if (cadreKey === 'accounts_executive') return 'Executive (Maker)';
+    if (cadreKey === 'accounts_supervisor') return 'Supervisor (Checker)';
+    if (cadreKey === 'accounts_manager') return 'Accounts Manager';
+    if (cadreKey === 'finance_controller' || cadreKey === 'accounts_admin' || cadreKey === 'admin') return 'Finance Controller';
+    if (cadreKey === 'cfo') return 'Chief Financial Officer';
     if (cadreKey === 'internal_auditor') return 'Auditors';
     if (cadreKey === 'finance_manager') return 'Finance & Tax';
   }
@@ -1164,8 +1284,12 @@ export function getCadreSingleLabel(cadreKey: StaffCadre, deptId?: string): stri
     if (cadreKey === 'insurance_coordinator') return 'IPD & TPA Insurance Billing Officer';
   }
   if (deptId === 'dept-accounts') {
-    if (cadreKey === 'accounts_admin' || cadreKey === 'admin') return 'Chief Accounts Officer & Controller';
-    if (cadreKey === 'internal_auditor') return 'Senior Internal Financial Auditor';
+    if (cadreKey === 'accounts_executive') return 'Accounts Executive (Voucher Maker)';
+    if (cadreKey === 'accounts_supervisor') return 'Accounts Supervisor (First Checker)';
+    if (cadreKey === 'accounts_manager') return 'Accounts Manager (Operations Control)';
+    if (cadreKey === 'finance_controller' || cadreKey === 'accounts_admin' || cadreKey === 'admin') return 'Finance Controller & Chief Accounts Officer';
+    if (cadreKey === 'cfo') return 'Chief Financial Officer & Strategic Finance';
+    if (cadreKey === 'internal_auditor') return 'Senior Financial Auditor (Sharma & Associates)';
     if (cadreKey === 'finance_manager') return 'Senior Finance & Tax Accountant';
   }
   return CADRE_METADATA[cadreKey]?.label || cadreKey;

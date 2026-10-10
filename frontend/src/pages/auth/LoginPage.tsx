@@ -32,6 +32,9 @@ import {
   Microscope,
   Package,
   FileText,
+  FileSpreadsheet,
+  TrendingUp,
+  ScrollText,
 } from 'lucide-react';
 import api from '../../services/api';
 import {
@@ -230,6 +233,12 @@ export const LoginPage: React.FC = () => {
         return <Package size={size} color={color} />;
       case 'FileText':
         return <FileText size={size} color={color} />;
+      case 'FileSpreadsheet':
+        return <FileSpreadsheet size={size} color={color} />;
+      case 'TrendingUp':
+        return <TrendingUp size={size} color={color} />;
+      case 'ScrollText':
+        return <ScrollText size={size} color={color} />;
       default:
         return <Building2 size={size} color={color} />;
     }
@@ -316,7 +325,13 @@ export const LoginPage: React.FC = () => {
           [RoleType.BILLING_MANAGER]: '/billing/supervisor',
           [RoleType.CASHIER]: '/billing',
           [RoleType.FINANCE_MANAGER]: '/accounts',
-          [RoleType.INTERNAL_AUDITOR]: '/accounts/audit',
+          [RoleType.INTERNAL_AUDITOR]: '/accounts',
+          [RoleType.ACCOUNTS_EXECUTIVE]: '/accounts',
+          [RoleType.ACCOUNTS_SUPERVISOR]: '/accounts',
+          [RoleType.ACCOUNTS_MANAGER]: '/accounts',
+          [RoleType.FINANCE_CONTROLLER]: '/accounts',
+          [RoleType.CFO]: '/accounts',
+          [RoleType.AUDITOR]: '/accounts',
         };
 
         const destination =
@@ -339,7 +354,13 @@ export const LoginPage: React.FC = () => {
         [RoleType.BILLING_MANAGER]: '/billing/supervisor',
         [RoleType.CASHIER]: '/billing',
         [RoleType.FINANCE_MANAGER]: '/accounts',
-        [RoleType.INTERNAL_AUDITOR]: '/accounts/audit',
+        [RoleType.INTERNAL_AUDITOR]: '/accounts',
+        [RoleType.ACCOUNTS_EXECUTIVE]: '/accounts',
+        [RoleType.ACCOUNTS_SUPERVISOR]: '/accounts',
+        [RoleType.ACCOUNTS_MANAGER]: '/accounts',
+        [RoleType.FINANCE_CONTROLLER]: '/accounts',
+        [RoleType.CFO]: '/accounts',
+        [RoleType.AUDITOR]: '/accounts',
       };
       const rawName = resolvedStaff?.name || credentialId.split('@')[0];
       const cleanName = rawName.replace(/^(Nurse|Dr\.)\s+/i, '').trim();
@@ -856,7 +877,13 @@ export const LoginPage: React.FC = () => {
             </label>
 
             {/* Cadre Segmented Buttons */}
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${availableCadres.length}, 1fr)`, gap: '0.375rem' }}>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: availableCadres.length > 4 ? 'repeat(3, 1fr)' : `repeat(${availableCadres.length}, 1fr)`,
+                gap: '0.375rem',
+              }}
+            >
               {availableCadres.map((cadreKey) => {
                 const meta = CADRE_METADATA[cadreKey] || {
                   label: cadreKey,

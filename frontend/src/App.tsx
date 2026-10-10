@@ -27,7 +27,7 @@ import { BillingDepartmentContainer } from './pages/billing/BillingDepartmentCon
 import { AccountsDepartmentContainer } from './pages/accounts/AccountsDepartmentContainer';
 import { PatientDashboard } from './pages/patient/PatientDashboard';
 import { DepartmentWorkspaceContainer } from './pages/department/DepartmentWorkspaceContainer';
-import { RoleType, BILLING_WORKSPACE_ROLES } from './types';
+import { RoleType, BILLING_WORKSPACE_ROLES, ACCOUNTS_WORKSPACE_ROLES } from './types';
 
 const queryClient = new QueryClient();
 
@@ -120,6 +120,12 @@ const RoleHomeRedirect: React.FC = () => {
     [RoleType.INVENTORY_MANAGER]: '/pharmacy/inventory',
     [RoleType.FINANCE_MANAGER]: '/accounts',
     [RoleType.INTERNAL_AUDITOR]: '/accounts/audit',
+    [RoleType.ACCOUNTS_EXECUTIVE]: '/accounts',
+    [RoleType.ACCOUNTS_SUPERVISOR]: '/accounts',
+    [RoleType.ACCOUNTS_MANAGER]: '/accounts',
+    [RoleType.FINANCE_CONTROLLER]: '/accounts',
+    [RoleType.CFO]: '/accounts',
+    [RoleType.AUDITOR]: '/accounts/audit',
     [RoleType.CASHIER]: '/billing',
     [RoleType.BILLING_SUPERVISOR]: '/billing/supervisor',
     [RoleType.BILLING_MANAGER]: '/billing/supervisor',
@@ -226,12 +232,7 @@ export function App() {
               element={
                 <ProtectedRoute
                   allowedRoles={[
-                    RoleType.FINANCE_MANAGER,
-                    RoleType.INTERNAL_AUDITOR,
-                    RoleType.BILLING_ADMIN,
-                    RoleType.DEPARTMENT_ADMIN,
-                    RoleType.SUPER_ADMIN,
-                    RoleType.HOSPITAL_ADMIN,
+                    ...ACCOUNTS_WORKSPACE_ROLES,
                   ]}
                 />
               }

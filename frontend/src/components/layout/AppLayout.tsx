@@ -617,6 +617,12 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
       [RoleType.BILLING_MANAGER]: '/billing/supervisor',
       [RoleType.BILLING_ADMIN]: '/billing/admin',
       [RoleType.INTERNAL_AUDITOR]: '/billing/finance',
+      [RoleType.ACCOUNTS_EXECUTIVE]: '/accounts',
+      [RoleType.ACCOUNTS_SUPERVISOR]: '/accounts',
+      [RoleType.ACCOUNTS_MANAGER]: '/accounts',
+      [RoleType.FINANCE_CONTROLLER]: '/accounts',
+      [RoleType.CFO]: '/accounts',
+      [RoleType.AUDITOR]: '/accounts/audit',
       [RoleType.PATIENT]: '/patient',
     };
     navigate(roleRoutes[selected] || '/admin');
