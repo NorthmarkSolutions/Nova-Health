@@ -32,6 +32,11 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
+      const token = localStorage.getItem('token');
+      // If running with local demo token, do not force-reload back to login
+      if (token && token.startsWith('local-')) {
+        return Promise.reject(error);
+      }
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       if (window.location.pathname !== '/login') {

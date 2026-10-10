@@ -25,6 +25,12 @@ class RoleType(models.TextChoices):
     BILLING_MANAGER = 'BILLING_MANAGER', 'Billing Manager'
     FINANCE_MANAGER = 'FINANCE_MANAGER', 'Finance Manager'
     INTERNAL_AUDITOR = 'INTERNAL_AUDITOR', 'Internal Auditor'
+    ACCOUNTS_EXECUTIVE = 'ACCOUNTS_EXECUTIVE', 'Accounts Executive'
+    ACCOUNTS_SUPERVISOR = 'ACCOUNTS_SUPERVISOR', 'Accounts Supervisor'
+    ACCOUNTS_MANAGER = 'ACCOUNTS_MANAGER', 'Accounts Manager'
+    FINANCE_CONTROLLER = 'FINANCE_CONTROLLER', 'Finance Controller'
+    CFO = 'CFO', 'Chief Financial Officer'
+    AUDITOR = 'AUDITOR', 'Auditor'
     INSURANCE_COORDINATOR = 'INSURANCE_COORDINATOR', 'Insurance Coordinator'
     PATIENT = 'PATIENT', 'Patient'
 

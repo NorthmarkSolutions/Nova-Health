@@ -119,5 +119,7 @@ graphify-out/
 *.graphify*
 .agents/
 backend/scratch/
+Accounts Department/
+
 
 

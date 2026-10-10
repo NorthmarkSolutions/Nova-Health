@@ -29,6 +29,8 @@ import {
   BedDouble,
   LogOut,
   Plus,
+  ChevronDown,
+  ChevronRight,
   Edit3,
   Archive,
   TrendingUp,
@@ -89,6 +91,23 @@ const formatDateMonth = (dStr: string) => {
 
 const MONO_FONT = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
 
+// Reusable Pharmacy Sidebar Design Tokens
+const SIDEBAR_TOKENS = {
+  activeBg: '#eff6ff',
+  activeBorder: '#bfdbfe',
+  activeColor: '#1d4ed8',
+  activeIconColor: '#2563eb',
+  activeShadow: '0 1px 3px rgba(37, 99, 235, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04)',
+  badgePillActiveBg: '#dbeafe',
+  badgePillActiveColor: '#1e40af',
+  badgePillHotBg: '#fef2f2',
+  badgePillHotColor: '#dc2626',
+  badgePillWarnBg: '#fffbeb',
+  badgePillWarnColor: '#b45309',
+  badgePillMutedBg: '#f1f5f9',
+  badgePillMutedColor: '#64748b',
+};
+
 // 11 Operational Modules Grouped Nav
 const NAV_GROUPS = [
   {
@@ -138,6 +157,27 @@ export const InventoryManagerWorkspace: React.FC = () => {
   const activePill = searchParams.get('pill') || 'all';
   const query = searchParams.get('q') || '';
   const selectedId = searchParams.get('sel') || '';
+
+  // Collapsible Nav Groups State
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+
+  const toggleGroup = useCallback((groupLabel: string) => {
+    setCollapsedGroups((prev) => ({
+      ...prev,
+      [groupLabel]: !prev[groupLabel],
+    }));
+  }, []);
+
+  // Ensure active tab's group is auto-expanded
+  useEffect(() => {
+    const parentGroup = NAV_GROUPS.find((g) => g.items.some((i) => i.key === activeTab));
+    if (parentGroup && collapsedGroups[parentGroup.label]) {
+      setCollapsedGroups((prev) => ({
+        ...prev,
+        [parentGroup.label]: false,
+      }));
+    }
+  }, [activeTab]);
 
   // Core Data States
   const [kpis, setKpis] = useState<InventoryKPIs | null>(null);
@@ -469,10 +509,52 @@ export const InventoryManagerWorkspace: React.FC = () => {
           borderRight: '1px solid #e5e7eb',
           display: 'flex',
           flexDirection: 'column',
+          height: '100%',
         }}
       >
+        <style>{`
+          .pharmacy-nav-item {
+            transition: all 0.15s ease;
+            outline: none;
+          }
+          .pharmacy-nav-item:hover:not(.active-nav-item) {
+            background-color: #f8fafc !important;
+            color: #0f172a !important;
+          }
+          .pharmacy-nav-item:hover:not(.active-nav-item) svg {
+            color: #0f172a !important;
+          }
+          .pharmacy-nav-item:focus-visible {
+            outline: 2px solid #2563eb !important;
+            outline-offset: -1px;
+          }
+          .pharmacy-sidebar-nav::-webkit-scrollbar {
+            width: 4px;
+          }
+          .pharmacy-sidebar-nav::-webkit-scrollbar-track {
+            background: transparent;
+          }
+          .pharmacy-sidebar-nav::-webkit-scrollbar-thumb {
+            background: #e2e8f0;
+            border-radius: 4px;
+          }
+          .pharmacy-sidebar-nav::-webkit-scrollbar-thumb:hover {
+            background: #cbd5e1;
+          }
+          .pharmacy-group-header:hover {
+            background-color: #f8fafc;
+            border-radius: 6px;
+          }
+          .pharmacy-group-header:hover span {
+            color: #475569 !important;
+          }
+          .pharmacy-dept-btn:hover {
+            color: #1d4ed8 !important;
+          }
+        `}</style>
+
         {/* Brand */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '18px 20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '16px 18px', borderBottom: '1px solid #f1f5f9' }}>
           <div
             style={{
               width: '32px',
@@ -485,40 +567,45 @@ export const InventoryManagerWorkspace: React.FC = () => {
               justifyContent: 'center',
               fontWeight: 700,
               fontSize: '15px',
+              boxShadow: '0 1px 2px rgba(37, 99, 235, 0.2)',
+              flexShrink: 0,
             }}
           >
             N
           </div>
-          <div>
-            <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>North Hospital</div>
-            <div style={{ fontSize: '12px', color: '#6b7280' }}>Clinical Enterprise HMS</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', lineHeight: 1.2 }}>North Hospital</div>
+            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '1px' }}>Clinical Enterprise HMS</div>
           </div>
         </div>
 
         {/* Department Info */}
-        <div style={{ margin: '0 16px', padding: '12px 14px', border: '1px solid #e5e7eb', borderRadius: '10px' }}>
+        <div style={{ margin: '12px 12px 6px', padding: '12px 14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '12px', color: '#6b7280' }}>Current department</span>
+            <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Current department</span>
             <span
               style={{
-                fontSize: '11px',
+                fontSize: '10px',
                 fontWeight: 700,
                 color: '#2563eb',
                 background: '#eff6ff',
+                border: '1px solid #bfdbfe',
                 borderRadius: '4px',
                 padding: '1px 6px',
+                letterSpacing: '0.04em',
               }}
             >
               STORE
             </span>
           </div>
-          <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827', marginTop: '4px' }}>Pharmacy</div>
-          <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>
+          <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', marginTop: '4px' }}>Pharmacy</div>
+          <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
             Central medical store · Block B, basement
           </div>
-          <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px dashed #e5e7eb', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px dashed #e2e8f0', display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <button
               onClick={() => navigate('/pharmacy/ipd')}
+              className="pharmacy-dept-btn"
               style={{
                 fontSize: '11px',
                 fontWeight: 600,
@@ -528,8 +615,9 @@ export const InventoryManagerWorkspace: React.FC = () => {
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '4px',
+                gap: '6px',
                 padding: 0,
+                transition: 'color 0.15s ease',
               }}
             >
               <BedDouble size={12} />
@@ -537,17 +625,19 @@ export const InventoryManagerWorkspace: React.FC = () => {
             </button>
             <button
               onClick={() => navigate('/pharmacy/opd')}
+              className="pharmacy-dept-btn"
               style={{
                 fontSize: '11px',
                 fontWeight: 600,
-                color: '#4b5563',
+                color: '#475569',
                 background: 'transparent',
                 border: 'none',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '4px',
+                gap: '6px',
                 padding: 0,
+                transition: 'color 0.15s ease',
               }}
             >
               <Pill size={12} />
@@ -555,6 +645,7 @@ export const InventoryManagerWorkspace: React.FC = () => {
             </button>
             <button
               onClick={() => navigate('/pharmacy/controlled-drugs')}
+              className="pharmacy-dept-btn"
               style={{
                 fontSize: '11px',
                 fontWeight: 600,
@@ -564,8 +655,9 @@ export const InventoryManagerWorkspace: React.FC = () => {
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '4px',
+                gap: '6px',
                 padding: 0,
+                transition: 'color 0.15s ease',
               }}
             >
               <Lock size={12} />
@@ -575,70 +667,204 @@ export const InventoryManagerWorkspace: React.FC = () => {
         </div>
 
         {/* Grouped Nav */}
-        <nav style={{ flex: 1, padding: '8px 12px 12px', display: 'flex', flexDirection: 'column', gap: '2px', overflowY: 'auto' }}>
-          {NAV_GROUPS.map((group) => (
-            <React.Fragment key={group.label}>
-              <div
-                style={{
-                  flexShrink: 0,
-                  padding: '16px 8px 8px',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  letterSpacing: '0.06em',
-                  color: '#6b7280',
-                }}
-              >
-                {group.label}
-              </div>
-              {group.items.map((item) => {
-                const isActive = activeTab === item.key;
-                const IconComponent = item.icon;
-                const count = (navCounts as Record<string, number>)[item.key] || 0;
-                const isHot = ['dash', 'expiry', 'appr', 'grn', 'tr', 'demand', 'recon'].includes(item.key) && count > 0;
-                const countFg = isHot ? (['appr', 'grn', 'demand'].includes(item.key) ? '#1d4ed8' : '#b45309') : '#6b7280';
+        <nav
+          className="pharmacy-sidebar-nav"
+          style={{
+            flex: 1,
+            padding: '6px 10px 14px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '2px',
+            overflowY: 'auto',
+            scrollbarWidth: 'thin',
+            scrollbarColor: '#e2e8f0 transparent',
+          }}
+        >
+          {NAV_GROUPS.map((group, gIdx) => {
+            const isCollapsed = !!collapsedGroups[group.label];
+            const hasActiveItem = group.items.some((i) => i.key === activeTab);
 
-                return (
-                  <div
-                    key={item.key}
-                    onClick={() => updateURL(item.key)}
+            return (
+              <div key={group.label} style={{ marginTop: gIdx > 0 ? '6px' : '0' }}>
+                <div
+                  onClick={() => toggleGroup(group.label)}
+                  className="pharmacy-group-header"
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      toggleGroup(group.label);
+                    }
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '8px 8px 4px',
+                    cursor: 'pointer',
+                    userSelect: 'none',
+                    borderRadius: '6px',
+                    transition: 'background-color 0.15s ease',
+                    borderTop: gIdx > 0 ? '1px solid #f1f5f9' : 'none',
+                    paddingTop: gIdx > 0 ? '10px' : '8px',
+                  }}
+                  title={`Click to ${isCollapsed ? 'expand' : 'collapse'} ${group.label}`}
+                >
+                  <span
                     style={{
-                      flexShrink: 0,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '10px',
-                      height: '40px',
-                      padding: '0 12px',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      fontSize: '14px',
-                      fontWeight: isActive ? 600 : 500,
-                      color: isActive ? '#2563eb' : '#374151',
-                      background: isActive ? '#eff6ff' : 'transparent',
-                      transition: 'background 0.15s ease',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      letterSpacing: '0.05em',
+                      textTransform: 'uppercase',
+                      color: hasActiveItem ? '#64748b' : '#94a3b8',
+                      transition: 'color 0.15s ease',
                     }}
                   >
-                    <IconComponent size={18} />
-                    <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {item.label}
+                    {group.label}
+                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span
+                      style={{
+                        fontSize: '10px',
+                        fontWeight: 600,
+                        color: hasActiveItem ? '#2563eb' : '#94a3b8',
+                        background: hasActiveItem ? '#eff6ff' : '#f8fafc',
+                        padding: '1px 5px',
+                        borderRadius: '4px',
+                        border: hasActiveItem ? '1px solid #bfdbfe' : '1px solid #f1f5f9',
+                      }}
+                    >
+                      {group.items.length}
                     </span>
-                    {count > 0 && (
-                      <span style={{ fontSize: '12px', fontWeight: 600, color: countFg }}>{count}</span>
+                    {isCollapsed ? (
+                      <ChevronRight size={13} color="#94a3b8" />
+                    ) : (
+                      <ChevronDown size={13} color="#94a3b8" />
                     )}
                   </div>
-                );
-              })}
-            </React.Fragment>
-          ))}
+                </div>
+
+                {!isCollapsed && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '2px' }}>
+                    {group.items.map((item) => {
+                      const isActive = activeTab === item.key;
+                      const IconComponent = item.icon;
+                      const count = (navCounts as Record<string, number>)[item.key] || 0;
+                      const isHot = ['dash', 'expiry', 'appr', 'grn', 'tr', 'demand', 'recon'].includes(item.key) && count > 0;
+                      const isUrgent = ['appr', 'demand', 'expiry'].includes(item.key);
+
+                      return (
+                        <div
+                          key={item.key}
+                          onClick={() => updateURL(item.key)}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              updateURL(item.key);
+                            }
+                          }}
+                          title={item.label}
+                          className={`pharmacy-nav-item ${isActive ? 'active-nav-item' : ''}`}
+                          style={{
+                            flexShrink: 0,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            height: '38px',
+                            padding: '0 10px',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            fontSize: '13px',
+                            fontWeight: isActive ? 600 : 500,
+                            color: isActive ? SIDEBAR_TOKENS.activeColor : '#475569',
+                            background: isActive ? SIDEBAR_TOKENS.activeBg : 'transparent',
+                            border: isActive ? `1px solid ${SIDEBAR_TOKENS.activeBorder}` : '1px solid transparent',
+                            boxShadow: isActive ? SIDEBAR_TOKENS.activeShadow : 'none',
+                          }}
+                        >
+                          <IconComponent
+                            size={18}
+                            strokeWidth={1.8}
+                            style={{
+                              color: isActive ? SIDEBAR_TOKENS.activeIconColor : '#64748b',
+                              flexShrink: 0,
+                              transition: 'color 0.15s ease',
+                            }}
+                          />
+                          <span
+                            style={{
+                              flex: 1,
+                              minWidth: 0,
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              lineHeight: 1.3,
+                            }}
+                          >
+                            {item.label}
+                          </span>
+                          {count > 0 && (
+                            <span
+                              style={{
+                                marginLeft: 'auto',
+                                flexShrink: 0,
+                                minWidth: '20px',
+                                height: '20px',
+                                padding: '0 6px',
+                                borderRadius: '10px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                background: isActive
+                                  ? SIDEBAR_TOKENS.badgePillActiveBg
+                                  : isHot
+                                  ? (isUrgent ? SIDEBAR_TOKENS.badgePillHotBg : SIDEBAR_TOKENS.badgePillWarnBg)
+                                  : SIDEBAR_TOKENS.badgePillMutedBg,
+                                color: isActive
+                                  ? SIDEBAR_TOKENS.badgePillActiveColor
+                                  : isHot
+                                  ? (isUrgent ? SIDEBAR_TOKENS.badgePillHotColor : SIDEBAR_TOKENS.badgePillWarnColor)
+                                  : SIDEBAR_TOKENS.badgePillMutedColor,
+                                transition: 'all 0.15s ease',
+                              }}
+                            >
+                              {count}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </nav>
 
         {/* User Footer */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '16px 20px', borderTop: '1px solid #e5e7eb' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            padding: '14px 16px',
+            borderTop: '1px solid #e2e8f0',
+            background: '#ffffff',
+            flexShrink: 0,
+          }}
+        >
           <div
             style={{
               width: '36px',
               height: '36px',
               borderRadius: '50%',
               background: '#eff6ff',
+              border: '1px solid #bfdbfe',
               color: '#1d4ed8',
               display: 'flex',
               alignItems: 'center',
@@ -651,8 +877,29 @@ export const InventoryManagerWorkspace: React.FC = () => {
             {initials}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{displayName}</div>
-            <div style={{ fontSize: '12px', color: '#6b7280', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <div
+              title={displayName}
+              style={{
+                fontSize: '13px',
+                fontWeight: 600,
+                color: '#0f172a',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {displayName}
+            </div>
+            <div
+              title={designation}
+              style={{
+                fontSize: '12px',
+                color: '#64748b',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
               {designation}
             </div>
           </div>
@@ -666,12 +913,21 @@ export const InventoryManagerWorkspace: React.FC = () => {
               background: 'transparent',
               border: 'none',
               cursor: 'pointer',
-              color: '#9ca3af',
-              padding: '4px',
+              color: '#94a3b8',
+              padding: '6px',
               borderRadius: '6px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#fef2f2';
+              e.currentTarget.style.color = '#dc2626';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'transparent';
+              e.currentTarget.style.color = '#94a3b8';
             }}
           >
             <LogOut size={16} />
@@ -936,297 +1192,163 @@ export const InventoryManagerWorkspace: React.FC = () => {
             </div>
           </div>
 
-          {/* 10 KPI Cards: 2 Rows x 5 Cards Layout */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            {/* ROW 1: Stock Health & Valuation */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '14px' }}>
-              {/* Card 1: Total SKUs */}
-              <div
-                onClick={() => updateURL('master')}
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '12px',
-                  padding: '18px 20px',
-                  cursor: 'pointer',
-                  minHeight: '120px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                  <span style={{ fontSize: '13px', color: '#4b5563', fontWeight: 600 }}>Total Master SKUs</span>
-                  <span style={{ fontSize: '11px', fontWeight: 700, borderRadius: '4px', padding: '2px 6px', background: '#f3f4f6', color: '#374151' }}>
-                    {formatINR(kpis?.total_valuation || 0)}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                  <span style={{ fontSize: '26px', fontWeight: 700, color: '#111827' }}>{medicines.length || kpis?.total_skus || 0}</span>
-                  <span style={{ fontSize: '12px', color: '#6b7280' }}>catalog items</span>
-                </div>
-              </div>
+          {/* Top 4 Essential KPI Cards: Single Row x 4 Cards Layout */}
+          {(() => {
+            const outOfStockCount = kpis?.out_of_stock_count || 0;
+            const statDemandsCount = demands.filter(d => d.priority === 'STAT').length;
+            const expiringThisMonthCount = batches.filter(b => b.months_left <= 1).length;
 
-              {/* Card 2: Low Stock */}
-              <div
-                onClick={() => updateURL('ledger', '', 'low')}
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '12px',
-                  padding: '18px 20px',
-                  cursor: 'pointer',
-                  minHeight: '120px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                  <span style={{ fontSize: '13px', color: '#4b5563', fontWeight: 600 }}>Stock Deficits</span>
-                  <span style={{ fontSize: '11px', fontWeight: 700, borderRadius: '4px', padding: '2px 6px', background: '#fef2f2', color: '#dc2626' }}>
-                    {kpis?.out_of_stock_count || 0} Out of Stock
-                  </span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                  <span style={{ fontSize: '26px', fontWeight: 700, color: '#b45309' }}>{kpis?.low_stock_count || 0}</span>
-                  <span style={{ fontSize: '12px', color: '#6b7280' }}>below threshold</span>
-                </div>
-              </div>
+            const cardStyle: React.CSSProperties = {
+              background: '#ffffff',
+              border: '1px solid #e5e7eb',
+              borderRadius: '12px',
+              padding: '16px 18px',
+              minHeight: '112px',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              cursor: 'pointer',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+              transition: 'border-color 0.15s ease, box-shadow 0.15s ease'
+            };
 
-              {/* Card 3: Expiring Soon */}
-              <div
-                onClick={() => updateURL('expiry')}
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '12px',
-                  padding: '18px 20px',
-                  cursor: 'pointer',
-                  minHeight: '120px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                  <span style={{ fontSize: '13px', color: '#4b5563', fontWeight: 600 }}>Expiring Soon</span>
-                  <span style={{ fontSize: '11px', fontWeight: 700, borderRadius: '4px', padding: '2px 6px', background: '#fffbeb', color: '#b45309' }}>
-                    ≤ 90 Days
-                  </span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                  <span style={{ fontSize: '26px', fontWeight: 700, color: '#111827' }}>{kpis?.expiring_batches_count || 0}</span>
-                  <span style={{ fontSize: '12px', color: '#6b7280' }}>batches queued</span>
-                </div>
-              </div>
+            const headerStyle: React.CSSProperties = {
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: '8px'
+            };
 
-              {/* Card 4: Pending Approvals */}
-              <div
-                onClick={() => updateURL('appr')}
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '12px',
-                  padding: '18px 20px',
-                  cursor: 'pointer',
-                  minHeight: '120px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                  <span style={{ fontSize: '13px', color: '#4b5563', fontWeight: 600 }}>Pending Approval</span>
-                  <span style={{ fontSize: '11px', fontWeight: 700, borderRadius: '4px', padding: '2px 6px', background: '#eff6ff', color: '#1d4ed8' }}>
-                    Dr. Pooja Shah
-                  </span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                  <span style={{ fontSize: '26px', fontWeight: 700, color: '#1d4ed8' }}>{kpis?.pending_approvals_count || 0}</span>
-                  <span style={{ fontSize: '12px', color: '#6b7280' }}>requisitions</span>
-                </div>
-              </div>
+            const labelStyle: React.CSSProperties = {
+              fontSize: '13px',
+              color: '#6b7280',
+              fontWeight: 500
+            };
 
-              {/* Card 5: Controlled Drugs */}
-              <div
-                onClick={() => updateURL('cd')}
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '12px',
-                  padding: '18px 20px',
-                  cursor: 'pointer',
-                  minHeight: '120px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                  <span style={{ fontSize: '13px', color: '#4b5563', fontWeight: 600 }}>Controlled Drugs</span>
-                  <span style={{ fontSize: '11px', fontWeight: 700, borderRadius: '4px', padding: '2px 6px', background: '#111827', color: '#ffffff' }}>
-                    Sch. X / H1
-                  </span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                  <span style={{ fontSize: '26px', fontWeight: 700, color: '#111827' }}>{kpis?.controlled_drugs_count || 0}</span>
-                  <span style={{ fontSize: '12px', color: '#6b7280' }}>vault items</span>
-                </div>
-              </div>
-            </div>
+            const neutralTagStyle: React.CSSProperties = {
+              fontSize: '11px',
+              fontWeight: 500,
+              borderRadius: '4px',
+              padding: '2px 6px',
+              background: '#f3f4f6',
+              color: '#6b7280'
+            };
 
-            {/* ROW 2: Operational Velocity & Risk (5 Cards) */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '14px' }}>
-              {/* Card 6: Pending PRs & POs */}
-              <div
-                onClick={() => updateURL('pr')}
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '12px',
-                  padding: '18px 20px',
-                  cursor: 'pointer',
-                  minHeight: '120px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                  <span style={{ fontSize: '13px', color: '#4b5563', fontWeight: 600 }}>Active PRs & POs</span>
-                  <span style={{ fontSize: '11px', fontWeight: 700, borderRadius: '4px', padding: '2px 6px', background: '#eff6ff', color: '#2563eb' }}>
-                    Procurement
-                  </span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                  <span style={{ fontSize: '26px', fontWeight: 700, color: '#111827' }}>
-                    {purchaseRequests.filter(p => !['Closed', 'Rejected'].includes(p.status)).length || kpis?.pending_prs_count || 0}
-                  </span>
-                  <span style={{ fontSize: '12px', color: '#6b7280' }}>pipeline orders</span>
-                </div>
-              </div>
+            const urgentRedTagStyle: React.CSSProperties = {
+              fontSize: '11px',
+              fontWeight: 600,
+              borderRadius: '4px',
+              padding: '2px 6px',
+              background: '#fef2f2',
+              color: '#dc2626',
+              border: '1px solid #fee2e2'
+            };
 
-              {/* Card 7: Department Demands */}
-              <div
-                onClick={() => updateURL('demand')}
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '12px',
-                  padding: '18px 20px',
-                  cursor: 'pointer',
-                  minHeight: '120px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                  <span style={{ fontSize: '13px', color: '#4b5563', fontWeight: 600 }}>Pending Demands</span>
-                  <span style={{ fontSize: '11px', fontWeight: 700, borderRadius: '4px', padding: '2px 6px', background: '#fef2f2', color: '#dc2626' }}>
-                    {demands.filter(d => d.priority === 'STAT').length} STAT
-                  </span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                  <span style={{ fontSize: '26px', fontWeight: 700, color: '#dc2626' }}>
-                    {demands.filter(d => d.status === 'PENDING_TRANSFER').length || 2}
-                  </span>
-                  <span style={{ fontSize: '12px', color: '#6b7280' }}>ward indents</span>
-                </div>
-              </div>
+            const metricRowStyle: React.CSSProperties = {
+              display: 'flex',
+              alignItems: 'baseline',
+              gap: '6px',
+              marginTop: '12px'
+            };
 
-              {/* Card 8: Dead Stock */}
-              <div
-                onClick={() => updateURL('dead')}
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '12px',
-                  padding: '18px 20px',
-                  cursor: 'pointer',
-                  minHeight: '120px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                  <span style={{ fontSize: '13px', color: '#4b5563', fontWeight: 600 }}>Dead Stock &gt;180d</span>
-                  <span style={{ fontSize: '11px', fontWeight: 700, borderRadius: '4px', padding: '2px 6px', background: '#fef2f2', color: '#b91c1c' }}>
-                    Locked Capital
-                  </span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                  <span style={{ fontSize: '26px', fontWeight: 700, color: '#b91c1c' }}>
-                    {kpis?.dead_stock_count || deadStock.length || 3}
-                  </span>
-                  <span style={{ fontSize: '12px', color: '#6b7280' }}>
-                    ({formatINR(kpis?.dead_stock_valuation || 24860)})
-                  </span>
-                </div>
-              </div>
+            const subtextStyle: React.CSSProperties = {
+              fontSize: '12px',
+              color: '#6b7280',
+              fontWeight: 400
+            };
 
-              {/* Card 9: Forecasted Stockouts */}
-              <div
-                onClick={() => updateURL('fc')}
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '12px',
-                  padding: '18px 20px',
-                  cursor: 'pointer',
-                  minHeight: '120px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                  <span style={{ fontSize: '13px', color: '#4b5563', fontWeight: 600 }}>Forecast Stockouts</span>
-                  <span style={{ fontSize: '11px', fontWeight: 700, borderRadius: '4px', padding: '2px 6px', background: '#fffbeb', color: '#b45309' }}>
-                    &lt; 7 Days Cover
-                  </span>
+            return (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
+                {/* Card 1: Total Master SKUs & Valuation */}
+                <div onClick={() => updateURL('master')} style={cardStyle}>
+                  <div style={headerStyle}>
+                    <span style={labelStyle}>Total Master SKUs</span>
+                    <span style={neutralTagStyle}>
+                      {formatINR(kpis?.total_valuation || 0)}
+                    </span>
+                  </div>
+                  <div style={metricRowStyle}>
+                    <span style={{ fontSize: '28px', fontWeight: 700, color: '#111827', lineHeight: 1.1, letterSpacing: '-0.02em' }}>
+                      {medicines.length || kpis?.total_skus || 0}
+                    </span>
+                    <span style={subtextStyle}>catalog items</span>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                  <span style={{ fontSize: '26px', fontWeight: 700, color: '#b45309' }}>
-                    {forecasting.filter(f => f.risk_level === 'CRITICAL').length || 2}
-                  </span>
-                  <span style={{ fontSize: '12px', color: '#6b7280' }}>high risk burn</span>
-                </div>
-              </div>
 
-              {/* Card 10: Expiring This Month */}
-              <div
-                onClick={() => updateURL('expiry')}
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '12px',
-                  padding: '18px 20px',
-                  cursor: 'pointer',
-                  minHeight: '120px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                  <span style={{ fontSize: '13px', color: '#4b5563', fontWeight: 600 }}>Expiring This Month</span>
-                  <span style={{ fontSize: '11px', fontWeight: 700, borderRadius: '4px', padding: '2px 6px', background: '#fef2f2', color: '#dc2626' }}>
-                    ≤ 30 Days
-                  </span>
+                {/* Card 2: Stock Deficits & Out of Stock */}
+                <div onClick={() => updateURL('ledger', '', 'low')} style={cardStyle}>
+                  <div style={headerStyle}>
+                    <span style={labelStyle}>Stock Deficits</span>
+                    <span style={outOfStockCount > 0 ? urgentRedTagStyle : neutralTagStyle}>
+                      {outOfStockCount > 0 ? `${outOfStockCount} Out of Stock` : '0 Out of Stock'}
+                    </span>
+                  </div>
+                  <div style={metricRowStyle}>
+                    <span
+                      style={{
+                        fontSize: '28px',
+                        fontWeight: 700,
+                        color: outOfStockCount > 0 ? '#dc2626' : '#111827',
+                        lineHeight: 1.1,
+                        letterSpacing: '-0.02em'
+                      }}
+                    >
+                      {kpis?.low_stock_count || 0}
+                    </span>
+                    <span style={subtextStyle}>below threshold</span>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                  <span style={{ fontSize: '26px', fontWeight: 700, color: '#dc2626' }}>
-                    {batches.filter(b => b.months_left <= 1).length || 3}
-                  </span>
-                  <span style={{ fontSize: '12px', color: '#6b7280' }}>quarantine due</span>
+
+                {/* Card 3: Expiring Batches */}
+                <div onClick={() => updateURL('expiry')} style={cardStyle}>
+                  <div style={headerStyle}>
+                    <span style={labelStyle}>Expiring Batches</span>
+                    <span style={expiringThisMonthCount > 0 ? urgentRedTagStyle : neutralTagStyle}>
+                      {expiringThisMonthCount > 0 ? `${expiringThisMonthCount} in ≤30d` : '≤ 90 Days'}
+                    </span>
+                  </div>
+                  <div style={metricRowStyle}>
+                    <span
+                      style={{
+                        fontSize: '28px',
+                        fontWeight: 700,
+                        color: expiringThisMonthCount > 0 ? '#dc2626' : '#111827',
+                        lineHeight: 1.1,
+                        letterSpacing: '-0.02em'
+                      }}
+                    >
+                      {kpis?.expiring_batches_count || batches.filter(b => b.months_left <= 3).length || 0}
+                    </span>
+                    <span style={subtextStyle}>quarantine / FEFO queue</span>
+                  </div>
+                </div>
+
+                {/* Card 4: Pending Demands & Ward Indents */}
+                <div onClick={() => updateURL('demand')} style={cardStyle}>
+                  <div style={headerStyle}>
+                    <span style={labelStyle}>Pending Demands</span>
+                    <span style={statDemandsCount > 0 ? urgentRedTagStyle : neutralTagStyle}>
+                      {statDemandsCount > 0 ? `${statDemandsCount} STAT` : 'Routine'}
+                    </span>
+                  </div>
+                  <div style={metricRowStyle}>
+                    <span
+                      style={{
+                        fontSize: '28px',
+                        fontWeight: 700,
+                        color: statDemandsCount > 0 ? '#dc2626' : '#111827',
+                        lineHeight: 1.1,
+                        letterSpacing: '-0.02em'
+                      }}
+                    >
+                      {demands.filter(d => d.status === 'PENDING_TRANSFER').length || 2}
+                    </span>
+                    <span style={subtextStyle}>ward & ICU indents</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
+            );
+          })()}
 
           {/* 3. SPLIT-SCREEN WORKSPACE: Table (Left) + Sticky Context Drawer (Right) */}
           <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
