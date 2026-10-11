@@ -32,6 +32,7 @@ import { IPDPharmacistWorkspace } from './IPDPharmacistWorkspace';
 import { ControlledDrugRegisterWorkspace } from '../controlled/ControlledDrugRegisterWorkspace';
 import { MyProfileModal } from '../inventory/modals/MyProfileModal';
 import { ChangePasswordModal } from '../inventory/modals/ChangePasswordModal';
+import '../shared/pharmacyMotion.css';
 
 // Reusable Pharmacy Sidebar Tokens (HMS Design Bible aligned)
 const SIDEBAR_TOKENS = {
@@ -317,6 +318,7 @@ export const UnifiedPharmacistWorkspace: React.FC<UnifiedPharmacistWorkspaceProp
 
   return (
     <div
+      className="hms-motion"
       style={{
         display: 'flex',
         height: '100vh',
@@ -776,18 +778,18 @@ export const UnifiedPharmacistWorkspace: React.FC<UnifiedPharmacistWorkspaceProp
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '6px',
-                  height: '32px',
-                  padding: '0 10px',
+                  gap: '8px',
+                  height: '40px',
+                  padding: '0 14px',
                   border: '1px solid #cbd5e1',
-                  borderRadius: '8px',
-                  fontSize: '12px',
+                  borderRadius: '10px',
+                  fontSize: '13px',
                   fontWeight: 600,
                   color: '#0f172a',
                   background: '#f8fafc',
                 }}
               >
-                <Coins size={14} color="#059669" />
+                <Coins size={16} color="#059669" />
                 <span>Drawer: ₹2,000.00</span>
               </div>
             )}
@@ -796,17 +798,17 @@ export const UnifiedPharmacistWorkspace: React.FC<UnifiedPharmacistWorkspaceProp
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
-                height: '32px',
-                padding: '0 10px',
+                gap: '8px',
+                height: '40px',
+                padding: '0 14px',
                 border: '1px solid #e5e7eb',
-                borderRadius: '8px',
-                fontSize: '12px',
+                borderRadius: '10px',
+                fontSize: '13px',
                 color: '#374151',
                 whiteSpace: 'nowrap',
               }}
             >
-              <Clock size={14} color="#6b7280" />
+              <Clock size={16} color="#6b7280" />
               Morning shift · 07:00–15:00
             </div>
 
@@ -822,12 +824,12 @@ export const UnifiedPharmacistWorkspace: React.FC<UnifiedPharmacistWorkspaceProp
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '8px',
-                  height: '34px',
-                  padding: '0 10px 0 6px',
+                  gap: '10px',
+                  height: '44px',
+                  padding: '0 12px 0 6px',
                   background: isProfileOpen ? '#f1f5f9' : '#ffffff',
                   border: '1px solid #e2e8f0',
-                  borderRadius: '8px',
+                  borderRadius: '10px',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease',
                   boxShadow: isProfileOpen ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
@@ -842,16 +844,16 @@ export const UnifiedPharmacistWorkspace: React.FC<UnifiedPharmacistWorkspaceProp
                 {/* Initials Avatar */}
                 <div
                   style={{
-                    width: '24px',
-                    height: '24px',
+                    width: '32px',
+                    height: '32px',
                     borderRadius: '50%',
                     background: '#eff6ff',
                     color: '#2563eb',
-                    border: '1px solid #bfdbfe',
+                    border: '1.5px solid #bfdbfe',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontSize: '11px',
+                    fontSize: '13px',
                     fontWeight: 700,
                     flexShrink: 0,
                   }}
@@ -860,13 +862,13 @@ export const UnifiedPharmacistWorkspace: React.FC<UnifiedPharmacistWorkspaceProp
                 </div>
 
                 {/* Name & Role */}
-                <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'left', lineHeight: 1.15 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'left', lineHeight: 1.25 }}>
                   <span
                     style={{
-                      fontSize: '12px',
+                      fontSize: '14px',
                       fontWeight: 600,
                       color: '#0f172a',
-                      maxWidth: '125px',
+                      maxWidth: '200px',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
@@ -876,20 +878,20 @@ export const UnifiedPharmacistWorkspace: React.FC<UnifiedPharmacistWorkspaceProp
                   </span>
                   <span
                     style={{
-                      fontSize: '10px',
+                      fontSize: '12px',
                       color: '#64748b',
-                      maxWidth: '125px',
+                      maxWidth: '200px',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {designation}
+                    Clinical Pharmacist
                   </span>
                 </div>
 
                 <ChevronDown
-                  size={14}
+                  size={16}
                   style={{
                     color: '#64748b',
                     marginLeft: '2px',
@@ -959,7 +961,7 @@ export const UnifiedPharmacistWorkspace: React.FC<UnifiedPharmacistWorkspaceProp
                             marginTop: '1px',
                           }}
                         >
-                          {user?.email || 's.nair@northhospital.org'}
+                          {user?.email || ''}
                         </div>
                         <div
                           style={{
@@ -1143,7 +1145,7 @@ export const UnifiedPharmacistWorkspace: React.FC<UnifiedPharmacistWorkspaceProp
                 onClick={() => handleOpenStockSearch()}
                 title="Search stock directory (Alt+S)"
                 style={{
-                  height: '42px',
+                  height: '40px',
                   padding: '0 16px',
                   borderRadius: '10px',
                   whiteSpace: 'nowrap',
@@ -1151,7 +1153,7 @@ export const UnifiedPharmacistWorkspace: React.FC<UnifiedPharmacistWorkspaceProp
                   color: activeModule === 'opd-stock' ? '#1d4ed8' : '#334155',
                   border: `1.5px solid ${activeModule === 'opd-stock' ? '#2563eb' : '#d1d5db'}`,
                   fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-                  fontSize: '13px',
+                  fontSize: '14px',
                   fontWeight: 600,
                   cursor: 'pointer',
                   display: 'flex',
@@ -1184,7 +1186,7 @@ export const UnifiedPharmacistWorkspace: React.FC<UnifiedPharmacistWorkspaceProp
                 onClick={handleOpenNewOtcSale}
                 title="New OTC Direct Sale (Alt+O)"
                 style={{
-                  height: '42px',
+                  height: '40px',
                   padding: '0 16px',
                   borderRadius: '10px',
                   whiteSpace: 'nowrap',
@@ -1192,7 +1194,7 @@ export const UnifiedPharmacistWorkspace: React.FC<UnifiedPharmacistWorkspaceProp
                   color: '#2563eb',
                   border: `1.5px solid ${activeModule === 'opd-otc' ? '#2563eb' : '#bfdbfe'}`,
                   fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-                  fontSize: '13px',
+                  fontSize: '14px',
                   fontWeight: 600,
                   cursor: 'pointer',
                   display: 'flex',
@@ -1225,7 +1227,7 @@ export const UnifiedPharmacistWorkspace: React.FC<UnifiedPharmacistWorkspaceProp
                 onClick={handleGlobalCallNext}
                 title="Call next order in queue (Alt+N or F2)"
                 style={{
-                  height: '42px',
+                  height: '40px',
                   padding: '0 20px',
                   borderRadius: '10px',
                   whiteSpace: 'nowrap',
@@ -1275,29 +1277,32 @@ export const UnifiedPharmacistWorkspace: React.FC<UnifiedPharmacistWorkspaceProp
           >
             {/* KPI 1: 🚨 STAT & Emergency Orders */}
             <div
+              role="button"
+              tabIndex={0}
+              className="hms-kpi"
               onClick={handleStatCardClick}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleStatCardClick(); } }}
               style={{
                 background: '#ffffff',
                 border: totalStatCount > 0 ? '1.5px solid #fecaca' : '1px solid #e5e7eb',
                 borderRadius: '12px',
                 padding: '18px 20px',
                 cursor: 'pointer',
-                minHeight: '115px',
+                minHeight: '120px',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'space-between',
-                transition: 'all 0.15s ease',
-                boxShadow: totalStatCount > 0 ? '0 2px 4px rgba(220, 38, 38, 0.05)' : 'none',
+                                boxShadow: totalStatCount > 0 ? '0 2px 4px rgba(220, 38, 38, 0.05)' : 'none',
               }}
               title="Click to jump directly to Emergency STAT queue"
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <span style={{ fontSize: '13px', fontWeight: 600, color: totalStatCount > 0 ? '#b91c1c' : '#4b5563' }}>
+                <span style={{ fontSize: '14px', fontWeight: 600, color: totalStatCount > 0 ? '#b91c1c' : '#4b5563' }}>
                   🚨 Urgent / STAT Orders
                 </span>
                 <span
                   style={{
-                    fontSize: '11px',
+                    fontSize: '12px',
                     fontWeight: 700,
                     borderRadius: '4px',
                     padding: '2px 6px',
@@ -1316,7 +1321,7 @@ export const UnifiedPharmacistWorkspace: React.FC<UnifiedPharmacistWorkspaceProp
                   </span>
                   <span style={{ fontSize: '12px', color: '#6b7280' }}>active urgent</span>
                 </div>
-                <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
                   {opdStatCount} OPD STAT · {ipdEmergencyCount} Ward STAT
                 </div>
               </div>
@@ -1324,28 +1329,31 @@ export const UnifiedPharmacistWorkspace: React.FC<UnifiedPharmacistWorkspaceProp
 
             {/* KPI 2: 💊 OPD Counter Queue */}
             <div
+              role="button"
+              tabIndex={0}
+              className="hms-kpi"
               onClick={handleOpdQueueCardClick}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleOpdQueueCardClick(); } }}
               style={{
                 background: '#ffffff',
                 border: activeModule === 'opd-queue' ? '1.5px solid #bfdbfe' : '1px solid #e5e7eb',
                 borderRadius: '12px',
                 padding: '18px 20px',
                 cursor: 'pointer',
-                minHeight: '115px',
+                minHeight: '120px',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'space-between',
-                transition: 'all 0.15s ease',
-              }}
+                              }}
               title="Click to view OPD Prescription Queue"
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <span style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563' }}>
+                <span style={{ fontSize: '14px', fontWeight: 600, color: '#4b5563' }}>
                   💊 OPD Counter Queue
                 </span>
                 <span
                   style={{
-                    fontSize: '11px',
+                    fontSize: '12px',
                     fontWeight: 700,
                     borderRadius: '4px',
                     padding: '2px 6px',
@@ -1364,7 +1372,7 @@ export const UnifiedPharmacistWorkspace: React.FC<UnifiedPharmacistWorkspaceProp
                   </span>
                   <span style={{ fontSize: '12px', color: '#6b7280' }}>prescriptions</span>
                 </div>
-                <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
                   {opdKpis?.pending_verification ?? 6} to verify · walk-in & appointments
                 </div>
               </div>
@@ -1372,28 +1380,31 @@ export const UnifiedPharmacistWorkspace: React.FC<UnifiedPharmacistWorkspaceProp
 
             {/* KPI 3: 🛏️ IPD Ward Indents */}
             <div
+              role="button"
+              tabIndex={0}
+              className="hms-kpi"
               onClick={() => selectModule('ipd-requests')}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectModule('ipd-requests'); } }}
               style={{
                 background: '#ffffff',
                 border: isIpdModule ? '1.5px solid #bfdbfe' : '1px solid #e5e7eb',
                 borderRadius: '12px',
                 padding: '18px 20px',
                 cursor: 'pointer',
-                minHeight: '115px',
+                minHeight: '120px',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'space-between',
-                transition: 'all 0.15s ease',
-              }}
+                              }}
               title="Click to view Inpatient Ward Requests"
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <span style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563' }}>
+                <span style={{ fontSize: '14px', fontWeight: 600, color: '#4b5563' }}>
                   🛏️ IPD Ward Indents
                 </span>
                 <span
                   style={{
-                    fontSize: '11px',
+                    fontSize: '12px',
                     fontWeight: 700,
                     borderRadius: '4px',
                     padding: '2px 6px',
@@ -1412,7 +1423,7 @@ export const UnifiedPharmacistWorkspace: React.FC<UnifiedPharmacistWorkspaceProp
                   </span>
                   <span style={{ fontSize: '12px', color: '#6b7280' }}>in progress</span>
                 </div>
-                <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
                   {ipdKpis?.open_requests ?? 1} new review · {ipdKpis?.pending_issues ?? 3} allocating
                 </div>
               </div>
@@ -1420,28 +1431,31 @@ export const UnifiedPharmacistWorkspace: React.FC<UnifiedPharmacistWorkspaceProp
 
             {/* KPI 4: ✅ Dispensed Today */}
             <div
+              role="button"
+              tabIndex={0}
+              className="hms-kpi"
               onClick={() => selectModule('opd-done')}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectModule('opd-done'); } }}
               style={{
                 background: '#ffffff',
                 border: '1px solid #e5e7eb',
                 borderRadius: '12px',
                 padding: '18px 20px',
                 cursor: 'pointer',
-                minHeight: '115px',
+                minHeight: '120px',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'space-between',
-                transition: 'all 0.15s ease',
-              }}
+                              }}
               title="Click to view Fulfilled Orders"
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <span style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563' }}>
+                <span style={{ fontSize: '14px', fontWeight: 600, color: '#4b5563' }}>
                   ✅ Dispensed Today
                 </span>
                 <span
                   style={{
-                    fontSize: '11px',
+                    fontSize: '12px',
                     fontWeight: 700,
                     borderRadius: '4px',
                     padding: '2px 6px',
@@ -1460,7 +1474,7 @@ export const UnifiedPharmacistWorkspace: React.FC<UnifiedPharmacistWorkspaceProp
                   </span>
                   <span style={{ fontSize: '12px', color: '#6b7280' }}>fulfilled</span>
                 </div>
-                <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
                   6 Outpatient · {ipdKpis?.issued_today ?? 6} Ward handovers
                 </div>
               </div>

@@ -1,1338 +1,319 @@
-import React, { useState } from 'react';
+// Lab Admin · Department settings — saved to the Lab Admin store with who/when, one section at a time.
+import React, { useEffect, useMemo, useState } from 'react';
+import { Settings, Save, RotateCcw } from 'lucide-react';
+import {
+  HmsMasterDetail,
+  HmsListRow,
+  HmsBadge,
+  HmsButton,
+  HmsDetailHeader,
+  HmsDetailBody,
+  HmsDetailFooter,
+  HmsSection,
+  HmsRow,
+  HmsField,
+  HmsToggle,
+  HmsEmpty,
+  HmsNotice,
+  INPUT,
+  TEXTAREA,
+  HMS,
+} from '../../../components/hms';
+import { LabAdminStore, LabSettings, fmtDate, fmtStamp } from '../data/labAdminStore';
+import { LabAdminViewProps } from './labAdminUi';
 
-interface LabAdminSettingsViewProps {
-  onNavigateTab?: (tab: string) => void;
-}
+type SectionKey = 'general' | 'hours' | 'workflow' | 'notifications' | 'printing' | 'integrations' | 'history';
 
-export const LabAdminSettingsView: React.FC<LabAdminSettingsViewProps> = () => {
-  const [activeAnchor, setActiveAnchor] = useState<string>('s2');
+const SECTION_FIELDS: Record<SectionKey, (keyof LabSettings)[]> = {
+  general: ['deptName', 'location', 'hod', 'intercom', 'nablNo', 'nablValidTo'],
+  hours: ['hours'],
+  workflow: ['batchSignoff', 'autoFlag', 'retestRoute', 'criticalAckWindow', 'escalateTo', 'barcodeFormat', 'rejectionReasons'],
+  notifications: ['notifyCriticalInApp', 'notifyCriticalSms', 'notifyIpdNurse', 'notifyDoctorAssistant', 'reportReadySms'],
+  printing: ['reportTemplate', 'digitalSignature', 'showPreviousResult', 'labelPrinter'],
+  integrations: [],
+  history: [],
+};
 
-  // General Settings
-  const [deptName, setDeptName] = useState('Diagnostic Lab');
-  const [location, setLocation] = useState('Ground floor · Block C');
-  const [hod, setHod] = useState('Dr. Kavitha Menon');
-  const [intercom, setIntercom] = useState('2140');
-  const [nablNo, setNablNo] = useState('MC-4418');
+const SECTION_META: Record<SectionKey, { title: string; description: string }> = {
+  general: { title: 'General', description: 'Shown on reports, labels and the department directory' },
+  hours: { title: 'Operating hours', description: 'Used by Reception when booking tests and by Home Collection' },
+  workflow: { title: 'Workflow rules', description: 'How orders move between technician, pathologist and the hospital' },
+  notifications: { title: 'Notifications', description: 'Who gets told what, outside the lab' },
+  printing: { title: 'Reports & printing', description: 'Layout and signatures on the final lab report' },
+  integrations: { title: 'Integrations', description: 'Connections to analyzers and Billing — status for reference' },
+  history: { title: 'Change history', description: 'Every admin change in the Lab, newest first' },
+};
 
-  // Operating Hours Toggles
-  const [opdHoursActive, setOpdHoursActive] = useState(true);
-  const [sundayHoursActive, setSundayHoursActive] = useState(true);
-  const [statHoursActive, setStatHoursActive] = useState(true);
-  const [homeCollectionActive, setHomeCollectionActive] = useState(true);
+const ToggleRow: React.FC<{ label: string; hint?: string; checked: boolean; onChange?: (v: boolean) => void; locked?: boolean; last?: boolean }> = ({ label, hint, checked, onChange, locked, last }) => (
+  <HmsRow
+    label={label}
+    hint={hint}
+    last={last}
+    value={locked ? <HmsBadge tone="gray">Locked</HmsBadge> : <HmsToggle checked={checked} onChange={(v) => onChange?.(v)} label={label} />}
+  />
+);
 
-  // Workflow Rules
-  const [batchSignoffEnabled, setBatchSignoffEnabled] = useState(true);
-  const [autoFlagRanges, setAutoFlagRanges] = useState(true);
-  const [retestRoute, setRetestRoute] = useState<'technician_queue' | 'technician_only' | 'general_queue'>('technician_queue');
-  const [criticalAckWindow, setCriticalAckWindow] = useState('15 minutes');
-  const [escalateTo, setEscalateTo] = useState('Department HOD, then Medical Superintendent');
-  const [barcodeFormat, setBarcodeFormat] = useState('LAB-YYMM-#### · Code 128');
-  const [rejectionReasons, setRejectionReasons] = useState('Haemolysed, clotted, QNS, mislabelled');
+export const LabAdminSettingsView: React.FC<LabAdminViewProps> = ({ data, by, notify }) => {
+  const { state, analyzers, tariffs } = data;
+  const saved = state.settings;
+  const [draft, setDraft] = useState<LabSettings>(saved);
+  const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState<string | null>('general');
 
-  // Notifications
-  const [notifyIpdNurse, setNotifyIpdNurse] = useState(true);
-  const [notifyDoctorAssistant, setNotifyDoctorAssistant] = useState(true);
-  const [reportReadySms, setReportReadySms] = useState(false);
+  // Pick up saves made elsewhere (another tab) when there are no local edits
+  const dirtyFields = useMemo(() => (Object.keys(saved) as (keyof LabSettings)[]).filter((k) => k !== 'savedAt' && k !== 'savedBy' && JSON.stringify(saved[k]) !== JSON.stringify(draft[k])), [saved, draft]);
+  useEffect(() => {
+    if (!dirtyFields.length) setDraft(saved);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saved]);
 
-  // Reports & Printing
-  const [reportTemplate, setReportTemplate] = useState('NABL standard · A4');
-  const [digitalSignature, setDigitalSignature] = useState('Signing pathologist + HOD');
-  const [showPreviousResult, setShowPreviousResult] = useState('Last 1 result with date');
-  const [labelPrinter, setLabelPrinter] = useState('Zebra ZD421 · Bench 2');
+  const set = <K extends keyof LabSettings>(k: K, v: LabSettings[K]) => setDraft((d) => ({ ...d, [k]: v }));
+  const dirtyIn = (s: SectionKey) => SECTION_FIELDS[s].some((f) => dirtyFields.includes(f));
+  const pathologists = state.staff.filter((s) => s.category === 'Pathologist' && !s.suspended);
+  const lisOffline = analyzers.filter((a) => a.status === 'Offline').length;
+  const labTariffs = Object.values(tariffs).filter((t) => !(t.code || '').toUpperCase().startsWith('RAD')).length;
+  const pendingPrices = Object.keys(state.priceDrafts).length;
 
-  // Toast
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  const triggerToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
+  const summary: Record<SectionKey, string> = {
+    general: `${draft.deptName} · HOD ${draft.hod}`,
+    hours: `${Object.values(draft.hours).filter(Boolean).length} of 4 services open`,
+    workflow: `Critical ack ${draft.criticalAckWindow} · re-test to ${draft.retestRoute === 'general_queue' ? 'general queue' : 'technician'}`,
+    notifications: `${[draft.notifyCriticalInApp, draft.notifyCriticalSms, draft.notifyIpdNurse, draft.notifyDoctorAssistant, draft.reportReadySms].filter(Boolean).length} of 5 on`,
+    printing: draft.reportTemplate,
+    integrations: `${analyzers.length} analyzers · ${labTariffs} tariffs`,
+    history: `${state.events.length} change${state.events.length === 1 ? '' : 's'} recorded`,
   };
 
-  const handleSaveChanges = () => {
-    triggerToast('Department configuration and workflow rules updated successfully');
+  const keys = Object.keys(SECTION_META) as SectionKey[];
+  const q = search.trim().toLowerCase();
+  const visible = keys.filter((k) => !q || `${SECTION_META[k].title} ${SECTION_META[k].description} ${summary[k]}`.toLowerCase().includes(q));
+  const rows: HmsListRow[] = visible.map((k) => ({
+    key: k,
+    title: SECTION_META[k].title,
+    badge: dirtyIn(k) ? <HmsBadge tone="amber">Unsaved</HmsBadge> : k === 'integrations' && lisOffline ? <HmsBadge tone="red">{lisOffline} offline</HmsBadge> : undefined,
+    sub: summary[k],
+  }));
+
+  const save = () => {
+    if (!draft.deptName.trim()) {
+      notify('Department name cannot be empty.', 'error');
+      return;
+    }
+    LabAdminStore.saveSettings(draft, by);
+    notify('Department settings saved. Technician and Pathologist workspaces use them from now on.');
+  };
+  const discard = () => {
+    setDraft(saved);
+    notify('Unsaved changes discarded.');
   };
 
-  const handleDiscard = () => {
-    setDeptName('Diagnostic Lab');
-    setLocation('Ground floor · Block C');
-    setHod('Dr. Kavitha Menon');
-    setIntercom('2140');
-    setBatchSignoffEnabled(true);
-    setAutoFlagRanges(true);
-    setRetestRoute('technician_queue');
-    triggerToast('Settings reverted to defaults');
-  };
-
-  const scrollToSection = (id: string) => {
-    setActiveAnchor(id);
-    const element = document.getElementById(id);
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const renderForm = (k: SectionKey) => {
+    switch (k) {
+      case 'general':
+        return (
+          <HmsSection title="General" padded>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '16px' }}>
+              <HmsField label="Department name" required>
+                <input style={INPUT} value={draft.deptName} onChange={(e) => set('deptName', e.target.value)} />
+              </HmsField>
+              <HmsField label="Department code" hint="Set by Hospital Admin">
+                <input style={{ ...INPUT, background: HMS.subtle, color: HMS.textSecondary }} value="LAB" readOnly />
+              </HmsField>
+              <HmsField label="Location">
+                <input style={INPUT} value={draft.location} onChange={(e) => set('location', e.target.value)} />
+              </HmsField>
+              <HmsField label="Head of department" hint="Pathologists in the lab team">
+                <select style={INPUT} value={draft.hod} onChange={(e) => set('hod', e.target.value)}>
+                  {!pathologists.some((p) => p.name === draft.hod) && <option value={draft.hod}>{draft.hod}</option>}
+                  {pathologists.map((p) => (
+                    <option key={p.id} value={p.name}>
+                      {p.name} · {p.role}
+                    </option>
+                  ))}
+                </select>
+              </HmsField>
+              <HmsField label="Intercom extension">
+                <input style={INPUT} value={draft.intercom} onChange={(e) => set('intercom', e.target.value)} />
+              </HmsField>
+              <HmsField label="NABL accreditation no." hint={`Valid to ${fmtDate(draft.nablValidTo)}`}>
+                <input style={INPUT} value={draft.nablNo} onChange={(e) => set('nablNo', e.target.value)} />
+              </HmsField>
+              <HmsField label="NABL valid to">
+                <input type="date" style={INPUT} value={draft.nablValidTo} onChange={(e) => set('nablValidTo', e.target.value)} />
+              </HmsField>
+            </div>
+          </HmsSection>
+        );
+      case 'hours':
+        return (
+          <HmsSection title="Operating hours">
+            <ToggleRow label="OPD sample collection" hint="Mon–Sat · 07:00 – 20:00" checked={draft.hours.opd} onChange={(v) => set('hours', { ...draft.hours, opd: v })} />
+            <ToggleRow label="Sunday collection" hint="Sun · 08:00 – 13:00" checked={draft.hours.sunday} onChange={(v) => set('hours', { ...draft.hours, sunday: v })} />
+            <ToggleRow label="Emergency & STAT processing" hint="All days · 24 hours" checked={draft.hours.stat} onChange={(v) => set('hours', { ...draft.hours, stat: v })} />
+            <ToggleRow label="Home collection" hint="Mon–Sat · 07:00 – 11:00" checked={draft.hours.home} onChange={(v) => set('hours', { ...draft.hours, home: v })} last />
+          </HmsSection>
+        );
+      case 'workflow':
+        return (
+          <>
+            <HmsSection title="Sign-off">
+              <ToggleRow label="Pathologist sign-off for every result" hint="Nothing reaches the doctor, billing or patient record without sign-off. Required for NABL." checked locked />
+              <ToggleRow label="Batch sign-off for normal results" hint="Let pathologists approve fully-normal results in one step." checked={draft.batchSignoff} onChange={(v) => set('batchSignoff', v)} />
+              <ToggleRow label="Auto-flag out-of-range values" hint="Amber for abnormal and red for critical as the technician types, using the Test Catalog ranges." checked={draft.autoFlag} onChange={(v) => set('autoFlag', v)} last />
+            </HmsSection>
+            <HmsSection title="Re-tests & critical values" padded>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '16px' }}>
+                <HmsField label="When a pathologist requests a re-test">
+                  <select style={INPUT} value={draft.retestRoute} onChange={(e) => set('retestRoute', e.target.value as LabSettings['retestRoute'])}>
+                    <option value="technician_queue">Original technician, tagged “Returned” in the queue</option>
+                    <option value="technician_only">Original technician only</option>
+                    <option value="general_queue">General test queue</option>
+                  </select>
+                </HmsField>
+                <HmsField label="Critical acknowledgement window">
+                  <select style={INPUT} value={draft.criticalAckWindow} onChange={(e) => set('criticalAckWindow', e.target.value)}>
+                    {['15 minutes', '30 minutes', '45 minutes', '60 minutes'].map((o) => (
+                      <option key={o}>{o}</option>
+                    ))}
+                  </select>
+                </HmsField>
+                <HmsField label="If the doctor has not acknowledged, escalate to">
+                  <select style={INPUT} value={draft.escalateTo} onChange={(e) => set('escalateTo', e.target.value)}>
+                    {['Department HOD, then Medical Superintendent', 'Duty Consultant', 'Chief Medical Officer'].map((o) => (
+                      <option key={o}>{o}</option>
+                    ))}
+                  </select>
+                </HmsField>
+                <HmsField label="Specimen barcode format">
+                  <select style={INPUT} value={draft.barcodeFormat} onChange={(e) => set('barcodeFormat', e.target.value)}>
+                    {['LAB-YYMM-#### · Code 128', 'UHID-TEST-#### · Code 39', 'QR Code (2D DataMatrix)'].map((o) => (
+                      <option key={o}>{o}</option>
+                    ))}
+                  </select>
+                </HmsField>
+              </div>
+              <div style={{ marginTop: '16px' }}>
+                <HmsField label="Sample rejection reasons" hint="Comma separated — shown to technicians when rejecting a sample.">
+                  <textarea style={TEXTAREA} value={draft.rejectionReasons} onChange={(e) => set('rejectionReasons', e.target.value)} />
+                </HmsField>
+              </div>
+            </HmsSection>
+          </>
+        );
+      case 'notifications':
+        return (
+          <HmsSection title="Notifications">
+            <ToggleRow label="Critical values · in-app alert to the ordering doctor" hint="Must be acknowledged within the window above." checked={draft.notifyCriticalInApp} onChange={(v) => set('notifyCriticalInApp', v)} />
+            <ToggleRow label="Critical values · SMS to the ordering doctor" checked={draft.notifyCriticalSms} onChange={(v) => set('notifyCriticalSms', v)} />
+            <ToggleRow label="Notify ward nurse for IPD patients" hint="When a report is signed off for an admitted patient." checked={draft.notifyIpdNurse} onChange={(v) => set('notifyIpdNurse', v)} />
+            <ToggleRow label="Status updates to Doctor Assistant" hint="Status only (collected, in progress, ready). No clinical values." checked={draft.notifyDoctorAssistant} onChange={(v) => set('notifyDoctorAssistant', v)} />
+            <ToggleRow label="Report ready SMS to patient" hint="Sent with a secure download link after sign-off." checked={draft.reportReadySms} onChange={(v) => set('reportReadySms', v)} last />
+          </HmsSection>
+        );
+      case 'printing':
+        return (
+          <HmsSection title="Reports & printing" padded>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '16px' }}>
+              <HmsField label="Report template">
+                <select style={INPUT} value={draft.reportTemplate} onChange={(e) => set('reportTemplate', e.target.value)}>
+                  {['NABL standard · A4', 'Compact summary · A4', 'Letterhead pre-printed · A4'].map((o) => (
+                    <option key={o}>{o}</option>
+                  ))}
+                </select>
+              </HmsField>
+              <HmsField label="Digital signature">
+                <select style={INPUT} value={draft.digitalSignature} onChange={(e) => set('digitalSignature', e.target.value)}>
+                  {['Signing pathologist + HOD', 'Signing pathologist only', 'Dual sign-off (Technician + Pathologist)'].map((o) => (
+                    <option key={o}>{o}</option>
+                  ))}
+                </select>
+              </HmsField>
+              <HmsField label="Show previous result">
+                <select style={INPUT} value={draft.showPreviousResult} onChange={(e) => set('showPreviousResult', e.target.value)}>
+                  {['Last 1 result with date', 'Last 3 results (trend table)', 'Do not show past results'].map((o) => (
+                    <option key={o}>{o}</option>
+                  ))}
+                </select>
+              </HmsField>
+              <HmsField label="Label printer">
+                <select style={INPUT} value={draft.labelPrinter} onChange={(e) => set('labelPrinter', e.target.value)}>
+                  {['Zebra ZD421 · Bench 2', 'TSC TE200 · Reception', 'Brother TD-4550DN · Phlebotomy'].map((o) => (
+                    <option key={o}>{o}</option>
+                  ))}
+                </select>
+              </HmsField>
+            </div>
+          </HmsSection>
+        );
+      case 'integrations':
+        return (
+          <HmsSection title="Integrations">
+            <HmsRow label="Analyzers registered" hint="Status reported by the Technician workbench" value={<HmsBadge tone={lisOffline ? 'red' : 'green'}>{lisOffline ? `${analyzers.length - lisOffline} of ${analyzers.length} online` : `${analyzers.length} online`}</HmsBadge>} />
+            <HmsRow label="Billing tariff master" hint={pendingPrices ? `${pendingPrices} draft price${pendingPrices === 1 ? '' : 's'} waiting to sync` : 'All lab prices synced'} value={<HmsBadge tone={pendingPrices ? 'amber' : 'green'}>{labTariffs} lab tariffs</HmsBadge>} />
+            <HmsRow label="LIS middleware" hint="Managed by IT — connection health is not reported to the HMS yet" value={<HmsBadge tone="gray">Not monitored</HmsBadge>} />
+            <HmsRow label="Home collection app" value={<HmsBadge tone="gray">Not configured</HmsBadge>} last />
+          </HmsSection>
+        );
+      case 'history':
+        return (
+          <HmsSection title="Change history">
+            {state.events.length === 0 ? (
+              <div style={{ padding: '12px 14px', fontSize: '13px', color: HMS.textSecondary }}>No admin changes recorded yet.</div>
+            ) : (
+              state.events.slice(0, 60).map((e, i) => <HmsRow key={e.at + i} label={e.text} hint={`${fmtStamp(e.at)} · ${e.by}`} value={<HmsBadge tone="gray">{e.area.toUpperCase()}</HmsBadge>} last={i === Math.min(state.events.length, 60) - 1} />)
+            )}
+          </HmsSection>
+        );
     }
   };
 
+  const renderDetail = (key: string | null) => {
+    const k = key as SectionKey | null;
+    if (!k || !SECTION_META[k]) return <HmsEmpty>Select a settings section.</HmsEmpty>;
+    const editable = SECTION_FIELDS[k].length > 0;
+    return (
+      <>
+        <HmsDetailHeader
+          icon={Settings}
+          title={SECTION_META[k].title}
+          badge={dirtyIn(k) ? <HmsBadge tone="amber">Unsaved</HmsBadge> : undefined}
+          subtitle={`${SECTION_META[k].description}${saved.savedAt ? ` · last saved ${fmtStamp(saved.savedAt)} by ${saved.savedBy}` : ''}`}
+        />
+        <HmsDetailBody>
+          {dirtyFields.length > 0 && <HmsNotice tone="amber">{dirtyFields.length} unsaved change{dirtyFields.length === 1 ? '' : 's'} across settings. Save to apply.</HmsNotice>}
+          {renderForm(k)}
+        </HmsDetailBody>
+        {editable && (
+          <HmsDetailFooter>
+            <HmsButton icon={RotateCcw} onClick={discard} disabled={!dirtyFields.length}>
+              Discard changes
+            </HmsButton>
+            <HmsButton variant="primary" icon={Save} onClick={save} disabled={!dirtyFields.length}>
+              Save changes
+            </HmsButton>
+          </HmsDetailFooter>
+        )}
+      </>
+    );
+  };
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div
-          style={{
-            position: 'fixed',
-            bottom: '24px',
-            right: '24px',
-            background: '#111827',
-            color: '#FFFFFF',
-            padding: '12px 20px',
-            borderRadius: '10px',
-            fontSize: '14px',
-            fontWeight: 500,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-            zIndex: 1000,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-        >
-          <span>✓</span>
-          <span>{toastMessage}</span>
-        </div>
-      )}
-
-      {/* Header */}
-      <header style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          <h1 style={{ margin: 0, fontSize: '32px', fontWeight: 700, letterSpacing: '-0.02em', color: '#111827' }}>
-            Department Settings
-          </h1>
-          <p style={{ margin: 0, fontSize: '14px', color: '#6B7280' }}>
-            How the Diagnostic Lab runs: hours, workflow rules, alerts and reports. Changes apply to the Technician and Pathologist workspaces.
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <button
-            onClick={handleDiscard}
-            style={{
-              whiteSpace: 'nowrap',
-              height: '40px',
-              padding: '0 16px',
-              borderRadius: '10px',
-              border: '1px solid #E5E7EB',
-              background: '#FFFFFF',
-              fontSize: '14px',
-              fontWeight: 500,
-              color: '#111827',
-              cursor: 'pointer',
-            }}
-          >
-            Discard
-          </button>
-          <button
-            onClick={handleSaveChanges}
-            style={{
-              whiteSpace: 'nowrap',
-              height: '40px',
-              padding: '0 16px',
-              borderRadius: '10px',
-              border: '1px solid #2563EB',
-              background: '#2563EB',
-              fontSize: '14px',
-              fontWeight: 600,
-              color: '#FFFFFF',
-              cursor: 'pointer',
-            }}
-          >
-            Save changes
-          </button>
-        </div>
-      </header>
-
-      {/* Two Column Layout: Anchor Menu & Settings Sections */}
-      <section style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', alignItems: 'flex-start' }}>
-        {/* Left Sticky Anchor Navigation */}
-        <div
-          style={{
-            flex: '0 1 220px',
-            minWidth: '180px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '4px',
-            position: 'sticky',
-            top: '24px',
-          }}
-        >
-          {[
-            { id: 's0', label: 'General' },
-            { id: 's1', label: 'Operating hours' },
-            { id: 's2', label: 'Workflow rules' },
-            { id: 's3', label: 'Notifications' },
-            { id: 's4', label: 'Reports & printing' },
-            { id: 's5', label: 'Integrations' },
-          ].map((item) => {
-            const isActive = activeAnchor === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => scrollToSection(item.id)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  height: '36px',
-                  padding: '0 12px',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  fontWeight: isActive ? 600 : 500,
-                  color: isActive ? '#1D4ED8' : '#374151',
-                  background: isActive ? '#EFF6FF' : 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                {item.label}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Right Settings Form Container */}
-        <div style={{ flex: '1 1 560px', minWidth: 0, maxWidth: '880px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {/* Section 0: General */}
-          <div
-            id="s0"
-            style={{
-              background: '#FFFFFF',
-              border: '1px solid #E5E7EB',
-              borderRadius: '12px',
-              boxShadow: '0 1px 2px rgba(17,24,39,0.04)',
-              padding: '20px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '16px',
-            }}
-          >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#111827' }}>General</h2>
-              <span style={{ fontSize: '13px', color: '#6B7280' }}>Shown on reports, labels and the department directory</span>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 600, color: '#374151' }}>Department name</label>
-                <input
-                  type="text"
-                  value={deptName}
-                  onChange={(e) => setDeptName(e.target.value)}
-                  style={{
-                    height: '40px',
-                    padding: '0 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #E5E7EB',
-                    fontSize: '14px',
-                    color: '#111827',
-                    outline: 'none',
-                  }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 600, color: '#374151' }}>Department code</label>
-                <div
-                  style={{
-                    height: '40px',
-                    border: '1px solid #E5E7EB',
-                    borderRadius: '8px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    padding: '0 12px',
-                    fontSize: '14px',
-                    background: '#F9FAFB',
-                    color: '#6B7280',
-                    fontFamily: "'JetBrains Mono', monospace",
-                  }}
-                >
-                  LAB
-                </div>
-                <span style={{ fontSize: '12px', color: '#6B7280' }}>Set by Hospital Admin</span>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 600, color: '#374151' }}>Location</label>
-                <input
-                  type="text"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  style={{
-                    height: '40px',
-                    padding: '0 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #E5E7EB',
-                    fontSize: '14px',
-                    color: '#111827',
-                    outline: 'none',
-                  }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 600, color: '#374151' }}>Head of department</label>
-                <select
-                  value={hod}
-                  onChange={(e) => setHod(e.target.value)}
-                  style={{
-                    height: '40px',
-                    padding: '0 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #E5E7EB',
-                    fontSize: '14px',
-                    color: '#111827',
-                    background: '#FFFFFF',
-                    outline: 'none',
-                  }}
-                >
-                  <option value="Dr. Kavitha Menon">Dr. Kavitha Menon</option>
-                  <option value="Dr. Amanda Chen">Dr. Amanda Chen</option>
-                  <option value="Dr. Rajesh Kumar">Dr. Rajesh Kumar</option>
-                </select>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 600, color: '#374151' }}>Intercom extension</label>
-                <input
-                  type="text"
-                  value={intercom}
-                  onChange={(e) => setIntercom(e.target.value)}
-                  style={{
-                    height: '40px',
-                    padding: '0 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #E5E7EB',
-                    fontSize: '14px',
-                    color: '#111827',
-                    outline: 'none',
-                  }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 600, color: '#374151' }}>NABL accreditation no.</label>
-                <div
-                  style={{
-                    height: '40px',
-                    border: '1px solid #E5E7EB',
-                    borderRadius: '8px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '0 12px',
-                    fontSize: '14px',
-                    background: '#FFFFFF',
-                    color: '#111827',
-                  }}
-                >
-                  <input
-                    type="text"
-                    value={nablNo}
-                    onChange={(e) => setNablNo(e.target.value)}
-                    style={{
-                      border: 'none',
-                      outline: 'none',
-                      width: '100%',
-                      fontSize: '14px',
-                      color: '#111827',
-                    }}
-                  />
-                  <span style={{ fontSize: '12px', color: '#6B7280', whiteSpace: 'nowrap' }}>valid to Aug 2027</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Section 1: Operating hours */}
-          <div
-            id="s1"
-            style={{
-              background: '#FFFFFF',
-              border: '1px solid #E5E7EB',
-              borderRadius: '12px',
-              boxShadow: '0 1px 2px rgba(17,24,39,0.04)',
-              padding: '20px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '14px',
-            }}
-          >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#111827' }}>Operating hours</h2>
-              <span style={{ fontSize: '13px', color: '#6B7280' }}>Used by Reception when booking tests and by Home Collection</span>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              {/* Row 1 */}
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'minmax(0,1.4fr) minmax(0,0.8fr) minmax(0,1fr) 44px',
-                  gap: '12px',
-                  alignItems: 'center',
-                  minHeight: '56px',
-                  borderBottom: '1px solid #F3F4F6',
-                }}
-              >
-                <span style={{ fontSize: '14px', fontWeight: 500, color: '#111827' }}>OPD sample collection</span>
-                <span style={{ fontSize: '14px', color: '#6B7280' }}>Mon–Sat</span>
-                <span style={{ fontSize: '14px', fontVariantNumeric: 'tabular-nums', color: '#374151' }}>07:00 – 20:00</span>
-                <button
-                  type="button"
-                  onClick={() => setOpdHoursActive(!opdHoursActive)}
-                  style={{
-                    flexShrink: 0,
-                    width: '40px',
-                    height: '22px',
-                    borderRadius: '11px',
-                    background: opdHoursActive ? '#2563EB' : '#D1D5DB',
-                    position: 'relative',
-                    border: 'none',
-                    cursor: 'pointer',
-                    transition: 'background 0.2s',
-                  }}
-                >
-                  <span
-                    style={{
-                      position: 'absolute',
-                      top: '3px',
-                      left: opdHoursActive ? '21px' : '3px',
-                      width: '16px',
-                      height: '16px',
-                      borderRadius: '50%',
-                      background: '#FFFFFF',
-                      transition: 'left 0.2s',
-                    }}
-                  />
-                </button>
-              </div>
-
-              {/* Row 2 */}
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'minmax(0,1.4fr) minmax(0,0.8fr) minmax(0,1fr) 44px',
-                  gap: '12px',
-                  alignItems: 'center',
-                  minHeight: '56px',
-                  borderBottom: '1px solid #F3F4F6',
-                }}
-              >
-                <span style={{ fontSize: '14px', fontWeight: 500, color: '#111827' }}>Sunday collection</span>
-                <span style={{ fontSize: '14px', color: '#6B7280' }}>Sun</span>
-                <span style={{ fontSize: '14px', fontVariantNumeric: 'tabular-nums', color: '#374151' }}>08:00 – 13:00</span>
-                <button
-                  type="button"
-                  onClick={() => setSundayHoursActive(!sundayHoursActive)}
-                  style={{
-                    flexShrink: 0,
-                    width: '40px',
-                    height: '22px',
-                    borderRadius: '11px',
-                    background: sundayHoursActive ? '#2563EB' : '#D1D5DB',
-                    position: 'relative',
-                    border: 'none',
-                    cursor: 'pointer',
-                    transition: 'background 0.2s',
-                  }}
-                >
-                  <span
-                    style={{
-                      position: 'absolute',
-                      top: '3px',
-                      left: sundayHoursActive ? '21px' : '3px',
-                      width: '16px',
-                      height: '16px',
-                      borderRadius: '50%',
-                      background: '#FFFFFF',
-                      transition: 'left 0.2s',
-                    }}
-                  />
-                </button>
-              </div>
-
-              {/* Row 3 */}
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'minmax(0,1.4fr) minmax(0,0.8fr) minmax(0,1fr) 44px',
-                  gap: '12px',
-                  alignItems: 'center',
-                  minHeight: '56px',
-                  borderBottom: '1px solid #F3F4F6',
-                }}
-              >
-                <span style={{ fontSize: '14px', fontWeight: 500, color: '#111827' }}>Emergency &amp; STAT processing</span>
-                <span style={{ fontSize: '14px', color: '#6B7280' }}>All days</span>
-                <span style={{ fontSize: '14px', fontVariantNumeric: 'tabular-nums', color: '#374151' }}>24 hours</span>
-                <button
-                  type="button"
-                  onClick={() => setStatHoursActive(!statHoursActive)}
-                  style={{
-                    flexShrink: 0,
-                    width: '40px',
-                    height: '22px',
-                    borderRadius: '11px',
-                    background: statHoursActive ? '#2563EB' : '#D1D5DB',
-                    position: 'relative',
-                    border: 'none',
-                    cursor: 'pointer',
-                    transition: 'background 0.2s',
-                  }}
-                >
-                  <span
-                    style={{
-                      position: 'absolute',
-                      top: '3px',
-                      left: statHoursActive ? '21px' : '3px',
-                      width: '16px',
-                      height: '16px',
-                      borderRadius: '50%',
-                      background: '#FFFFFF',
-                      transition: 'left 0.2s',
-                    }}
-                  />
-                </button>
-              </div>
-
-              {/* Row 4 */}
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'minmax(0,1.4fr) minmax(0,0.8fr) minmax(0,1fr) 44px',
-                  gap: '12px',
-                  alignItems: 'center',
-                  minHeight: '56px',
-                  borderBottom: '1px solid #F3F4F6',
-                }}
-              >
-                <span style={{ fontSize: '14px', fontWeight: 500, color: '#111827' }}>Home collection</span>
-                <span style={{ fontSize: '14px', color: '#6B7280' }}>Mon–Sat</span>
-                <span style={{ fontSize: '14px', fontVariantNumeric: 'tabular-nums', color: '#374151' }}>07:00 – 11:00</span>
-                <button
-                  type="button"
-                  onClick={() => setHomeCollectionActive(!homeCollectionActive)}
-                  style={{
-                    flexShrink: 0,
-                    width: '40px',
-                    height: '22px',
-                    borderRadius: '11px',
-                    background: homeCollectionActive ? '#2563EB' : '#D1D5DB',
-                    position: 'relative',
-                    border: 'none',
-                    cursor: 'pointer',
-                    transition: 'background 0.2s',
-                  }}
-                >
-                  <span
-                    style={{
-                      position: 'absolute',
-                      top: '3px',
-                      left: homeCollectionActive ? '21px' : '3px',
-                      width: '16px',
-                      height: '16px',
-                      borderRadius: '50%',
-                      background: '#FFFFFF',
-                      transition: 'left 0.2s',
-                    }}
-                  />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Section 2: Workflow rules */}
-          <div
-            id="s2"
-            style={{
-              background: '#FFFFFF',
-              border: '1px solid #E5E7EB',
-              borderRadius: '12px',
-              boxShadow: '0 1px 2px rgba(17,24,39,0.04)',
-              padding: '20px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '14px',
-            }}
-          >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#111827' }}>Workflow rules</h2>
-              <span style={{ fontSize: '13px', color: '#6B7280' }}>Controls how orders move between technician, pathologist and the rest of the hospital</span>
-            </div>
-
-            {/* Pathologist Sign-off (Locked) */}
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                gap: '16px',
-                minHeight: '64px',
-                padding: '12px 0',
-                borderBottom: '1px solid #F3F4F6',
-              }}
-            >
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                <span style={{ fontSize: '14px', fontWeight: 500, color: '#111827' }}>Pathologist sign-off for every result</span>
-                <span style={{ fontSize: '13px', color: '#6B7280' }}>
-                  Nothing reaches the doctor, billing or patient record without sign-off. Required for NABL.
-                </span>
-              </div>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '12px', color: '#6B7280', whiteSpace: 'nowrap' }}>Locked</span>
-                <span
-                  style={{
-                    flexShrink: 0,
-                    width: '40px',
-                    height: '22px',
-                    borderRadius: '11px',
-                    background: '#2563EB',
-                    position: 'relative',
-                    display: 'inline-block',
-                    opacity: 0.9,
-                  }}
-                >
-                  <span
-                    style={{
-                      position: 'absolute',
-                      top: '3px',
-                      left: '21px',
-                      width: '16px',
-                      height: '16px',
-                      borderRadius: '50%',
-                      background: '#FFFFFF',
-                    }}
-                  />
-                </span>
-              </span>
-            </div>
-
-            {/* Batch Sign-off */}
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                gap: '16px',
-                minHeight: '64px',
-                padding: '12px 0',
-                borderBottom: '1px solid #F3F4F6',
-              }}
-            >
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                <span style={{ fontSize: '14px', fontWeight: 500, color: '#111827' }}>Batch sign-off for normal results</span>
-                <span style={{ fontSize: '13px', color: '#6B7280' }}>Let pathologists approve fully-normal results in one step.</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setBatchSignoffEnabled(!batchSignoffEnabled)}
-                style={{
-                  flexShrink: 0,
-                  width: '40px',
-                  height: '22px',
-                  borderRadius: '11px',
-                  background: batchSignoffEnabled ? '#2563EB' : '#D1D5DB',
-                  position: 'relative',
-                  border: 'none',
-                  cursor: 'pointer',
-                  transition: 'background 0.2s',
-                }}
-              >
-                <span
-                  style={{
-                    position: 'absolute',
-                    top: '3px',
-                    left: batchSignoffEnabled ? '21px' : '3px',
-                    width: '16px',
-                    height: '16px',
-                    borderRadius: '50%',
-                    background: '#FFFFFF',
-                    transition: 'left 0.2s',
-                  }}
-                />
-              </button>
-            </div>
-
-            {/* Auto-flag out-of-range */}
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                gap: '16px',
-                minHeight: '64px',
-                padding: '12px 0',
-                borderBottom: '1px solid #F3F4F6',
-              }}
-            >
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                <span style={{ fontSize: '14px', fontWeight: 500, color: '#111827' }}>Auto-flag out-of-range values</span>
-                <span style={{ fontSize: '13px', color: '#6B7280' }}>
-                  Flags amber for abnormal and red for critical as the technician types, using ranges from the Test Catalog.
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setAutoFlagRanges(!autoFlagRanges)}
-                style={{
-                  flexShrink: 0,
-                  width: '40px',
-                  height: '22px',
-                  borderRadius: '11px',
-                  background: autoFlagRanges ? '#2563EB' : '#D1D5DB',
-                  position: 'relative',
-                  border: 'none',
-                  cursor: 'pointer',
-                  transition: 'background 0.2s',
-                }}
-              >
-                <span
-                  style={{
-                    position: 'absolute',
-                    top: '3px',
-                    left: autoFlagRanges ? '21px' : '3px',
-                    width: '16px',
-                    height: '16px',
-                    borderRadius: '50%',
-                    background: '#FFFFFF',
-                    transition: 'left 0.2s',
-                  }}
-                />
-              </button>
-            </div>
-
-            {/* When a pathologist requests a re-test (Radio cards) */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '12px 0', borderBottom: '1px solid #F3F4F6' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                <span style={{ fontSize: '14px', fontWeight: 500, color: '#111827' }}>When a pathologist requests a re-test</span>
-                <span style={{ fontSize: '13px', color: '#6B7280' }}>Where the order goes back to</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {/* Option 1 */}
-                <div
-                  onClick={() => setRetestRoute('technician_queue')}
-                  style={{
-                    display: 'flex',
-                    gap: '12px',
-                    alignItems: 'flex-start',
-                    padding: '12px 14px',
-                    border: retestRoute === 'technician_queue' ? '1px solid #2563EB' : '1px solid #E5E7EB',
-                    background: retestRoute === 'technician_queue' ? '#EFF6FF' : '#FFFFFF',
-                    borderRadius: '10px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <span
-                    style={{
-                      flexShrink: 0,
-                      width: '18px',
-                      height: '18px',
-                      borderRadius: '50%',
-                      border: retestRoute === 'technician_queue' ? '5px solid #2563EB' : '2px solid #D1D5DB',
-                      background: '#FFFFFF',
-                      marginTop: '1px',
-                    }}
-                  />
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                    <span style={{ fontSize: '14px', fontWeight: 500, color: '#111827' }}>
-                      Original technician, plus a “Returned” tag in the queue
-                    </span>
-                    <span style={{ fontSize: '13px', color: '#6B7280' }}>
-                      Direct alert to the person who entered it; still visible to the whole bench
-                    </span>
-                  </div>
-                </div>
-
-                {/* Option 2 */}
-                <div
-                  onClick={() => setRetestRoute('technician_only')}
-                  style={{
-                    display: 'flex',
-                    gap: '12px',
-                    alignItems: 'flex-start',
-                    padding: '12px 14px',
-                    border: retestRoute === 'technician_only' ? '1px solid #2563EB' : '1px solid #E5E7EB',
-                    background: retestRoute === 'technician_only' ? '#EFF6FF' : '#FFFFFF',
-                    borderRadius: '10px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <span
-                    style={{
-                      flexShrink: 0,
-                      width: '18px',
-                      height: '18px',
-                      borderRadius: '50%',
-                      border: retestRoute === 'technician_only' ? '5px solid #2563EB' : '2px solid #D1D5DB',
-                      background: '#FFFFFF',
-                      marginTop: '1px',
-                    }}
-                  />
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                    <span style={{ fontSize: '14px', fontWeight: 500, color: '#111827' }}>Original technician only</span>
-                    <span style={{ fontSize: '13px', color: '#6B7280' }}>Only they see it until they act</span>
-                  </div>
-                </div>
-
-                {/* Option 3 */}
-                <div
-                  onClick={() => setRetestRoute('general_queue')}
-                  style={{
-                    display: 'flex',
-                    gap: '12px',
-                    alignItems: 'flex-start',
-                    padding: '12px 14px',
-                    border: retestRoute === 'general_queue' ? '1px solid #2563EB' : '1px solid #E5E7EB',
-                    background: retestRoute === 'general_queue' ? '#EFF6FF' : '#FFFFFF',
-                    borderRadius: '10px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <span
-                    style={{
-                      flexShrink: 0,
-                      width: '18px',
-                      height: '18px',
-                      borderRadius: '50%',
-                      border: retestRoute === 'general_queue' ? '5px solid #2563EB' : '2px solid #D1D5DB',
-                      background: '#FFFFFF',
-                      marginTop: '1px',
-                    }}
-                  />
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                    <span style={{ fontSize: '14px', fontWeight: 500, color: '#111827' }}>General test queue</span>
-                    <span style={{ fontSize: '13px', color: '#6B7280' }}>Whoever picks it up next</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Critical Ack Window, Escalate To, Barcode, Sample rejection */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', paddingTop: '12px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 600, color: '#374151' }}>Critical acknowledgment window</label>
-                <select
-                  value={criticalAckWindow}
-                  onChange={(e) => setCriticalAckWindow(e.target.value)}
-                  style={{
-                    height: '40px',
-                    padding: '0 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #E5E7EB',
-                    fontSize: '14px',
-                    color: '#111827',
-                    background: '#FFFFFF',
-                    outline: 'none',
-                  }}
-                >
-                  <option value="15 minutes">15 minutes</option>
-                  <option value="30 minutes">30 minutes</option>
-                  <option value="45 minutes">45 minutes</option>
-                  <option value="60 minutes">60 minutes</option>
-                </select>
-                <span style={{ fontSize: '12px', color: '#6B7280' }}>If the doctor has not acknowledged, escalate</span>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 600, color: '#374151' }}>Escalate to</label>
-                <select
-                  value={escalateTo}
-                  onChange={(e) => setEscalateTo(e.target.value)}
-                  style={{
-                    height: '40px',
-                    padding: '0 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #E5E7EB',
-                    fontSize: '14px',
-                    color: '#111827',
-                    background: '#FFFFFF',
-                    outline: 'none',
-                  }}
-                >
-                  <option value="Department HOD, then Medical Superintendent">
-                    Department HOD, then Medical Superintendent
-                  </option>
-                  <option value="Duty Consultant">Duty Consultant</option>
-                  <option value="Chief Medical Officer">Chief Medical Officer</option>
-                </select>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 600, color: '#374151' }}>Specimen barcode format</label>
-                <select
-                  value={barcodeFormat}
-                  onChange={(e) => setBarcodeFormat(e.target.value)}
-                  style={{
-                    height: '40px',
-                    padding: '0 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #E5E7EB',
-                    fontSize: '14px',
-                    color: '#111827',
-                    background: '#FFFFFF',
-                    outline: 'none',
-                  }}
-                >
-                  <option value="LAB-YYMM-#### · Code 128">LAB-YYMM-#### · Code 128</option>
-                  <option value="UHID-TEST-#### · Code 39">UHID-TEST-#### · Code 39</option>
-                  <option value="QR-CODE-2D">QR Code (2D DataMatrix)</option>
-                </select>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 600, color: '#374151' }}>Sample rejection reasons</label>
-                <input
-                  type="text"
-                  value={rejectionReasons}
-                  onChange={(e) => setRejectionReasons(e.target.value)}
-                  style={{
-                    height: '40px',
-                    padding: '0 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #E5E7EB',
-                    fontSize: '14px',
-                    color: '#111827',
-                    outline: 'none',
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Section 3: Notifications */}
-          <div
-            id="s3"
-            style={{
-              background: '#FFFFFF',
-              border: '1px solid #E5E7EB',
-              borderRadius: '12px',
-              boxShadow: '0 1px 2px rgba(17,24,39,0.04)',
-              padding: '20px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '14px',
-            }}
-          >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#111827' }}>Notifications</h2>
-              <span style={{ fontSize: '13px', color: '#6B7280' }}>Who gets told what, outside the lab</span>
-            </div>
-
-            {/* Critical alert channels */}
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                gap: '16px',
-                minHeight: '64px',
-                padding: '12px 0',
-                borderBottom: '1px solid #F3F4F6',
-              }}
-            >
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                <span style={{ fontSize: '14px', fontWeight: 500, color: '#111827' }}>
-                  Critical values: urgent alert to ordering doctor
-                </span>
-                <span style={{ fontSize: '13px', color: '#6B7280' }}>In-app alert that must be acknowledged, plus SMS.</span>
-              </div>
-              <div style={{ display: 'flex', gap: '6px' }}>
-                <span
-                  style={{
-                    whiteSpace: 'nowrap',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    padding: '3px 8px',
-                    borderRadius: '6px',
-                    background: '#EFF6FF',
-                    color: '#1D4ED8',
-                  }}
-                >
-                  In-app
-                </span>
-                <span
-                  style={{
-                    whiteSpace: 'nowrap',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    padding: '3px 8px',
-                    borderRadius: '6px',
-                    background: '#EFF6FF',
-                    color: '#1D4ED8',
-                  }}
-                >
-                  SMS
-                </span>
-              </div>
-            </div>
-
-            {/* Notify ward nurse */}
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                gap: '16px',
-                minHeight: '64px',
-                padding: '12px 0',
-                borderBottom: '1px solid #F3F4F6',
-              }}
-            >
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                <span style={{ fontSize: '14px', fontWeight: 500, color: '#111827' }}>Notify ward nurse for IPD patients</span>
-                <span style={{ fontSize: '13px', color: '#6B7280' }}>When a report is signed off for an admitted patient.</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setNotifyIpdNurse(!notifyIpdNurse)}
-                style={{
-                  flexShrink: 0,
-                  width: '40px',
-                  height: '22px',
-                  borderRadius: '11px',
-                  background: notifyIpdNurse ? '#2563EB' : '#D1D5DB',
-                  position: 'relative',
-                  border: 'none',
-                  cursor: 'pointer',
-                  transition: 'background 0.2s',
-                }}
-              >
-                <span
-                  style={{
-                    position: 'absolute',
-                    top: '3px',
-                    left: notifyIpdNurse ? '21px' : '3px',
-                    width: '16px',
-                    height: '16px',
-                    borderRadius: '50%',
-                    background: '#FFFFFF',
-                    transition: 'left 0.2s',
-                  }}
-                />
-              </button>
-            </div>
-
-            {/* Status updates to Assistant */}
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                gap: '16px',
-                minHeight: '64px',
-                padding: '12px 0',
-                borderBottom: '1px solid #F3F4F6',
-              }}
-            >
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                <span style={{ fontSize: '14px', fontWeight: 500, color: '#111827' }}>Status updates to Doctor Assistant</span>
-                <span style={{ fontSize: '13px', color: '#6B7280' }}>
-                  Status only (collected, in progress, ready). No clinical values.
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setNotifyDoctorAssistant(!notifyDoctorAssistant)}
-                style={{
-                  flexShrink: 0,
-                  width: '40px',
-                  height: '22px',
-                  borderRadius: '11px',
-                  background: notifyDoctorAssistant ? '#2563EB' : '#D1D5DB',
-                  position: 'relative',
-                  border: 'none',
-                  cursor: 'pointer',
-                  transition: 'background 0.2s',
-                }}
-              >
-                <span
-                  style={{
-                    position: 'absolute',
-                    top: '3px',
-                    left: notifyDoctorAssistant ? '21px' : '3px',
-                    width: '16px',
-                    height: '16px',
-                    borderRadius: '50%',
-                    background: '#FFFFFF',
-                    transition: 'left 0.2s',
-                  }}
-                />
-              </button>
-            </div>
-
-            {/* Report ready SMS to patient */}
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                gap: '16px',
-                minHeight: '64px',
-                padding: '12px 0',
-              }}
-            >
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                <span style={{ fontSize: '14px', fontWeight: 500, color: '#111827' }}>Report ready SMS to patient</span>
-                <span style={{ fontSize: '13px', color: '#6B7280' }}>Sent with a secure download link after sign-off.</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setReportReadySms(!reportReadySms)}
-                style={{
-                  flexShrink: 0,
-                  width: '40px',
-                  height: '22px',
-                  borderRadius: '11px',
-                  background: reportReadySms ? '#2563EB' : '#D1D5DB',
-                  position: 'relative',
-                  border: 'none',
-                  cursor: 'pointer',
-                  transition: 'background 0.2s',
-                }}
-              >
-                <span
-                  style={{
-                    position: 'absolute',
-                    top: '3px',
-                    left: reportReadySms ? '21px' : '3px',
-                    width: '16px',
-                    height: '16px',
-                    borderRadius: '50%',
-                    background: '#FFFFFF',
-                    transition: 'left 0.2s',
-                  }}
-                />
-              </button>
-            </div>
-          </div>
-
-          {/* Section 4: Reports & printing */}
-          <div
-            id="s4"
-            style={{
-              background: '#FFFFFF',
-              border: '1px solid #E5E7EB',
-              borderRadius: '12px',
-              boxShadow: '0 1px 2px rgba(17,24,39,0.04)',
-              padding: '20px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '14px',
-            }}
-          >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#111827' }}>Reports &amp; printing</h2>
-              <span style={{ fontSize: '13px', color: '#6B7280' }}>Layout of the final lab report</span>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 600, color: '#374151' }}>Report template</label>
-                <select
-                  value={reportTemplate}
-                  onChange={(e) => setReportTemplate(e.target.value)}
-                  style={{
-                    height: '40px',
-                    padding: '0 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #E5E7EB',
-                    fontSize: '14px',
-                    color: '#111827',
-                    background: '#FFFFFF',
-                    outline: 'none',
-                  }}
-                >
-                  <option value="NABL standard · A4">NABL standard · A4</option>
-                  <option value="Compact summary · A4">Compact summary · A4</option>
-                  <option value="Letterhead pre-printed · A4">Letterhead pre-printed · A4</option>
-                </select>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 600, color: '#374151' }}>Digital signature</label>
-                <select
-                  value={digitalSignature}
-                  onChange={(e) => setDigitalSignature(e.target.value)}
-                  style={{
-                    height: '40px',
-                    padding: '0 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #E5E7EB',
-                    fontSize: '14px',
-                    color: '#111827',
-                    background: '#FFFFFF',
-                    outline: 'none',
-                  }}
-                >
-                  <option value="Signing pathologist + HOD">Signing pathologist + HOD</option>
-                  <option value="Signing pathologist only">Signing pathologist only</option>
-                  <option value="Dual sign-off (Technician + Pathologist)">Dual sign-off (Technician + Pathologist)</option>
-                </select>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 600, color: '#374151' }}>Show previous result</label>
-                <select
-                  value={showPreviousResult}
-                  onChange={(e) => setShowPreviousResult(e.target.value)}
-                  style={{
-                    height: '40px',
-                    padding: '0 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #E5E7EB',
-                    fontSize: '14px',
-                    color: '#111827',
-                    background: '#FFFFFF',
-                    outline: 'none',
-                  }}
-                >
-                  <option value="Last 1 result with date">Last 1 result with date</option>
-                  <option value="Last 3 results (trend table)">Last 3 results (trend table)</option>
-                  <option value="Do not show past results">Do not show past results</option>
-                </select>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 600, color: '#374151' }}>Label printer</label>
-                <select
-                  value={labelPrinter}
-                  onChange={(e) => setLabelPrinter(e.target.value)}
-                  style={{
-                    height: '40px',
-                    padding: '0 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #E5E7EB',
-                    fontSize: '14px',
-                    color: '#111827',
-                    background: '#FFFFFF',
-                    outline: 'none',
-                  }}
-                >
-                  <option value="Zebra ZD421 · Bench 2">Zebra ZD421 · Bench 2</option>
-                  <option value="TSC TE200 · Reception">TSC TE200 · Reception</option>
-                  <option value="Brother TD-4550DN · Phlebotomy">Brother TD-4550DN · Phlebotomy</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Section 5: Integrations */}
-          <div
-            id="s5"
-            style={{
-              background: '#FFFFFF',
-              border: '1px solid #E5E7EB',
-              borderRadius: '12px',
-              boxShadow: '0 1px 2px rgba(17,24,39,0.04)',
-              padding: '20px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '14px',
-            }}
-          >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#111827' }}>Integrations</h2>
-              <span style={{ fontSize: '13px', color: '#6B7280' }}>Connections managed by IT; status shown for reference</span>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  gap: '12px',
-                  minHeight: '56px',
-                  borderBottom: '1px solid #F3F4F6',
-                }}
-              >
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                  <span style={{ fontSize: '14px', fontWeight: 500, color: '#111827' }}>
-                    Analyzer interface (LIS middleware)
-                  </span>
-                  <span style={{ fontSize: '12px', color: '#6B7280' }}>7 analyzers · last message 10:46</span>
-                </div>
-                <span
-                  style={{
-                    whiteSpace: 'nowrap',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    padding: '3px 8px',
-                    borderRadius: '6px',
-                    background: '#F0FDF4',
-                    color: '#15803D',
-                  }}
-                >
-                  Connected
-                </span>
-              </div>
-
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  gap: '12px',
-                  minHeight: '56px',
-                  borderBottom: '1px solid #F3F4F6',
-                }}
-              >
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                  <span style={{ fontSize: '14px', fontWeight: 500, color: '#111827' }}>Billing tariff master</span>
-                  <span style={{ fontSize: '12px', color: '#6B7280' }}>Last sync 09:12</span>
-                </div>
-                <span
-                  style={{
-                    whiteSpace: 'nowrap',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    padding: '3px 8px',
-                    borderRadius: '6px',
-                    background: '#F0FDF4',
-                    color: '#15803D',
-                  }}
-                >
-                  Connected
-                </span>
-              </div>
-
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  gap: '12px',
-                  minHeight: '56px',
-                }}
-              >
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                  <span style={{ fontSize: '14px', fontWeight: 500, color: '#111827' }}>Home collection app</span>
-                  <span style={{ fontSize: '12px', color: '#6B7280' }}>Not configured</span>
-                </div>
-                <span
-                  style={{
-                    whiteSpace: 'nowrap',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    padding: '3px 8px',
-                    borderRadius: '6px',
-                    background: '#F3F4F6',
-                    color: '#374151',
-                  }}
-                >
-                  Off
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-    </div>
+    <HmsMasterDetail
+      listId="lab-settings"
+      title="Department settings"
+      description="Department details, hours, workflow rules, notifications and printing. Changes apply after you save."
+      total={keys.length}
+      rows={rows}
+      search={search}
+      onSearch={setSearch}
+      searchPlaceholder="Search settings"
+      selectedKey={selected}
+      onSelect={setSelected}
+      primaryLabel="edit section"
+      onPrimary={() => requestAnimationFrame(() => document.querySelector<HTMLElement>('[aria-label="Settings section details"] input:not([readonly]), [aria-label="Settings section details"] select, [aria-label="Settings section details"] [role="switch"]')?.focus())}
+      detailLabel="Settings section"
+      renderDetail={renderDetail}
+    />
   );
 };
 

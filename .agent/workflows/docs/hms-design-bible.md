@@ -6,7 +6,7 @@ Version: 2.0 · 11 Oct 2026
 
 > **For AI agents and developers — read this first.**
 > When asked to "follow the HMS bible" for a department, apply **Section 19 (Department Workspace Standard)** to that department's workspace, using **Section 20 (Apply Checklist)** step by step.
-> Section 19 is the implemented standard (reference implementation: Pharmacy Admin Workspace, `frontend/src/pages/pharmacy/admin/PharmacyAdminWorkspace.tsx`).
+> Section 19 is the implemented standard. **Build new workspaces from the shared components in `frontend/src/components/hms/` (Section 19.11)** — reference implementation: Lab Admin Workspace, `frontend/src/pages/lab/admin/`. Pharmacy Admin (`frontend/src/pages/pharmacy/admin/PharmacyAdminWorkspace.tsx`) is the original hand-built version of the same design.
 > **If any older rule in Sections 1–18 conflicts with Section 19, Section 19 wins.**
 
 ---
@@ -725,7 +725,7 @@ Every department workspace (Pharmacy, Lab, Radiology, Billing, Accounts, IPD, OT
 └──────────┴───────────────────────────────────────────────────────────┘
 ```
 
-Reference implementation: `frontend/src/pages/pharmacy/admin/PharmacyAdminWorkspace.tsx`. When this document is silent, copy what that file does.
+Use the shared components in `frontend/src/components/hms/` (19.11). Reference implementation: `frontend/src/pages/lab/admin/` (built on those components); `frontend/src/pages/pharmacy/admin/PharmacyAdminWorkspace.tsx` is the original. When this document is silent, copy what they do.
 
 Keep each department's own menu items, data, permissions, routes and workflows. Only the layout and visual language change.
 
@@ -952,6 +952,49 @@ Implementation rules:
 - Do not create duplicate components or new colors. If a shared component would make the screen look different from Section 19, follow Section 19.
 - Verify with `npx tsc -p tsconfig.app.json --noEmit`, `npx oxlint <files>` (no new warnings) and `npx vite build`, then click through every section in the browser.
 
+## 19.10 Motion
+
+Motion only confirms what changed. It never delays work. Reference: `FOCUS_CSS` in `PharmacyAdminWorkspace.tsx`.
+
+- Durations 120–200ms, `ease-out`. Animate only `opacity` and `transform` (bars may also transition `width`). No bounce, spin or looping motion except loading skeletons.
+- Always include a `@media (prefers-reduced-motion: reduce)` block that removes animations and transitions.
+
+| Where | Motion |
+|---|---|
+| Right box on selection change | Fade from 0.55 + 4px slide, 160ms, via `element.animate()` on the panel (do not remount it with `key`, which loses focus and scroll) |
+| List rows | Background and left-border color transition 120ms |
+| Completion bar | Grows from the left (`scaleX` 0→1, 500ms) on first show; width changes transition 300ms; the "✓ Done" label fades in |
+| Buttons | Hover: lift 1px, soft shadow, brightness 0.97 (120–150ms). Press: scale 0.97, 60ms. Icons: Plus rotates 90°, Refresh 180°, Download nudges down, Arrow/Send nudge right. Not on sidebar items or disabled buttons. Apply once with a root-scoped CSS rule, not per button |
+| KPI cards | Hover/focus: lift 1px, soft shadow, border #BFDBFE, 150ms |
+| Sidebar groups | Chevron rotates (-90° when collapsed); items fade in when expanded |
+| Menus and dialogs | Backdrop fades in; panel pops from scale 0.98, 150ms |
+| Loading values | Shimmer skeleton blocks instead of "—" while loading; "—" only when data is unavailable |
+| Value changes (stock, totals) | Brief green (up) / amber (down) background flash, ≤600ms |
+| Validation errors | One short shake (≈200ms) and red border; never repeat |
+
+Never animate while the user is typing or scanning, never animate every row on page load, and never count KPI numbers up on refresh.
+
+## 19.11 Shared Components (use these — do not hand-build the shell again)
+
+`import { … } from '../../../components/hms';`
+
+| Component | Covers |
+|---|---|
+| `HmsShell` | 19.2 sidebar (groups, counts, user card), 19.3 top bar (breadcrumb, live date, Shortcuts, 44px profile + menu, My Profile / Change Password modals), "?" dialog, Alt+1…0, `/`, Alt+P, department Alt+letter shortcuts (`altShortcuts`), CSS tokens + motion (`hms.css`) |
+| `HmsPageHeader` | 19.4 title, description, 1–3 actions with `Alt+…` chips |
+| `HmsKpiRow` | 19.5 exactly four clickable KPI cards (`value: null` shows "—", `loading` shows a skeleton) |
+| `HmsMasterDetail` | 19.6 left box (search, filter pills, listbox rows, completion bar, footer) + right box with fade; ↑↓ PageUp/Down Home/End Enter Esc |
+| `HmsDetailHeader`, `HmsStatStrip`, `HmsDetailBody`, `HmsSection`, `HmsRow`, `HmsDetailFooter`, `HmsNotice`, `HmsEmpty` | 19.6 right-box parts |
+| `HmsButton`, `HmsBadge`, `HmsProgress`, `HmsField`, `HmsToggle`, `INPUT`, `TEXTAREA` | 19.7 buttons, badges, completion bar, form controls |
+| `HmsModal`, `HmsToast` + `useHmsToast` | 19.8 dialogs (role, focus, Esc) and notifications |
+
+Pattern (see `LabAdminWorkspace.tsx`):
+
+1. One data hook per department returning every source the workspace reads (Lab: `useLabAdminData()` in `pages/lab/data/labAdminStore.ts`). Every count — KPIs, sidebar pills, filter chips — is derived from it.
+2. The workspace renders `HmsShell` → `HmsPageHeader` → `HmsKpiRow` → the active section view.
+3. Each section view renders one `HmsMasterDetail`, keeps its own search / pill / selection state, and accepts `initialFilter` so a KPI click opens the right filter (`?tab=…&filter=…`).
+4. Alt+N reaches the active view as an incrementing `newSignal` prop; the view opens its "add" dialog when it changes.
+
 ---
 
 # 20. Apply Checklist (use for every department)
@@ -968,7 +1011,8 @@ Work through these in order. Report what changed and anything you could not appl
 8. **Buttons & typography** (19.1, 19.7): one font, the type scale only, 40px buttons, 10px radius.
 9. **Keyboard** (19.8): Alt+number navigation, `/`, arrows, Enter, Esc, Alt+N, Alt+P, `?` dialog, modal Esc/focus, visible focus.
 10. **Data** (19.9): map API fields in the service, remove hard-coded fallbacks, flag missing endpoints.
-11. **Verify**: type-check, lint, build, and click through every section (selection sync, filters, search, shortcuts, modals, profile menu).
+11. **Motion** (19.10): add the motion CSS block and reduced-motion rule.
+12. **Verify**: type-check, lint, build, render every `?tab=` and KPI filter once (for example with a Vite SSR build of the workspace) and check no screen shows `undefined` / `NaN`, then click through every section (selection sync, filters, search, shortcuts, modals, profile menu).
 
 ---
 
@@ -976,4 +1020,4 @@ Work through these in order. Report what changed and anything you could not appl
 
 Copy and paste, replacing the department and route:
 
-> Apply the HMS design bible (`.agent/workflows/docs/hms-design-bible.md`, Sections 19–20) to the **{Department} {Role} workspace** at **`{route}`**. Use `frontend/src/pages/pharmacy/admin/PharmacyAdminWorkspace.tsx` as the reference implementation. Keep all existing menu items, data, permissions and workflows. Follow the Section 20 checklist step by step and report what changed and anything you could not apply.
+> Apply the HMS design bible (`.agent/workflows/docs/hms-design-bible.md`, Sections 19–20) to the **{Department} {Role} workspace** at **`{route}`**. Build it from `frontend/src/components/hms/` and use `frontend/src/pages/lab/admin/` as the reference implementation. Keep all existing menu items, data, permissions and workflows. Follow the Section 20 checklist step by step and report what changed and anything you could not apply.

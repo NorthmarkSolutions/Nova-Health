@@ -59,6 +59,7 @@ import {
 } from '../../../services/pharmacyOpdService';
 import NewOTCSalePage from './NewOTCSalePage';
 import { pharmacyInventoryService } from '../../../services/pharmacyInventoryService';
+import '../shared/pharmacyMotion.css';
 
 // ==========================================
 // BADGE STYLES (HMS DESIGN BIBLE)
@@ -88,7 +89,7 @@ const getScheduleBadge = (sched: string, isCd: boolean) => {
 // Filter pill styling helper matching InventoryManagerWorkspace & HMS Design Bible
 const getPillStyle = (isActive: boolean, customColor?: 'red' | 'dark' | 'amber') => {
   const base = {
-    height: '30px',
+    height: '32px',
     padding: '0 12px',
     borderRadius: '9999px',
     fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
@@ -324,6 +325,14 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
 
   // Hospital Credit State
   const [selectedCreditId, setSelectedCreditId] = useState<string>('CR-STAFF-01');
+
+  // Motion: fade the right box when the selection changes (HMS bible 19.10)
+  useEffect(() => {
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    document.querySelectorAll<HTMLElement>('[data-hms-detail]').forEach((el) => {
+      if (typeof el.animate === 'function') el.animate([{ opacity: 0.55, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], { duration: 160, easing: 'ease-out' });
+    });
+  }, [selectedCompId, selectedOrderId, selectedOtcId, selectedReturnId, selectedStockId]);
   const [creditAuthName, setCreditAuthName] = useState<string>('Dr. Sarah Jenkins - Medical Superintendent');
   const [creditAuthPin, setCreditAuthPin] = useState<string>('4412');
   const [creditJustification, setCreditJustification] = useState<string>('Authorized monthly staff healthcare entitlement');
@@ -1162,10 +1171,13 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
   ];
 
   return (
-    <div style={{ display: 'flex', height: isEmbedded ? 'auto' : '100vh', width: isEmbedded ? '100%' : '100vw', overflow: isEmbedded ? 'visible' : 'hidden', background: '#f9fafb', fontFamily: 'Inter, sans-serif' }}>
+    <div className="hms-motion" style={{ display: 'flex', height: isEmbedded ? 'auto' : '100vh', width: isEmbedded ? '100%' : '100vw', overflow: isEmbedded ? 'visible' : 'hidden', background: '#f9fafb', fontFamily: 'Inter, sans-serif' }}>
       {/* Toast Notification */}
       {notification && (
         <div
+          key={notification.message}
+          role="status"
+          className={`hms-toast${notification.type === 'success' ? '' : ' hms-shake'}`}
           style={{
             position: 'fixed',
             top: '20px',
@@ -1214,7 +1226,7 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
             <button
               onClick={() => navigate('/pharmacy/ipd')}
               style={{
-                fontSize: '11px',
+                fontSize: '12px',
                 fontWeight: 600,
                 color: '#2563eb',
                 background: 'transparent',
@@ -1232,7 +1244,7 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
             <button
               onClick={() => navigate('/pharmacy/inventory')}
               style={{
-                fontSize: '11px',
+                fontSize: '12px',
                 fontWeight: 600,
                 color: '#4b5563',
                 background: 'transparent',
@@ -1250,7 +1262,7 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
             <button
               onClick={() => navigate('/pharmacy/controlled-drugs')}
               style={{
-                fontSize: '11px',
+                fontSize: '12px',
                 fontWeight: 600,
                 color: '#b45309',
                 background: 'transparent',
@@ -1410,13 +1422,13 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                   display: 'flex',
                   alignItems: 'center',
                   gap: '5px',
-                  height: '28px',
+                  height: '32px',
                   padding: '0 10px',
-                  borderRadius: '6px',
+                  borderRadius: '8px',
                   border: 'none',
                   background: '#ffffff',
                   color: '#1d4ed8',
-                  fontSize: '12px',
+                  fontSize: '13px',
                   fontWeight: 600,
                   cursor: 'pointer',
                   boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
@@ -1435,13 +1447,13 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                   display: 'flex',
                   alignItems: 'center',
                   gap: '5px',
-                  height: '28px',
+                  height: '32px',
                   padding: '0 10px',
-                  borderRadius: '6px',
+                  borderRadius: '8px',
                   border: 'none',
                   background: 'transparent',
                   color: '#64748b',
-                  fontSize: '12px',
+                  fontSize: '13px',
                   fontWeight: 500,
                   cursor: 'pointer',
                   transition: 'all 0.15s ease',
@@ -1458,13 +1470,13 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '6px',
-                  height: '32px',
-                  padding: '0 12px',
+                  gap: '8px',
+                  height: '40px',
+                  padding: '0 14px',
                   border: '1px solid #e5e7eb',
-                  borderRadius: '8px',
-                  fontSize: '12px',
-                  fontWeight: 500,
+                  borderRadius: '10px',
+                  fontSize: '14px',
+                  fontWeight: 600,
                   color: '#4b5563',
                   background: '#fff',
                   cursor: 'pointer',
@@ -1479,13 +1491,13 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
-                height: '32px',
-                padding: '0 12px',
+                gap: '8px',
+                height: '40px',
+                padding: '0 14px',
                 border: '1px solid #e5e7eb',
-                borderRadius: '8px',
-                fontSize: '12px',
-                fontWeight: 500,
+                borderRadius: '10px',
+                fontSize: '14px',
+                fontWeight: 600,
                 color: '#2563eb',
                 background: '#eff6ff',
                 cursor: 'pointer',
@@ -1504,7 +1516,7 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                 padding: '0 12px',
                 border: '1px solid #cbd5e1',
                 borderRadius: '8px',
-                fontSize: '12px',
+                fontSize: '13px',
                 fontWeight: 600,
                 color: '#0f172a',
                 background: '#f8fafc',
@@ -1522,12 +1534,12 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
-                height: '32px',
-                padding: '0 12px',
+                gap: '8px',
+                height: '40px',
+                padding: '0 14px',
                 border: '1px solid #e5e7eb',
-                borderRadius: '8px',
-                fontSize: '12px',
+                borderRadius: '10px',
+                fontSize: '13px',
                 color: '#374151',
                 whiteSpace: 'nowrap',
               }}
@@ -1542,6 +1554,9 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
         {/* Floating Toast Notification */}
         {notification && (
           <div
+            key={notification.message}
+            role="status"
+            className={`hms-toast${notification.type === 'error' ? ' hms-shake' : ''}`}
             style={{
               position: 'fixed',
               top: '20px',
@@ -1830,7 +1845,7 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                gridTemplateColumns: 'minmax(340px, 1fr) minmax(0, 2.3fr)',
                 gap: '16px',
                 alignItems: 'start',
                 width: '100%',
@@ -1841,7 +1856,6 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
               {/* LEFT CONTAINER (Matches KPI Card 1 - Column 1 across ALL screens) */}
               <div
                 style={{
-                  gridColumn: 'span 1',
                   width: '100%',
                   minWidth: 0,
                   maxWidth: '100%',
@@ -1918,13 +1932,13 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                         onClick={handleCallNext}
                         title="Call next patient in queue (Alt+N)"
                         style={{
-                          height: '36px',
+                          height: '40px',
                           padding: '0 10px',
-                          borderRadius: '8px',
+                          borderRadius: '10px',
                           background: '#ffffff',
                           color: '#1d4ed8',
                           border: '1px solid #bfdbfe',
-                          fontSize: '12px',
+                          fontSize: '14px',
                           fontWeight: 600,
                           cursor: 'pointer',
                           whiteSpace: 'nowrap',
@@ -2074,10 +2088,10 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                                   handleOpenOrder(r);
                                 }}
                                 style={{
-                                  height: '24px',
+                                  height: '32px',
                                   padding: '0 8px',
-                                  borderRadius: '6px',
-                                  fontSize: '11px',
+                                  borderRadius: '8px',
+                                  fontSize: '13px',
                                   fontWeight: 600,
                                   cursor: 'pointer',
                                   whiteSpace: 'nowrap',
@@ -2215,8 +2229,8 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
 
               {/* RIGHT STICKY CONTEXT INSPECTION DRAWER */}
               <div
+                data-hms-detail
                 style={{
-                  gridColumn: 'span 3',
                   width: '100%',
                   minWidth: 0,
                   maxWidth: '100%',
@@ -2324,13 +2338,13 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                               <button
                                 onClick={() => setTab('stock')}
                                 style={{
-                                  height: '34px',
+                                  height: '40px',
                                   padding: '0 12px',
-                                  borderRadius: '8px',
+                                  borderRadius: '10px',
                                   background: '#ffffff',
                                   color: '#374151',
                                   border: '1px solid #d1d5db',
-                                  fontSize: '12px',
+                                  fontSize: '14px',
                                   fontWeight: 600,
                                   cursor: 'pointer',
                                   display: 'inline-flex',
@@ -2535,11 +2549,11 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                                       style={{
                                         height: '32px',
                                         padding: '0 14px',
-                                        borderRadius: '6px',
+                                        borderRadius: '8px',
                                         background: '#dc2626',
                                         color: '#fff',
                                         border: 'none',
-                                        fontSize: '12px',
+                                        fontSize: '13px',
                                         fontWeight: 600,
                                         cursor: 'pointer',
                                       }}
@@ -2626,14 +2640,14 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                                 PRESCRIPTION VERIFICATION
                               </div>
                               <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                                <CircleCheck size={18} color="#16a34a" />
+                                <CircleCheck size={18} color="#16a34a" className="hms-tick" />
                                 <div>
                                   <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827' }}>E-signature & prescriber valid</div>
                                   <div style={{ fontSize: '12px', color: '#6b7280' }}>Verified against medical register (KMC 48211)</div>
                                 </div>
                               </div>
                               <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                                <CircleCheck size={18} color="#16a34a" />
+                                <CircleCheck size={18} color="#16a34a" className="hms-tick" />
                                 <div>
                                   <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827' }}>Prescription issue date valid</div>
                                   <div style={{ fontSize: '12px', color: '#6b7280' }}>Issued today · within 7-day OPD validity period</div>
@@ -2668,7 +2682,7 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                                     justifyContent: 'center',
                                   }}
                                 >
-                                  {idConfirmed && <Check size={12} color="#fff" strokeWidth={3} />}
+                                  {idConfirmed && <Check size={12} color="#fff" strokeWidth={3} className="hms-tick" />}
                                 </span>
                                 <div>
                                   <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827' }}>
@@ -2740,7 +2754,7 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                                               justifyContent: 'center',
                                             }}
                                           >
-                                            {isSelectedForDispense && <Check size={11} color="#fff" strokeWidth={3} />}
+                                            {isSelectedForDispense && <Check size={11} color="#fff" strokeWidth={3} className="hms-tick" />}
                                           </span>
                                         )}
                                         <div style={{ minWidth: 0 }}>
@@ -2824,13 +2838,13 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                                       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px' }}>
                                         <button
                                           onClick={() => showNotice('Dr. R. Kulkarni notified via clinical messenger', 'success')}
-                                          style={{ height: '36px', padding: '0 12px', borderRadius: '10px', background: '#fff', color: '#111827', border: '1px solid #d1d5db', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+                                          style={{ height: '40px', padding: '0 12px', borderRadius: '10px', background: '#fff', color: '#111827', border: '1px solid #d1d5db', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
                                         >
                                           Contact doctor
                                         </button>
                                         <button
                                           onClick={() => setAllergyModalOpen(true)}
-                                          style={{ height: '36px', padding: '0 12px', borderRadius: '10px', background: '#fff', color: '#dc2626', border: '1px solid #fecaca', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+                                          style={{ height: '40px', padding: '0 12px', borderRadius: '10px', background: '#fff', color: '#dc2626', border: '1px solid #fecaca', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
                                         >
                                           Override with reason
                                         </button>
@@ -2840,7 +2854,7 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                                 </div>
                               ) : (
                                 <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', padding: '12px', borderRadius: '10px', background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
-                                  <CircleCheck size={18} color="#15803d" />
+                                  <CircleCheck size={18} color="#15803d" className="hms-tick" />
                                   <div>
                                     <div style={{ fontSize: '14px', fontWeight: 600, color: '#15803d' }}>No allergy conflicts detected</div>
                                     <div style={{ fontSize: '12px', color: '#4b5563', marginTop: '2px' }}>Formulary cross-reactivity scan passed</div>
@@ -2879,7 +2893,7 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                                           justifyContent: 'center',
                                         }}
                                       >
-                                        {interactionAck && <Check size={12} color="#fff" strokeWidth={3} />}
+                                        {interactionAck && <Check size={12} color="#fff" strokeWidth={3} className="hms-tick" />}
                                       </span>
                                       <span style={{ fontSize: '13px', fontWeight: 500, color: '#111827' }}>Reviewed — will counsel patient</span>
                                     </div>
@@ -2887,7 +2901,7 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                                 </div>
                               ) : (
                                 <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', padding: '12px', borderRadius: '10px', background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
-                                  <CircleCheck size={18} color="#15803d" />
+                                  <CircleCheck size={18} color="#15803d" className="hms-tick" />
                                   <div>
                                     <div style={{ fontSize: '14px', fontWeight: 600, color: '#15803d' }}>No significant interactions</div>
                                     <div style={{ fontSize: '12px', color: '#4b5563', marginTop: '2px' }}>All concurrent prescribed items are clinically compatible</div>
@@ -2919,7 +2933,7 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                                     style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', cursor: 'pointer' }}
                                   >
                                     <span style={{ width: '18px', height: '18px', flexShrink: 0, borderRadius: '5px', border: `1.5px solid ${cdRxSighted ? '#2563eb' : '#d1d5db'}`, background: cdRxSighted ? '#2563eb' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                      {cdRxSighted && <Check size={12} color="#fff" strokeWidth={3} />}
+                                      {cdRxSighted && <Check size={12} color="#fff" strokeWidth={3} className="hms-tick" />}
                                     </span>
                                     <div>
                                       <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827' }}>Original physical prescription sighted</div>
@@ -2931,7 +2945,7 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                                     style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', cursor: 'pointer' }}
                                   >
                                     <span style={{ width: '18px', height: '18px', flexShrink: 0, borderRadius: '5px', border: `1.5px solid ${cdPhotoId ? '#2563eb' : '#d1d5db'}`, background: cdPhotoId ? '#2563eb' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                      {cdPhotoId && <Check size={12} color="#fff" strokeWidth={3} />}
+                                      {cdPhotoId && <Check size={12} color="#fff" strokeWidth={3} className="hms-tick" />}
                                     </span>
                                     <div>
                                       <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827' }}>Patient photo ID verified</div>
@@ -2954,7 +2968,7 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                                 </div>
                               ) : (
                                 <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', padding: '12px', borderRadius: '10px', background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
-                                  <CircleCheck size={18} color="#15803d" />
+                                  <CircleCheck size={18} color="#15803d" className="hms-tick" />
                                   <div>
                                     <div style={{ fontSize: '14px', fontWeight: 600, color: '#15803d' }}>No controlled drugs</div>
                                     <div style={{ fontSize: '12px', color: '#4b5563', marginTop: '2px' }}>No statutory CD register entry required for this order</div>
@@ -3149,9 +3163,9 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                                       key={m}
                                       onClick={() => setTenderMethod(m)}
                                       style={{
-                                        height: '36px',
+                                        height: '40px',
                                         borderRadius: '10px',
-                                        fontSize: '13px',
+                                        fontSize: '14px',
                                         fontWeight: 600,
                                         cursor: 'pointer',
                                         background: tenderMethod === m ? '#eff6ff' : '#fff',
@@ -3181,7 +3195,7 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                                               type="button"
                                               onClick={() => setTenderAmount(String(chip.amt))}
                                               style={{
-                                                fontSize: '11px',
+                                                fontSize: '12px',
                                                 fontWeight: 600,
                                                 padding: '2px 6px',
                                                 borderRadius: '4px',
@@ -3342,7 +3356,7 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                                     />
                                     <button
                                       onClick={handleClearReceptionWebhook}
-                                      style={{ height: '38px', padding: '0 12px', borderRadius: '8px', background: '#2563eb', color: '#fff', border: 'none', fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                                      style={{ height: '40px', padding: '0 12px', borderRadius: '10px', background: '#2563eb', color: '#fff', border: 'none', fontSize: '14px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
                                     >
                                       Clear via Cashier
                                     </button>
@@ -3428,7 +3442,7 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                                         type="button"
                                         onClick={() => setCopayMethod(m)}
                                         style={{
-                                          fontSize: '11px',
+                                          fontSize: '12px',
                                           fontWeight: 600,
                                           padding: '2px 8px',
                                           borderRadius: '4px',
@@ -3679,7 +3693,7 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                                       justifyContent: 'center',
                                     }}
                                   >
-                                    {isPicked && <Check size={12} color="#fff" strokeWidth={3} />}
+                                    {isPicked && <Check size={12} color="#fff" strokeWidth={3} className="hms-tick" />}
                                   </span>
                                   <div style={{ minWidth: 0 }}>
                                     <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827' }}>
@@ -3713,7 +3727,7 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                               }}
                             >
                               <span style={{ width: '18px', height: '18px', flexShrink: 0, borderRadius: '5px', border: `1.5px solid ${labelsAffixed ? '#2563eb' : '#d1d5db'}`, background: labelsAffixed ? '#2563eb' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                {labelsAffixed && <Check size={12} color="#fff" strokeWidth={3} />}
+                                {labelsAffixed && <Check size={12} color="#fff" strokeWidth={3} className="hms-tick" />}
                               </span>
                               <div>
                                 <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827' }}>Dosage labels printed and affixed</div>
@@ -3775,7 +3789,7 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                                   }}
                                 >
                                   <span style={{ width: '18px', height: '18px', flexShrink: 0, borderRadius: '5px', border: `1.5px solid ${checked ? '#2563eb' : '#d1d5db'}`, background: checked ? '#2563eb' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    {checked && <Check size={12} color="#fff" strokeWidth={3} />}
+                                    {checked && <Check size={12} color="#fff" strokeWidth={3} className="hms-tick" />}
                                   </span>
                                   <div>
                                     <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827' }}>{c.t}</div>
@@ -3792,7 +3806,7 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                           <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                             {activeOrder.status === 'DISPENSED' ? (
                               <div style={{ display: 'flex', gap: '10px', padding: '12px', borderRadius: '10px', background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
-                                <CircleCheck size={18} color="#15803d" />
+                                <CircleCheck size={18} color="#15803d" className="hms-tick" />
                                 <div>
                                   <div style={{ fontSize: '14px', fontWeight: 600, color: '#15803d' }}>Dispensed and handed over</div>
                                   <div style={{ fontSize: '12px', color: '#4b5563', marginTop: '2px' }}>
@@ -3862,7 +3876,7 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                             <div style={{ display: 'flex', gap: '8px', flex: 1 }}>
                               <button
                                 onClick={handlePutOnHold}
-                                style={{ height: '40px', padding: '0 14px', borderRadius: '10px', background: '#fff', color: '#b45309', border: '1px solid #fde68a', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+                                style={{ height: '40px', padding: '0 14px', borderRadius: '10px', background: '#fff', color: '#b45309', border: '1px solid #fde68a', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
                               >
                                 Put on hold
                               </button>
@@ -3964,7 +3978,7 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
               <div
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                  gridTemplateColumns: 'minmax(340px, 1fr) minmax(0, 2.3fr)',
                   gap: '16px',
                   alignItems: 'start',
                   width: '100%',
@@ -3975,7 +3989,6 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                 {/* Left Panel: 1 Column */}
                 <div
                   style={{
-                    gridColumn: 'span 1',
                     width: '100%',
                     minWidth: 0,
                     maxWidth: '100%',
@@ -4113,8 +4126,8 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
 
                 {/* Right Panel */}
                 <div
+                  data-hms-detail
                   style={{
-                    gridColumn: 'span 3',
                     width: '100%',
                     minWidth: 0,
                     maxWidth: '100%',
@@ -4165,13 +4178,13 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                       <button
                         onClick={() => showNotice(`Reprinted invoice ${activeOtcSale?.sale_number || ''}`)}
                         style={{
-                          height: '36px',
+                          height: '40px',
                           padding: '0 14px',
-                          borderRadius: '8px',
+                          borderRadius: '10px',
                           border: '1px solid #d1d5db',
                           background: '#ffffff',
                           color: '#374151',
-                          fontSize: '13px',
+                          fontSize: '14px',
                           fontWeight: 600,
                           cursor: 'pointer',
                           display: 'flex',
@@ -4185,13 +4198,13 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                       <button
                         onClick={() => setIsCreatingOtcSale(true)}
                         style={{
-                          height: '36px',
+                          height: '40px',
                           padding: '0 16px',
-                          borderRadius: '8px',
+                          borderRadius: '10px',
                           border: 'none',
                           background: '#2563eb',
                           color: '#ffffff',
-                          fontSize: '13px',
+                          fontSize: '14px',
                           fontWeight: 600,
                           cursor: 'pointer',
                           display: 'flex',
@@ -4363,13 +4376,13 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                           setNewReturnSearch(activeOtcSale?.sale_number || '');
                         }}
                         style={{
-                          height: '36px',
+                          height: '40px',
                           padding: '0 14px',
-                          borderRadius: '8px',
+                          borderRadius: '10px',
                           border: '1px solid #e2e8f0',
                           background: '#ffffff',
                           color: '#475569',
-                          fontSize: '13px',
+                          fontSize: '14px',
                           fontWeight: 600,
                           cursor: 'pointer',
                         }}
@@ -4379,13 +4392,13 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                       <button
                         onClick={() => showNotice(`Printed tax invoice for ${activeOtcSale?.sale_number || ''}`)}
                         style={{
-                          height: '36px',
+                          height: '40px',
                           padding: '0 16px',
-                          borderRadius: '8px',
+                          borderRadius: '10px',
                           border: 'none',
                           background: '#2563eb',
                           color: '#ffffff',
-                          fontSize: '13px',
+                          fontSize: '14px',
                           fontWeight: 600,
                           cursor: 'pointer',
                           display: 'flex',
@@ -4410,7 +4423,7 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                gridTemplateColumns: 'minmax(340px, 1fr) minmax(0, 2.3fr)',
                 gap: '16px',
                 alignItems: 'start',
                 width: '100%',
@@ -4421,7 +4434,6 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
               {/* Left Panel: 1 Column */}
               <div
                 style={{
-                  gridColumn: 'span 1',
                   width: '100%',
                   minWidth: 0,
                   maxWidth: '100%',
@@ -4571,8 +4583,8 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
 
               {/* Right Panel */}
               <div
+                data-hms-detail
                 style={{
-                  gridColumn: 'span 3',
                   width: '100%',
                   minWidth: 0,
                   maxWidth: '100%',
@@ -4623,13 +4635,13 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                     <button
                       onClick={() => showNotice(`Printed dispense slip for ${activeCompleted?.id}`)}
                       style={{
-                        height: '36px',
+                        height: '40px',
                         padding: '0 14px',
-                        borderRadius: '8px',
+                        borderRadius: '10px',
                         border: '1px solid #d1d5db',
                         background: '#ffffff',
                         color: '#374151',
-                        fontSize: '13px',
+                        fontSize: '14px',
                         fontWeight: 600,
                         cursor: 'pointer',
                         display: 'flex',
@@ -4647,13 +4659,13 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                         setNewReturnSearch(activeCompleted?.id || '');
                       }}
                       style={{
-                        height: '36px',
+                        height: '40px',
                         padding: '0 16px',
-                        borderRadius: '8px',
+                        borderRadius: '10px',
                         border: '1px solid #bfdbfe',
                         background: '#eff6ff',
                         color: '#1d4ed8',
-                        fontSize: '13px',
+                        fontSize: '14px',
                         fontWeight: 600,
                         cursor: 'pointer',
                         display: 'flex',
@@ -4825,13 +4837,13 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                       setNewReturnSearch(activeCompleted?.id || '');
                     }}
                     style={{
-                      height: '36px',
+                      height: '40px',
                       padding: '0 16px',
-                      borderRadius: '8px',
+                      borderRadius: '10px',
                       background: '#ffffff',
                       color: '#111827',
                       border: '1px solid #d1d5db',
-                      fontSize: '13px',
+                      fontSize: '14px',
                       fontWeight: 600,
                       cursor: 'pointer',
                       display: 'flex',
@@ -4854,7 +4866,7 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                gridTemplateColumns: 'minmax(340px, 1fr) minmax(0, 2.3fr)',
                 gap: '16px',
                 alignItems: 'start',
                 width: '100%',
@@ -4865,7 +4877,6 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
               {/* Left Panel: 1 Column */}
               <div
                 style={{
-                  gridColumn: 'span 1',
                   width: '100%',
                   minWidth: 0,
                   maxWidth: '100%',
@@ -5033,8 +5044,8 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
 
               {/* Right Panel */}
               <div
+                data-hms-detail
                 style={{
-                  gridColumn: 'span 3',
                   width: '100%',
                   minWidth: 0,
                   maxWidth: '100%',
@@ -5088,13 +5099,13 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                     <button
                       onClick={() => setNewReturnOpen(true)}
                       style={{
-                        height: '36px',
+                        height: '40px',
                         padding: '0 16px',
-                        borderRadius: '8px',
+                        borderRadius: '10px',
                         border: 'none',
                         background: '#2563eb',
                         color: '#ffffff',
-                        fontSize: '13px',
+                        fontSize: '14px',
                         fontWeight: 600,
                         cursor: 'pointer',
                         display: 'flex',
@@ -5256,7 +5267,7 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                                 justifyContent: 'center',
                               }}
                             >
-                              {retInspectChecks[c.key] && <Check size={12} color="#ffffff" strokeWidth={3} />}
+                              {retInspectChecks[c.key] && <Check size={12} color="#ffffff" strokeWidth={3} className="hms-tick" />}
                             </span>
                             <span style={{ fontSize: '13px', color: '#1e293b' }}>{c.label}</span>
                           </div>
@@ -5302,13 +5313,13 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                         <button
                           onClick={() => handleInspectReturnConfirm('quarantine')}
                           style={{
-                            height: '36px',
+                            height: '40px',
                             padding: '0 14px',
-                            borderRadius: '8px',
+                            borderRadius: '10px',
                             background: '#ffffff',
                             color: '#b45309',
                             border: '1px solid #fde68a',
-                            fontSize: '13px',
+                            fontSize: '14px',
                             fontWeight: 600,
                             cursor: 'pointer',
                           }}
@@ -5318,13 +5329,13 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                         <button
                           onClick={() => handleInspectReturnConfirm('restock')}
                           style={{
-                            height: '36px',
+                            height: '40px',
                             padding: '0 18px',
-                            borderRadius: '8px',
+                            borderRadius: '10px',
                             background: '#2563eb',
                             color: '#ffffff',
                             border: 'none',
-                            fontSize: '13px',
+                            fontSize: '14px',
                             fontWeight: 600,
                             cursor: 'pointer',
                           }}
@@ -5338,13 +5349,13 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                       <button
                         onClick={handleProcessRefundConfirm}
                         style={{
-                          height: '36px',
+                          height: '40px',
                           padding: '0 20px',
-                          borderRadius: '8px',
+                          borderRadius: '10px',
                           background: '#16a34a',
                           color: '#ffffff',
                           border: 'none',
-                          fontSize: '13px',
+                          fontSize: '14px',
                           fontWeight: 700,
                           cursor: 'pointer',
                         }}
@@ -5357,13 +5368,13 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                       <button
                         onClick={handleRejectReturnConfirm}
                         style={{
-                          height: '36px',
+                          height: '40px',
                           padding: '0 16px',
-                          borderRadius: '8px',
+                          borderRadius: '10px',
                           background: '#dc2626',
                           color: '#ffffff',
                           border: 'none',
-                          fontSize: '13px',
+                          fontSize: '14px',
                           fontWeight: 600,
                           cursor: 'pointer',
                         }}
@@ -5384,7 +5395,7 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                gridTemplateColumns: 'minmax(340px, 1fr) minmax(0, 2.3fr)',
                 gap: '16px',
                 alignItems: 'start',
                 width: '100%',
@@ -5395,7 +5406,6 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
               {/* Left Panel: 1 Column */}
               <div
                 style={{
-                  gridColumn: 'span 1',
                   width: '100%',
                   minWidth: 0,
                   maxWidth: '100%',
@@ -5716,8 +5726,8 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
 
               {/* Right Panel */}
               <div
+                data-hms-detail
                 style={{
-                  gridColumn: 'span 3',
                   width: '100%',
                   minWidth: 0,
                   maxWidth: '100%',
@@ -5791,13 +5801,13 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                         }
                       }}
                       style={{
-                        height: '36px',
+                        height: '40px',
                         padding: '0 14px',
-                        borderRadius: '8px',
+                        borderRadius: '10px',
                         border: '1px solid #d1d5db',
                         background: '#ffffff',
                         color: '#374151',
-                        fontSize: '13px',
+                        fontSize: '14px',
                         fontWeight: 600,
                         cursor: 'pointer',
                         display: 'flex',
@@ -5814,13 +5824,13 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                         setIsCreatingOtcSale(true);
                       }}
                       style={{
-                        height: '36px',
+                        height: '40px',
                         padding: '0 16px',
-                        borderRadius: '8px',
+                        borderRadius: '10px',
                         border: 'none',
                         background: '#2563eb',
                         color: '#ffffff',
-                        fontSize: '13px',
+                        fontSize: '14px',
                         fontWeight: 600,
                         cursor: 'pointer',
                         display: 'flex',
@@ -6028,7 +6038,7 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
           ALLERGY OVERRIDE MODAL
       ========================================== */}
       {allergyModalOpen && (
-        <div
+        <div className="hms-backdrop"
           onClick={() => setAllergyModalOpen(false)}
           style={{
             position: 'fixed',
@@ -6119,7 +6129,7 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
           PHASE 5: STATUTORY RECEIPT & CERTIFICATE MODAL
       ========================================== */}
       {receiptModalOpen && completedReceiptData && (
-        <div
+        <div className="hms-backdrop"
           onClick={() => setReceiptModalOpen(false)}
           style={{
             position: 'fixed',
@@ -6315,12 +6325,12 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                   display: 'flex',
                   alignItems: 'center',
                   gap: '6px',
-                  height: '38px',
+                  height: '40px',
                   padding: '0 16px',
-                  borderRadius: '8px',
+                  borderRadius: '10px',
                   background: '#fff',
                   border: '1px solid #cbd5e1',
-                  fontSize: '13px',
+                  fontSize: '14px',
                   fontWeight: 600,
                   color: '#0f172a',
                   cursor: 'pointer',
@@ -6332,12 +6342,12 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
               <button
                 onClick={() => setReceiptModalOpen(false)}
                 style={{
-                  height: '38px',
+                  height: '40px',
                   padding: '0 20px',
-                  borderRadius: '8px',
+                  borderRadius: '10px',
                   background: '#2563eb',
                   border: 'none',
-                  fontSize: '13px',
+                  fontSize: '14px',
                   fontWeight: 600,
                   color: '#fff',
                   cursor: 'pointer',
@@ -6354,7 +6364,7 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
           PHASE 5: SHIFT DRAWER RECONCILIATION MODAL
       ========================================== */}
       {shiftDrawerModalOpen && (
-        <div
+        <div className="hms-backdrop"
           onClick={() => setShiftDrawerModalOpen(false)}
           style={{
             position: 'fixed',
@@ -6440,7 +6450,7 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
             <div style={{ padding: '16px 24px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '8px', background: '#f8fafc' }}>
               <button
                 onClick={() => setShiftDrawerModalOpen(false)}
-                style={{ height: '38px', padding: '0 16px', borderRadius: '8px', background: '#fff', border: '1px solid #cbd5e1', fontSize: '13px', fontWeight: 600, color: '#0f172a', cursor: 'pointer' }}
+                style={{ height: '40px', padding: '0 16px', borderRadius: '10px', background: '#fff', border: '1px solid #cbd5e1', fontSize: '14px', fontWeight: 600, color: '#0f172a', cursor: 'pointer' }}
               >
                 Close
               </button>
@@ -6455,7 +6465,7 @@ export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
                     showNotice(e.response?.data?.error || 'Failed to close shift drawer', 'error');
                   }
                 }}
-                style={{ height: '38px', padding: '0 16px', borderRadius: '8px', background: '#dc2626', border: 'none', fontSize: '13px', fontWeight: 600, color: '#fff', cursor: 'pointer' }}
+                style={{ height: '40px', padding: '0 16px', borderRadius: '10px', background: '#dc2626', border: 'none', fontSize: '14px', fontWeight: 600, color: '#fff', cursor: 'pointer' }}
               >
                 Reconcile &amp; End Shift
               </button>

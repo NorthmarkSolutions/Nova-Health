@@ -23,7 +23,6 @@ import {
   ShieldCheck,
   Search,
   ExternalLink,
-  ChevronRight,
   Filter,
   Download,
   Check,
@@ -44,6 +43,7 @@ import { useNavigate } from 'react-router-dom';
 import { RoleType } from '../../../types';
 import { MyProfileModal } from '../inventory/modals/MyProfileModal';
 import { ChangePasswordModal } from '../inventory/modals/ChangePasswordModal';
+import '../shared/pharmacyMotion.css';
 import {
   pharmacyAdminService,
   PharmacyAdminMetrics,
@@ -178,6 +178,24 @@ const FOCUS_CSS = `
 .pa-focus:focus-visible, .pa-root button:focus-visible, .pa-root [role="button"]:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
 .pa-row:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }
 .pa-kbd { font-size: 11px; font-weight: 600; line-height: 1; padding: 3px 5px; border-radius: 4px; border: 1px solid #e2e8f0; background: #f8fafc; color: #64748b; white-space: nowrap; }
+@keyframes pa-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes pa-pop { from { opacity: 0; transform: scale(0.98) translateY(-2px); } to { opacity: 1; transform: none; } }
+@keyframes pa-backdrop { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pa-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes pa-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.pa-fade-in { animation: pa-fade-in 160ms ease-out both; }
+.pa-pop { animation: pa-pop 150ms ease-out both; transform-origin: top right; }
+.pa-backdrop { animation: pa-backdrop 150ms ease-out both; }
+.pa-bar { transform-origin: left center; animation: pa-grow 500ms ease-out both; transition: width 300ms ease-out; }
+.pa-kpi { transition: transform 150ms ease-out, box-shadow 150ms ease-out, border-color 150ms ease-out; }
+.pa-kpi:hover, .pa-kpi:focus-visible { transform: translateY(-1px); box-shadow: 0 6px 16px -6px rgba(15, 23, 42, 0.14); border-color: #bfdbfe; }
+.pa-chev { transition: transform 150ms ease-out; }
+.pa-row { transition: background-color 120ms ease-out, border-left-color 120ms ease-out; }
+.pa-skel { display: inline-block; border-radius: 6px; background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 37%, #f1f5f9 63%); background-size: 400% 100%; animation: pa-shimmer 1.4s ease infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .pa-root *, .pa-root *::before, .pa-root *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+  .pa-kpi:hover, .pa-kpi:focus-visible { transform: none; }
+}
 `;
 
 // Alt+1 … Alt+0 open the sidebar sections in this order
@@ -709,6 +727,12 @@ export const PharmacyAdminWorkspace: React.FC = () => {
 
   // The highlighted row and the detail panel always resolve to the same visible row
   const mdActiveKey: string | null = md ? (md.rows.find(r => r.key === mdSelectedKey)?.key ?? md.rows[0]?.key ?? null) : null;
+  useEffect(() => {
+    const el = detailRef.current;
+    if (!el || !mdActiveKey || typeof el.animate !== 'function') return;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    el.animate([{ opacity: 0.55, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], { duration: 160, easing: 'ease-out' });
+  }, [mdActiveKey, activeTab]);
   const activeStaff = activeTab === 'staff' ? staffList.find(s => s.id === mdActiveKey) || null : null;
 
   const runPrimaryAction = (key: string) => {
@@ -799,7 +823,7 @@ export const PharmacyAdminWorkspace: React.FC = () => {
   }, [activeTab]);
 
   return (
-    <div className="pa-root" style={{ display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', background: '#f9fafb', fontFamily: "'Inter', sans-serif", fontSize: '14px', color: '#111827' }}>
+    <div className="pa-root hms-motion" style={{ display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', background: '#f9fafb', fontFamily: "'Inter', sans-serif", fontSize: '14px', color: '#111827' }}>
       {/* 1. Left Navigation Sidebar (260px, matching Clinical Pharmacist & Inventory Manager) */}
       <style>{FOCUS_CSS}</style>
       <aside style={{ width: '260px', flexShrink: 0, background: '#ffffff', borderRight: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -851,7 +875,7 @@ export const PharmacyAdminWorkspace: React.FC = () => {
               <div key={group.label} style={{ marginTop: gIdx > 0 ? '6px' : '2px' }}>
                 <button
                   type="button"
-                  className="pa-focus"
+                  className="pa-focus pharmacy-group-header"
                   onClick={() => setCollapsedGroups(prev => ({ ...prev, [group.label]: !prev[group.label] }))}
                   aria-expanded={!isCollapsed}
                   title={`${isCollapsed ? 'Expand' : 'Collapse'} ${group.label.toLowerCase()}`}
@@ -864,12 +888,12 @@ export const PharmacyAdminWorkspace: React.FC = () => {
                     <span style={{ fontSize: '10px', fontWeight: 600, color: hasActiveItem ? '#2563eb' : '#94a3b8', background: hasActiveItem ? '#eff6ff' : '#f8fafc', padding: '1px 5px', borderRadius: '4px', border: hasActiveItem ? '1px solid #bfdbfe' : '1px solid #f1f5f9' }}>
                       {group.items.length}
                     </span>
-                    {isCollapsed ? <ChevronRight size={13} color="#94a3b8" /> : <ChevronDown size={13} color="#94a3b8" />}
+                    <ChevronDown size={13} color="#94a3b8" className="pa-chev" style={{ transform: isCollapsed ? 'rotate(-90deg)' : 'none' }} />
                   </span>
                 </button>
 
                 {!isCollapsed && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '2px' }}>
+                  <div className="pa-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '2px' }}>
                     {group.items.map(item => {
                       const isActive = activeTab === item.key;
                       const IconComponent = item.icon;
@@ -877,7 +901,7 @@ export const PharmacyAdminWorkspace: React.FC = () => {
                         <button
                           key={item.key}
                           type="button"
-                          className="pa-focus"
+                          className="pa-focus pharmacy-nav-item"
                           onClick={() => handleNav(item.key)}
                           aria-current={isActive ? 'page' : undefined}
                           aria-keyshortcuts={navShortcut(item.key).replace('+', '+') || undefined}
@@ -1014,6 +1038,7 @@ export const PharmacyAdminWorkspace: React.FC = () => {
 
               {isProfileOpen && (
                 <div
+                  className="pa-pop"
                   role="menu"
                   aria-label="Account"
                   onKeyDown={e => {
@@ -1156,14 +1181,14 @@ export const PharmacyAdminWorkspace: React.FC = () => {
           {/* Exactly 4 KPI cards — Revenue lives in Reports */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '16px' }}>
             {/* KPI 1: Prescription volume */}
-            <div role="button" tabIndex={0} className="pa-focus" onClick={() => handleNav('overview')} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleNav('overview'); } }} style={KPI_CARD} title="Open overview">
+            <div role="button" tabIndex={0} className="pa-focus pa-kpi" onClick={() => handleNav('overview')} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleNav('overview'); } }} style={KPI_CARD} title="Open overview">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
                 <span style={{ fontSize: '14px', fontWeight: 600, color: '#4b5563' }}>Prescription volume</span>
                 <span style={kpiBadge('gray')}>TODAY</span>
               </div>
               <div>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                  <span style={{ fontSize: '28px', fontWeight: 700, color: '#111827' }}>{metrics ? metrics.kpis.rx_volume : '—'}</span>
+                  <span style={{ fontSize: '28px', fontWeight: 700, color: '#111827' }}>{metrics ? metrics.kpis.rx_volume : isLoading ? <span className="pa-skel" aria-label="Loading" style={{ width: '72px', height: '28px' }} /> : '—'}</span>
                   <span style={{ fontSize: '12px', color: '#6b7280' }}>received</span>
                 </div>
                 <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
@@ -1173,7 +1198,7 @@ export const PharmacyAdminWorkspace: React.FC = () => {
             </div>
 
             {/* KPI 2: Dispensed today */}
-            <div role="button" tabIndex={0} className="pa-focus" onClick={() => handleNav('reports')} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleNav('reports'); } }} style={KPI_CARD} title="Open reports">
+            <div role="button" tabIndex={0} className="pa-focus pa-kpi" onClick={() => handleNav('reports')} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleNav('reports'); } }} style={KPI_CARD} title="Open reports">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
                 <span style={{ fontSize: '14px', fontWeight: 600, color: '#4b5563' }}>Dispensed today</span>
                 {metrics && (
@@ -1182,7 +1207,7 @@ export const PharmacyAdminWorkspace: React.FC = () => {
               </div>
               <div>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                  <span style={{ fontSize: '28px', fontWeight: 700, color: '#111827' }}>{metrics ? metrics.kpis.dispensed_today : '—'}</span>
+                  <span style={{ fontSize: '28px', fontWeight: 700, color: '#111827' }}>{metrics ? metrics.kpis.dispensed_today : isLoading ? <span className="pa-skel" aria-label="Loading" style={{ width: '72px', height: '28px' }} /> : '—'}</span>
                   <span style={{ fontSize: '12px', color: '#6b7280' }}>fulfilled</span>
                 </div>
                 <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>Across OPD, IPD and OTC counters</div>
@@ -1190,14 +1215,14 @@ export const PharmacyAdminWorkspace: React.FC = () => {
             </div>
 
             {/* KPI 3: Inventory health */}
-            <div role="button" tabIndex={0} className="pa-focus" onClick={() => handleNav('inv', 'out')} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleNav('inv', 'out'); } }} style={{ ...KPI_CARD, border: stockoutCount > 0 ? '1.5px solid #fecaca' : KPI_CARD.border, boxShadow: stockoutCount > 0 ? '0 2px 4px rgba(220, 38, 38, 0.05)' : 'none' }} title="Open inventory health">
+            <div role="button" tabIndex={0} className="pa-focus pa-kpi" onClick={() => handleNav('inv', 'out')} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleNav('inv', 'out'); } }} style={{ ...KPI_CARD, border: stockoutCount > 0 ? '1.5px solid #fecaca' : KPI_CARD.border, boxShadow: stockoutCount > 0 ? '0 2px 4px rgba(220, 38, 38, 0.05)' : 'none' }} title="Open inventory health">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
                 <span style={{ fontSize: '14px', fontWeight: 600, color: stockoutCount > 0 ? '#b91c1c' : '#4b5563' }}>Inventory health</span>
                 <span style={kpiBadge(stockoutCount > 0 ? 'red' : 'green')}>{stockoutCount > 0 ? `${stockoutCount} OUT OF STOCK` : 'CLEAR'}</span>
               </div>
               <div>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                  <span style={{ fontSize: '28px', fontWeight: 700, color: '#111827' }}>{metrics ? `${metrics.kpis.inventory_health_pct}%` : '—'}</span>
+                  <span style={{ fontSize: '28px', fontWeight: 700, color: '#111827' }}>{metrics ? `${metrics.kpis.inventory_health_pct}%` : isLoading ? <span className="pa-skel" aria-label="Loading" style={{ width: '72px', height: '28px' }} /> : '—'}</span>
                   <span style={{ fontSize: '12px', color: '#6b7280' }}>SKUs healthy</span>
                 </div>
                 <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>{invhList.length} exceptions tracked by the Inventory Manager</div>
@@ -1205,14 +1230,14 @@ export const PharmacyAdminWorkspace: React.FC = () => {
             </div>
 
             {/* KPI 4: Staff productivity */}
-            <div role="button" tabIndex={0} className="pa-focus" onClick={() => handleNav('staff')} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleNav('staff'); } }} style={KPI_CARD} title="Open staff & roster">
+            <div role="button" tabIndex={0} className="pa-focus pa-kpi" onClick={() => handleNav('staff')} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleNav('staff'); } }} style={KPI_CARD} title="Open staff & roster">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
                 <span style={{ fontSize: '14px', fontWeight: 600, color: '#4b5563' }}>Staff productivity</span>
                 <span style={kpiBadge('blue')}>{onDutyCount} ON DUTY</span>
               </div>
               <div>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                  <span style={{ fontSize: '28px', fontWeight: 700, color: '#111827' }}>{metrics ? metrics.kpis.avg_turnaround_mins : '—'}</span>
+                  <span style={{ fontSize: '28px', fontWeight: 700, color: '#111827' }}>{metrics ? metrics.kpis.avg_turnaround_mins : isLoading ? <span className="pa-skel" aria-label="Loading" style={{ width: '72px', height: '28px' }} /> : '—'}</span>
                   <span style={{ fontSize: '12px', color: '#6b7280' }}>min avg OPD turnaround</span>
                 </div>
                 <div style={{ fontSize: '12px', marginTop: '2px', color: shiftGaps > 0 ? '#b45309' : '#94a3b8' }}>
@@ -1605,7 +1630,7 @@ export const PharmacyAdminWorkspace: React.FC = () => {
                           onClick={() => mdSelect(row.key)}
                           onFocus={() => mdSelect(row.key)}
                           onDoubleClick={() => runPrimaryAction(row.key)}
-                          style={{ padding: '12px 16px', borderBottom: '1px solid #f1f5f9', borderLeft: `3px solid ${isSel ? '#2563eb' : 'transparent'}`, background: isSel ? '#eff6ff' : '#ffffff', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '6px', transition: 'background 0.12s ease' }}
+                          style={{ padding: '12px 16px', borderBottom: '1px solid #f1f5f9', borderLeft: `3px solid ${isSel ? '#2563eb' : 'transparent'}`, background: isSel ? '#eff6ff' : '#ffffff', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '6px', }}
                         >
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
                             <span title={row.title} style={{ flex: 1, minWidth: 0, fontSize: '14px', fontWeight: 600, color: isSel ? '#1d4ed8' : '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.title}</span>
@@ -1619,7 +1644,7 @@ export const PharmacyAdminWorkspace: React.FC = () => {
                             </div>
                           )}
                           {row.progress && (done ? (
-                            <span style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', fontWeight: 600, color: '#15803d' }}>
+                            <span className="pa-fade-in" style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', fontWeight: 600, color: '#15803d' }}>
                               <CheckCircle2 size={14} /> {row.progress.doneLabel}
                             </span>
                           ) : (
@@ -1631,7 +1656,7 @@ export const PharmacyAdminWorkspace: React.FC = () => {
                               aria-label={`${row.progress.pct}% complete`}
                               style={{ display: 'block', height: '6px', borderRadius: '3px', background: '#f1f5f9', overflow: 'hidden' }}
                             >
-                              <span style={{ display: 'block', height: '6px', width: `${row.progress.pct}%`, borderRadius: '3px', background: '#2563eb' }} />
+                              <span className="pa-bar" style={{ display: 'block', height: '6px', width: `${row.progress.pct}%`, borderRadius: '3px', background: '#2563eb' }} />
                             </span>
                           ))}
                         </div>
@@ -1711,7 +1736,7 @@ export const PharmacyAdminWorkspace: React.FC = () => {
                           ) : (
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                               <span role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Progress to target" style={{ flex: 1, height: '8px', borderRadius: '4px', background: '#f1f5f9', overflow: 'hidden' }}>
-                                <span style={{ display: 'block', height: '8px', width: `${pct}%`, borderRadius: '4px', background: '#2563eb' }} />
+                                <span className="pa-bar" style={{ display: 'block', height: '8px', width: `${pct}%`, borderRadius: '4px', background: '#2563eb' }} />
                               </span>
                               <span style={{ fontSize: '14px', fontWeight: 600, color: '#111827', whiteSpace: 'nowrap' }}>{staff.done} of {staff.target} processed</span>
                             </div>
@@ -2292,9 +2317,10 @@ export const PharmacyAdminWorkspace: React.FC = () => {
       {isAssignModalOpen && assigningShift && (
         <div
           onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); setIsAssignModalOpen(false); } }}
+          className="pa-backdrop"
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
         >
-          <div role="dialog" aria-modal="true" aria-label="Assign shift coverage" style={{ background: '#fff', borderRadius: '14px', width: '480px', maxWidth: '90%', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)' }}>
+          <div className="pa-pop" role="dialog" aria-modal="true" aria-label="Assign shift coverage" style={{ background: '#fff', borderRadius: '14px', width: '480px', maxWidth: '90%', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <div>
                 <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#111827', margin: 0 }}>Assign Shift Coverage</h3>
@@ -2393,9 +2419,10 @@ export const PharmacyAdminWorkspace: React.FC = () => {
         <div
           onClick={() => setIsShortcutsOpen(false)}
           onKeyDown={e => { if (e.key === 'Escape') setIsShortcutsOpen(false); }}
+          className="pa-backdrop"
           style={{ position: 'fixed', inset: 0, background: 'rgba(17,24,39,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
         >
-          <div role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" onClick={e => e.stopPropagation()} style={{ background: '#ffffff', borderRadius: '12px', width: '520px', maxWidth: '92%', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+          <div className="pa-pop" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" onClick={e => e.stopPropagation()} style={{ background: '#ffffff', borderRadius: '12px', width: '520px', maxWidth: '92%', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <h3 style={{ fontSize: '20px', fontWeight: 600, color: '#111827', margin: 0 }}>Keyboard shortcuts</h3>
               <button type="button" autoFocus onClick={() => setIsShortcutsOpen(false)} aria-label="Close" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280', padding: '4px' }}>

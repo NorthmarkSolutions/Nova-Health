@@ -1,0 +1,5 @@
+/*
+ * Pharmacy motion layer (HMS design bible, Section 19.10).
+ * The rules live in the shared HMS stylesheet so every department moves the same way.
+ */
+@import '../../../components/hms/hms.css';

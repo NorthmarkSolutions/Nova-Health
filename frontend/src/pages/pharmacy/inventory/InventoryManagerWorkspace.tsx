@@ -30,7 +30,6 @@ import {
   LogOut,
   Plus,
   ChevronDown,
-  ChevronRight,
   Edit3,
   Archive,
   TrendingUp,
@@ -936,6 +935,43 @@ export const InventoryManagerWorkspace: React.FC = () => {
     return selectedItem ? getItemDetails(selectedItem).key : null;
   }, [selectedItem, getItemDetails]);
 
+  // Motion: flash rows whose stock/metric changed (green up, amber down, blue new) after a refresh of the same view
+  const [rowFlash, setRowFlash] = useState<Record<string, 'up' | 'down' | 'new'>>({});
+  const rowSnapshotRef = useRef<{ ctx: string; metrics: Map<string, string> } | null>(null);
+  useEffect(() => {
+    const ctx = `${activeTab}|${activePill}|${query}`;
+    const metrics = new Map<string, string>();
+    activeItems.forEach((item: any) => {
+      const d = getItemDetails(item);
+      metrics.set(String(d.key), String(d.metric ?? ''));
+    });
+    const prev = rowSnapshotRef.current;
+    rowSnapshotRef.current = { ctx, metrics };
+    if (!prev || prev.ctx !== ctx || prev.metrics.size === 0) return;
+    const changed: Record<string, 'up' | 'down' | 'new'> = {};
+    metrics.forEach((metric, key) => {
+      const before = prev.metrics.get(key);
+      if (before === undefined) { changed[key] = 'new'; return; }
+      if (before === metric) return;
+      const a = parseFloat(before.replace(/[^0-9.-]/g, ''));
+      const b = parseFloat(metric.replace(/[^0-9.-]/g, ''));
+      changed[key] = !Number.isNaN(a) && !Number.isNaN(b) && b < a ? 'down' : 'up';
+    });
+    if (Object.keys(changed).length === 0) return;
+    setRowFlash(changed);
+    const t = window.setTimeout(() => setRowFlash({}), 1500);
+    return () => window.clearTimeout(t);
+  }, [activeItems, getItemDetails, activeTab, activePill, query]);
+
+  // Motion: fade the inspection drawer when the selection changes (no remount, keeps focus)
+  const inspectionPanelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = inspectionPanelRef.current;
+    if (!el || !activeSelectionKey || typeof el.animate !== 'function') return;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    el.animate([{ opacity: 0.55, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], { duration: 160, easing: 'ease-out' });
+  }, [activeSelectionKey, activeTab]);
+
   // Keep selected row visible and accessible in list viewport
   useEffect(() => {
     if (activeSelectionKey) {
@@ -1066,10 +1102,10 @@ export const InventoryManagerWorkspace: React.FC = () => {
 
   // Pill styling helper for wrapping chips
   const getPillStyle = (isActive: boolean) => ({
-    height: '28px',
-    padding: '0 10px',
+    height: '32px',
+    padding: '0 12px',
     borderRadius: '9999px',
-    fontSize: '12px',
+    fontSize: '13px',
     fontWeight: 600,
     cursor: 'pointer',
     whiteSpace: 'nowrap' as const,
@@ -1081,7 +1117,7 @@ export const InventoryManagerWorkspace: React.FC = () => {
   });
 
   return (
-    <div style={{ display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', background: '#f9fafb', fontFamily: "'Inter', sans-serif" }}>
+    <div className="inv-root" style={{ display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', background: '#f9fafb', fontFamily: "'Inter', sans-serif" }}>
       {/* 1. SIDEBAR (260px) */}
       <aside
         style={{
@@ -1158,6 +1194,41 @@ export const InventoryManagerWorkspace: React.FC = () => {
           }
           .med-compact-scroll::-webkit-scrollbar-thumb:hover {
             background: #94a3b8;
+          }
+          @keyframes hms-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+          @keyframes hms-pop { from { opacity: 0; transform: scale(0.98) translateY(-2px); } to { opacity: 1; transform: none; } }
+          @keyframes hms-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+          @keyframes hms-flash-up { 0%, 35% { background-color: #dcfce7; } 100% { background-color: transparent; } }
+          @keyframes hms-flash-down { 0%, 35% { background-color: #fef3c7; } 100% { background-color: transparent; } }
+          @keyframes hms-flash-new { 0%, 45% { background-color: #dbeafe; } 100% { background-color: transparent; } }
+          @keyframes hms-pulse-once { 0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.35); } 100% { box-shadow: 0 0 0 8px rgba(220, 38, 38, 0); } }
+          .hms-fade-in { animation: hms-fade-in 160ms ease-out both; }
+          .hms-pop { animation: hms-pop 150ms ease-out both; transform-origin: top right; }
+          .hms-kpi { transition: transform 150ms ease-out, box-shadow 150ms ease-out, border-color 150ms ease-out !important; }
+          .hms-kpi:hover, .hms-kpi:focus-visible { transform: translateY(-1px); box-shadow: 0 6px 16px -6px rgba(15, 23, 42, 0.14) !important; border-color: #bfdbfe !important; }
+          .hms-kpi:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+          .hms-chev { transition: transform 150ms ease-out; }
+          .hms-skel { display: inline-block; border-radius: 6px; background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 37%, #f1f5f9 63%); background-size: 400% 100%; animation: hms-shimmer 1.4s ease infinite; }
+          .med-compact-row.hms-flash-up { animation: hms-flash-up 1.2s ease-out; }
+          .med-compact-row.hms-flash-down { animation: hms-flash-down 1.2s ease-out; }
+          .med-compact-row.hms-flash-new { animation: hms-flash-new 1.4s ease-out; }
+          .hms-pulse-once { animation: hms-pulse-once 900ms ease-out 2; }
+          .inv-root button { transition: transform 120ms ease-out, box-shadow 150ms ease-out, filter 150ms ease-out, background-color 150ms ease-out, border-color 150ms ease-out, color 150ms ease-out; }
+          .inv-root button:not(:disabled):not(.pharmacy-nav-item):not(.pharmacy-group-header):hover { transform: translateY(-1px); box-shadow: 0 4px 10px -4px rgba(15, 23, 42, 0.18); filter: brightness(0.97); }
+          .inv-root button:not(:disabled):active { transform: translateY(0) scale(0.97) !important; box-shadow: none; filter: brightness(0.92); transition-duration: 60ms; }
+          .inv-root button:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+          .inv-root button:disabled { cursor: not-allowed; }
+          .inv-root button svg { transition: transform 200ms ease-out; }
+          .inv-root button:not(:disabled):hover svg.lucide-plus { transform: rotate(90deg); }
+          .inv-root button:not(:disabled):hover svg.lucide-refresh-cw, .inv-root button:not(:disabled):hover svg.lucide-rotate-cw { transform: rotate(180deg); }
+          .inv-root button:not(:disabled):hover svg.lucide-download { transform: translateY(2px); }
+          .inv-root button:not(:disabled):hover svg.lucide-arrow-right, .inv-root button:not(:disabled):hover svg.lucide-chevron-right, .inv-root button:not(:disabled):hover svg.lucide-send { transform: translateX(2px); }
+          .inv-root button.pharmacy-nav-item:not(:disabled):hover svg { transform: scale(1.08); }
+          @media (prefers-reduced-motion: reduce) {
+            .hms-fade-in, .hms-pop, .hms-skel, .hms-pulse-once, .med-compact-row.hms-flash-up, .med-compact-row.hms-flash-down, .med-compact-row.hms-flash-new { animation: none !important; }
+            .hms-kpi, .hms-chev, .pharmacy-nav-item, .med-compact-row { transition: none !important; }
+            .inv-root button, .inv-root button svg { transition: none !important; transform: none !important; }
+            .hms-kpi:hover, .hms-kpi:focus-visible { transform: none; }
           }
         `}</style>
 
@@ -1337,16 +1408,12 @@ export const InventoryManagerWorkspace: React.FC = () => {
                     >
                       {group.items.length}
                     </span>
-                    {isCollapsed ? (
-                      <ChevronRight size={13} color="#94a3b8" />
-                    ) : (
-                      <ChevronDown size={13} color="#94a3b8" />
-                    )}
+                    <ChevronDown size={13} color="#94a3b8" className="hms-chev" style={{ transform: isCollapsed ? 'rotate(-90deg)' : 'none' }} />
                   </div>
                 </div>
 
                 {!isCollapsed && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '2px' }}>
+                  <div className="hms-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '2px' }}>
                     {group.items.map((item) => {
                       const isActive = activeTab === item.key;
                       const IconComponent = item.icon;
@@ -1588,19 +1655,19 @@ export const InventoryManagerWorkspace: React.FC = () => {
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '6px',
-                  height: '32px',
-                  padding: '0 12px',
+                  gap: '8px',
+                  height: '40px',
+                  padding: '0 14px',
                   border: '1px solid #e5e7eb',
-                  borderRadius: '8px',
-                  fontSize: '12px',
-                  fontWeight: 500,
+                  borderRadius: '10px',
+                  fontSize: '14px',
+                  fontWeight: 600,
                   color: '#4b5563',
                   background: '#fff',
                   cursor: 'pointer',
                 }}
               >
-                <ArrowLeft size={14} />
+                <ArrowLeft size={16} />
                 HMS Admin
               </button>
             )}
@@ -1609,40 +1676,42 @@ export const InventoryManagerWorkspace: React.FC = () => {
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
-                height: '32px',
-                padding: '0 12px',
+                gap: '8px',
+                height: '40px',
+                padding: '0 14px',
                 border: '1px solid #e5e7eb',
-                borderRadius: '8px',
-                fontSize: '12px',
-                fontWeight: 500,
+                borderRadius: '10px',
+                fontSize: '14px',
+                fontWeight: 600,
                 color: '#2563eb',
                 background: '#eff6ff',
                 cursor: 'pointer',
               }}
             >
-              <Pill size={14} />
+              <Pill size={16} />
               OPD Dispense Counter
             </button>
-            <div
+            <button
+              type="button"
               onClick={refreshData}
               title="Click to refresh inventory cache"
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
-                height: '32px',
-                padding: '0 12px',
+                gap: '8px',
+                height: '40px',
+                padding: '0 14px',
                 border: '1px solid #e5e7eb',
-                borderRadius: '8px',
-                fontSize: '12px',
+                borderRadius: '10px',
+                background: '#ffffff',
+                fontSize: '14px',
                 color: '#374151',
                 whiteSpace: 'nowrap',
                 cursor: 'pointer',
               }}
             >
-              <Clock size={14} /> Last stock sync · {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </div>
+              <Clock size={16} /> Last stock sync · {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </button>
 
             <div style={{ width: '1px', height: '20px', background: '#e5e7eb', margin: '0 2px' }} />
 
@@ -1656,12 +1725,12 @@ export const InventoryManagerWorkspace: React.FC = () => {
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '8px',
-                  height: '34px',
-                  padding: '0 10px 0 6px',
+                  gap: '10px',
+                  height: '44px',
+                  padding: '0 12px 0 6px',
                   background: isProfileOpen ? '#f1f5f9' : '#ffffff',
                   border: '1px solid #e2e8f0',
-                  borderRadius: '8px',
+                  borderRadius: '10px',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease',
                   boxShadow: isProfileOpen ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
@@ -1676,16 +1745,16 @@ export const InventoryManagerWorkspace: React.FC = () => {
                 {/* Initials Avatar */}
                 <div
                   style={{
-                    width: '24px',
-                    height: '24px',
+                    width: '32px',
+                    height: '32px',
                     borderRadius: '50%',
                     background: '#eff6ff',
                     color: '#2563eb',
-                    border: '1px solid #bfdbfe',
+                    border: '1.5px solid #bfdbfe',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontSize: '11px',
+                    fontSize: '13px',
                     fontWeight: 700,
                     flexShrink: 0,
                   }}
@@ -1694,13 +1763,13 @@ export const InventoryManagerWorkspace: React.FC = () => {
                 </div>
 
                 {/* Name & Role */}
-                <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'left', lineHeight: 1.15 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'left', lineHeight: 1.25 }}>
                   <span
                     style={{
-                      fontSize: '12px',
+                      fontSize: '14px',
                       fontWeight: 600,
                       color: '#0f172a',
-                      maxWidth: '125px',
+                      maxWidth: '200px',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
@@ -1710,20 +1779,20 @@ export const InventoryManagerWorkspace: React.FC = () => {
                   </span>
                   <span
                     style={{
-                      fontSize: '10px',
+                      fontSize: '12px',
                       color: '#64748b',
-                      maxWidth: '125px',
+                      maxWidth: '200px',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {designation}
+                    Inventory Manager
                   </span>
                 </div>
 
                 <ChevronDown
-                  size={14}
+                  size={16}
                   style={{
                     color: '#64748b',
                     marginLeft: '2px',
@@ -1736,6 +1805,7 @@ export const InventoryManagerWorkspace: React.FC = () => {
               {/* Profile Dropdown Popover */}
               {isProfileOpen && (
                 <div
+                  className="hms-pop"
                   style={{
                     position: 'absolute',
                     top: 'calc(100% + 6px)',
@@ -1747,7 +1817,6 @@ export const InventoryManagerWorkspace: React.FC = () => {
                     boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
                     zIndex: 100,
                     overflow: 'hidden',
-                    animation: 'fadeIn 0.15s ease-out',
                   }}
                 >
                   {/* Top Header Card */}
@@ -1794,7 +1863,7 @@ export const InventoryManagerWorkspace: React.FC = () => {
                             marginTop: '1px',
                           }}
                         >
-                          {user?.email || 'r.kumar@northhospital.org'}
+                          {user?.email || ''}
                         </div>
                         <div
                           style={{
@@ -1802,7 +1871,7 @@ export const InventoryManagerWorkspace: React.FC = () => {
                             alignItems: 'center',
                             gap: '4px',
                             marginTop: '6px',
-                            fontSize: '10px',
+                            fontSize: '12px',
                             fontWeight: 600,
                             color: '#16a34a',
                             background: '#f0fdf4',
@@ -1832,7 +1901,7 @@ export const InventoryManagerWorkspace: React.FC = () => {
                         alignItems: 'center',
                         gap: '10px',
                         padding: '9px 12px',
-                        fontSize: '13px',
+                        fontSize: '14px',
                         fontWeight: 500,
                         color: '#334155',
                         background: 'transparent',
@@ -1890,7 +1959,7 @@ export const InventoryManagerWorkspace: React.FC = () => {
                         alignItems: 'center',
                         gap: '10px',
                         padding: '9px 12px',
-                        fontSize: '13px',
+                        fontSize: '14px',
                         fontWeight: 500,
                         color: '#334155',
                         background: 'transparent',
@@ -1923,7 +1992,7 @@ export const InventoryManagerWorkspace: React.FC = () => {
                         alignItems: 'center',
                         gap: '10px',
                         padding: '9px 12px',
-                        fontSize: '13px',
+                        fontSize: '14px',
                         fontWeight: 500,
                         color: '#dc2626',
                         background: 'transparent',
@@ -1985,7 +2054,7 @@ export const InventoryManagerWorkspace: React.FC = () => {
                   background: '#2563eb',
                   color: '#ffffff',
                   border: 'none',
-                  fontSize: '13px',
+                  fontSize: '14px',
                   fontWeight: 600,
                   cursor: 'pointer',
                   display: 'inline-flex',
@@ -2010,7 +2079,7 @@ export const InventoryManagerWorkspace: React.FC = () => {
                   background: '#ffffff',
                   color: '#111827',
                   border: '1px solid #d1d5db',
-                  fontSize: '13px',
+                  fontSize: '14px',
                   fontWeight: 600,
                   cursor: 'pointer',
                   display: 'inline-flex',
@@ -2034,7 +2103,7 @@ export const InventoryManagerWorkspace: React.FC = () => {
                   background: '#ffffff',
                   color: '#111827',
                   border: '1px solid #d1d5db',
-                  fontSize: '13px',
+                  fontSize: '14px',
                   fontWeight: 600,
                   cursor: 'pointer',
                   display: 'inline-flex',
@@ -2058,7 +2127,7 @@ export const InventoryManagerWorkspace: React.FC = () => {
                   background: '#ffffff',
                   color: '#111827',
                   border: '1px solid #d1d5db',
-                  fontSize: '13px',
+                  fontSize: '14px',
                   fontWeight: 600,
                   cursor: 'pointer',
                   display: 'inline-flex',
@@ -2079,7 +2148,7 @@ export const InventoryManagerWorkspace: React.FC = () => {
                   background: '#f8fafc',
                   color: '#334155',
                   border: '1px solid #cbd5e1',
-                  fontSize: '13px',
+                  fontSize: '14px',
                   fontWeight: 600,
                   cursor: 'pointer',
                   display: 'inline-flex',
@@ -2161,7 +2230,7 @@ export const InventoryManagerWorkspace: React.FC = () => {
             return (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '16px', width: '100%', boxSizing: 'border-box' }}>
                 {/* Card 1: Total Master SKUs & Valuation */}
-                <div onClick={() => updateURL('master')} style={cardStyle}>
+                <div role="button" tabIndex={0} className="hms-kpi" onClick={() => updateURL('master')} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); updateURL('master'); } }} style={cardStyle}>
                   <div style={headerStyle}>
                     <span style={labelStyle}>Total Master SKUs</span>
                     <span style={neutralTagStyle}>
@@ -2170,17 +2239,17 @@ export const InventoryManagerWorkspace: React.FC = () => {
                   </div>
                   <div style={metricRowStyle}>
                     <span style={{ fontSize: '28px', fontWeight: 700, color: '#111827', lineHeight: 1.1, letterSpacing: '-0.02em' }}>
-                      {medicines.length || kpis?.total_skus || 0}
+                      {loading && !kpis ? <span className="hms-skel" aria-label="Loading" style={{ width: '64px', height: '28px' }} /> : medicines.length || kpis?.total_skus || 0}
                     </span>
                     <span style={subtextStyle}>catalog items</span>
                   </div>
                 </div>
 
                 {/* Card 2: Stock Deficits & Out of Stock */}
-                <div onClick={() => updateURL('ledger', '', 'low')} style={cardStyle}>
+                <div role="button" tabIndex={0} className="hms-kpi" onClick={() => updateURL('ledger', '', 'low')} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); updateURL('ledger', '', 'low'); } }} style={cardStyle}>
                   <div style={headerStyle}>
                     <span style={labelStyle}>Stock Deficits</span>
-                    <span style={outOfStockCount > 0 ? urgentRedTagStyle : neutralTagStyle}>
+                    <span className={outOfStockCount > 0 ? 'hms-pulse-once' : undefined} style={outOfStockCount > 0 ? urgentRedTagStyle : neutralTagStyle}>
                       {outOfStockCount > 0 ? `${outOfStockCount} Out of Stock` : '0 Out of Stock'}
                     </span>
                   </div>
@@ -2194,17 +2263,17 @@ export const InventoryManagerWorkspace: React.FC = () => {
                         letterSpacing: '-0.02em'
                       }}
                     >
-                      {kpis?.low_stock_count || 0}
+                      {loading && !kpis ? <span className="hms-skel" aria-label="Loading" style={{ width: '64px', height: '28px' }} /> : kpis?.low_stock_count || 0}
                     </span>
                     <span style={subtextStyle}>below threshold</span>
                   </div>
                 </div>
 
                 {/* Card 3: Expiring Batches */}
-                <div onClick={() => updateURL('expiry')} style={cardStyle}>
+                <div role="button" tabIndex={0} className="hms-kpi" onClick={() => updateURL('expiry')} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); updateURL('expiry'); } }} style={cardStyle}>
                   <div style={headerStyle}>
                     <span style={labelStyle}>Expiring Batches</span>
-                    <span style={expiringThisMonthCount > 0 ? urgentRedTagStyle : neutralTagStyle}>
+                    <span className={expiringThisMonthCount > 0 ? 'hms-pulse-once' : undefined} style={expiringThisMonthCount > 0 ? urgentRedTagStyle : neutralTagStyle}>
                       {expiringThisMonthCount > 0 ? `${expiringThisMonthCount} in ≤30d` : '≤ 90 Days'}
                     </span>
                   </div>
@@ -2218,17 +2287,17 @@ export const InventoryManagerWorkspace: React.FC = () => {
                         letterSpacing: '-0.02em'
                       }}
                     >
-                      {kpis?.expiring_batches_count || batches.filter(b => b.months_left <= 3).length || 0}
+                      {loading && !kpis ? <span className="hms-skel" aria-label="Loading" style={{ width: '64px', height: '28px' }} /> : kpis?.expiring_batches_count || batches.filter(b => b.months_left <= 3).length || 0}
                     </span>
                     <span style={subtextStyle}>quarantine / FEFO queue</span>
                   </div>
                 </div>
 
                 {/* Card 4: Pending Demands & Ward Indents */}
-                <div onClick={() => updateURL('demand')} style={cardStyle}>
+                <div role="button" tabIndex={0} className="hms-kpi" onClick={() => updateURL('demand')} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); updateURL('demand'); } }} style={cardStyle}>
                   <div style={headerStyle}>
                     <span style={labelStyle}>Pending Demands</span>
-                    <span style={statDemandsCount > 0 ? urgentRedTagStyle : neutralTagStyle}>
+                    <span className={statDemandsCount > 0 ? 'hms-pulse-once' : undefined} style={statDemandsCount > 0 ? urgentRedTagStyle : neutralTagStyle}>
                       {statDemandsCount > 0 ? `${statDemandsCount} STAT` : 'Routine'}
                     </span>
                   </div>
@@ -2242,7 +2311,7 @@ export const InventoryManagerWorkspace: React.FC = () => {
                         letterSpacing: '-0.02em'
                       }}
                     >
-                      {demands.filter(d => d.status === 'PENDING_TRANSFER').length || 2}
+                      {loading && !kpis ? <span className="hms-skel" aria-label="Loading" style={{ width: '64px', height: '28px' }} /> : demands.filter(d => d.status === 'PENDING_TRANSFER').length}
                     </span>
                     <span style={subtextStyle}>ward & ICU indents</span>
                   </div>
@@ -2251,11 +2320,11 @@ export const InventoryManagerWorkspace: React.FC = () => {
             );
           })()}
 
-          {/* 3. SPLIT-SCREEN WORKSPACE: Aligned with 4-Column KPI Grid across ALL screens */}
+          {/* 3. MASTER-DETAIL: Left box ~30% (min 340px) · Right box ~70% (HMS bible 19.6) */}
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+              gridTemplateColumns: 'minmax(340px, 1fr) minmax(0, 2.3fr)',
               gap: '16px',
               alignItems: 'start',
               width: '100%',
@@ -2263,10 +2332,9 @@ export const InventoryManagerWorkspace: React.FC = () => {
               boxSizing: 'border-box',
             }}
           >
-            {/* LEFT CONTAINER (Matches KPI Card 1 - Column 1 across ALL screens) */}
+            {/* LEFT BOX: list with the important information only */}
             <div
               style={{
-                gridColumn: 'span 1',
                 width: '100%',
                 minWidth: 0,
                 maxWidth: '100%',
@@ -2787,7 +2855,7 @@ export const InventoryManagerWorkspace: React.FC = () => {
                             }
                           }
                         }}
-                        className={`med-compact-row ${isSel ? 'med-selected' : ''}`}
+                        className={`med-compact-row ${isSel ? 'med-selected' : ''}${rowFlash[String(details.key)] ? ` hms-flash-${rowFlash[String(details.key)]}` : ''}`}
                         style={{
                           display: 'flex',
                           flexDirection: 'column',
@@ -2860,10 +2928,9 @@ export const InventoryManagerWorkspace: React.FC = () => {
               </div>
             </div>
 
-            {/* RIGHT STICKY CONTEXT INSPECTION DRAWER (Matches KPI Cards 2-4 - Columns 2 to 4 across ALL screens) */}
+            {/* RIGHT BOX: sticky details drawer */}
             <div
               style={{
-                gridColumn: 'span 3',
                 width: '100%',
                 minWidth: 0,
                 position: 'sticky',
@@ -2875,6 +2942,7 @@ export const InventoryManagerWorkspace: React.FC = () => {
               </div>
 
               <div
+                ref={inspectionPanelRef}
                 style={{
                   background: '#ffffff',
                   border: '1px solid #e5e7eb',
@@ -2933,14 +3001,14 @@ export const InventoryManagerWorkspace: React.FC = () => {
                           setIsCreateTransferOpen(true);
                         }}
                         style={{
-                          height: '36px',
+                          height: '40px',
                           padding: '0 16px',
                           background: selectedDemand.priority === 'STAT' ? '#dc2626' : '#2563eb',
                           color: '#ffffff',
                           border: 'none',
-                          borderRadius: '8px',
+                          borderRadius: '10px',
                           fontWeight: 700,
-                          fontSize: '13px',
+                          fontSize: '14px',
                           cursor: 'pointer',
                           display: 'inline-flex',
                           alignItems: 'center',
@@ -3030,13 +3098,13 @@ export const InventoryManagerWorkspace: React.FC = () => {
                             setIsReconOpen(true);
                           }}
                           style={{
-                            height: '36px',
+                            height: '40px',
                             padding: '0 14px',
                             background: '#ffffff',
                             color: '#475569',
                             border: '1px solid #cbd5e1',
-                            borderRadius: '8px',
-                            fontSize: '13px',
+                            borderRadius: '10px',
+                            fontSize: '14px',
                             fontWeight: 600,
                             cursor: 'pointer',
                             display: 'inline-flex',
@@ -3054,13 +3122,13 @@ export const InventoryManagerWorkspace: React.FC = () => {
                             setIsExpiryActionOpen(true);
                           }}
                           style={{
-                            height: '36px',
+                            height: '40px',
                             padding: '0 14px',
                             background: '#fee2e2',
                             color: '#dc2626',
                             border: '1px solid #fecaca',
-                            borderRadius: '8px',
-                            fontSize: '13px',
+                            borderRadius: '10px',
+                            fontSize: '14px',
                             fontWeight: 600,
                             cursor: 'pointer',
                             display: 'inline-flex',
@@ -3134,13 +3202,13 @@ export const InventoryManagerWorkspace: React.FC = () => {
                           refreshData();
                         }}
                         style={{
-                          height: '38px',
+                          height: '40px',
                           padding: '0 16px',
                           background: '#fffbeb',
                           color: '#b45309',
                           border: '1px solid #fde68a',
-                          borderRadius: '8px',
-                          fontSize: '13px',
+                          borderRadius: '10px',
+                          fontSize: '14px',
                           fontWeight: 600,
                           cursor: 'pointer',
                           display: 'inline-flex',
@@ -3177,14 +3245,14 @@ export const InventoryManagerWorkspace: React.FC = () => {
                           setIsExpiryActionOpen(true);
                         }}
                         style={{
-                          height: '36px',
+                          height: '40px',
                           padding: '0 16px',
                           background: '#dc2626',
                           color: '#ffffff',
                           border: 'none',
-                          borderRadius: '8px',
+                          borderRadius: '10px',
                           fontWeight: 700,
-                          fontSize: '13px',
+                          fontSize: '14px',
                           cursor: 'pointer',
                           display: 'inline-flex',
                           alignItems: 'center',
@@ -3266,14 +3334,14 @@ export const InventoryManagerWorkspace: React.FC = () => {
                           }
                         }}
                         style={{
-                          height: '36px',
+                          height: '40px',
                           padding: '0 16px',
                           background: '#2563eb',
                           color: '#ffffff',
                           border: 'none',
-                          borderRadius: '8px',
+                          borderRadius: '10px',
                           fontWeight: 700,
-                          fontSize: '13px',
+                          fontSize: '14px',
                           cursor: 'pointer',
                           display: 'inline-flex',
                           alignItems: 'center',
@@ -3354,14 +3422,14 @@ export const InventoryManagerWorkspace: React.FC = () => {
                             refreshData();
                           }}
                           style={{
-                            height: '36px',
+                            height: '40px',
                             padding: '0 16px',
                             background: '#15803d',
                             color: '#ffffff',
                             border: 'none',
-                            borderRadius: '8px',
+                            borderRadius: '10px',
                             fontWeight: 700,
-                            fontSize: '13px',
+                            fontSize: '14px',
                             cursor: 'pointer',
                             display: 'inline-flex',
                             alignItems: 'center',
@@ -3446,14 +3514,14 @@ export const InventoryManagerWorkspace: React.FC = () => {
                           setIsReconOpen(true);
                         }}
                         style={{
-                          height: '36px',
+                          height: '40px',
                           padding: '0 16px',
                           background: '#ffffff',
                           color: '#2563eb',
                           border: '1px solid #bfdbfe',
-                          borderRadius: '8px',
+                          borderRadius: '10px',
                           fontWeight: 600,
-                          fontSize: '13px',
+                          fontSize: '14px',
                           cursor: 'pointer',
                           display: 'inline-flex',
                           alignItems: 'center',
@@ -3551,14 +3619,14 @@ export const InventoryManagerWorkspace: React.FC = () => {
                           refreshData();
                         }}
                         style={{
-                          height: '36px',
+                          height: '40px',
                           padding: '0 16px',
                           background: '#2563eb',
                           color: '#ffffff',
                           border: 'none',
-                          borderRadius: '8px',
+                          borderRadius: '10px',
                           fontWeight: 700,
-                          fontSize: '13px',
+                          fontSize: '14px',
                           cursor: 'pointer',
                           display: 'inline-flex',
                           alignItems: 'center',
@@ -3637,7 +3705,7 @@ export const InventoryManagerWorkspace: React.FC = () => {
                               setStatusNotice({ type: 'amber', title: `PR #${res.pr_number} Submitted`, sub: 'Forwarded for approval.' });
                               refreshData();
                             }}
-                            style={{ height: '36px', padding: '0 14px', background: '#2563eb', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
+                            style={{ height: '40px', padding: '0 14px', background: '#2563eb', color: '#ffffff', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: 700, cursor: 'pointer' }}
                           >
                             Submit for Approval
                           </button>
@@ -3650,7 +3718,7 @@ export const InventoryManagerWorkspace: React.FC = () => {
                                 setStatusNotice({ type: 'green', title: `PR #${res.pr_number} Approved`, sub: 'Purchase requisition approved.' });
                                 refreshData();
                               }}
-                              style={{ height: '36px', padding: '0 14px', background: '#15803d', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                              style={{ height: '40px', padding: '0 14px', background: '#15803d', color: '#ffffff', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                             >
                               <Check size={16} /> Approve PR
                             </button>
@@ -3660,7 +3728,7 @@ export const InventoryManagerWorkspace: React.FC = () => {
                                 setStatusNotice({ type: 'red', title: `PR #${res.pr_number} Rejected`, sub: 'Requisition returned to requester.' });
                                 refreshData();
                               }}
-                              style={{ height: '36px', padding: '0 14px', background: '#fee2e2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+                              style={{ height: '40px', padding: '0 14px', background: '#fee2e2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
                             >
                               Reject
                             </button>
@@ -3673,7 +3741,7 @@ export const InventoryManagerWorkspace: React.FC = () => {
                               setStatusNotice({ type: 'blue', title: `PO #${res.purchase_order_number || 'PO-2026'} Issued`, sub: 'Purchase order transmitted to vendor.' });
                               refreshData();
                             }}
-                            style={{ height: '36px', padding: '0 14px', background: '#2563eb', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                            style={{ height: '40px', padding: '0 14px', background: '#2563eb', color: '#ffffff', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                           >
                             <FileText size={16} /> Issue Purchase Order
                           </button>
@@ -3787,14 +3855,14 @@ export const InventoryManagerWorkspace: React.FC = () => {
                             refreshData();
                           }}
                           style={{
-                            height: '36px',
+                            height: '40px',
                             padding: '0 16px',
                             background: '#15803d',
                             color: '#ffffff',
                             border: 'none',
-                            borderRadius: '8px',
+                            borderRadius: '10px',
                             fontWeight: 700,
-                            fontSize: '13px',
+                            fontSize: '14px',
                             cursor: 'pointer',
                             display: 'inline-flex',
                             alignItems: 'center',
@@ -3893,14 +3961,14 @@ export const InventoryManagerWorkspace: React.FC = () => {
                           updateURL('pr', '', 'all');
                         }}
                         style={{
-                          height: '36px',
+                          height: '40px',
                           padding: '0 16px',
                           background: '#2563eb',
                           color: '#ffffff',
                           border: 'none',
-                          borderRadius: '8px',
+                          borderRadius: '10px',
                           fontWeight: 700,
-                          fontSize: '13px',
+                          fontSize: '14px',
                           cursor: 'pointer',
                           display: 'inline-flex',
                           alignItems: 'center',
@@ -3988,14 +4056,14 @@ export const InventoryManagerWorkspace: React.FC = () => {
                             refreshData();
                           }}
                           style={{
-                            height: '36px',
+                            height: '40px',
                             padding: '0 16px',
                             background: '#15803d',
                             color: '#ffffff',
                             border: 'none',
-                            borderRadius: '8px',
+                            borderRadius: '10px',
                             fontWeight: 700,
-                            fontSize: '13px',
+                            fontSize: '14px',
                             cursor: 'pointer',
                             display: 'inline-flex',
                             alignItems: 'center',
@@ -4085,14 +4153,14 @@ export const InventoryManagerWorkspace: React.FC = () => {
                           refreshData();
                         }}
                         style={{
-                          height: '36px',
+                          height: '40px',
                           padding: '0 16px',
                           background: '#ffffff',
                           color: '#dc2626',
                           border: '1px solid #fecaca',
-                          borderRadius: '8px',
+                          borderRadius: '10px',
                           fontWeight: 700,
-                          fontSize: '13px',
+                          fontSize: '14px',
                           cursor: 'pointer',
                           display: 'inline-flex',
                           alignItems: 'center',
@@ -4190,13 +4258,13 @@ export const InventoryManagerWorkspace: React.FC = () => {
                               setIsAddEditMedOpen(true);
                             }}
                             style={{
-                              height: '36px',
+                              height: '40px',
                               padding: '0 14px',
                               background: '#ffffff',
                               color: '#2563eb',
                               border: '1px solid #bfdbfe',
-                              borderRadius: '8px',
-                              fontSize: '13px',
+                              borderRadius: '10px',
+                              fontSize: '14px',
                               fontWeight: 600,
                               cursor: 'pointer',
                               display: 'inline-flex',
@@ -4214,13 +4282,13 @@ export const InventoryManagerWorkspace: React.FC = () => {
                               setIsCreateBatchOpen(true);
                             }}
                             style={{
-                              height: '36px',
+                              height: '40px',
                               padding: '0 14px',
                               background: '#2563eb',
                               color: '#ffffff',
                               border: 'none',
-                              borderRadius: '8px',
-                              fontSize: '13px',
+                              borderRadius: '10px',
+                              fontSize: '14px',
                               fontWeight: 600,
                               cursor: 'pointer',
                               display: 'inline-flex',
@@ -4349,7 +4417,7 @@ export const InventoryManagerWorkspace: React.FC = () => {
                               background: 'transparent',
                               border: 'none',
                               color: '#2563eb',
-                              fontSize: '12px',
+                              fontSize: '13px',
                               fontWeight: 600,
                               cursor: 'pointer',
                               padding: 0,
@@ -4369,13 +4437,13 @@ export const InventoryManagerWorkspace: React.FC = () => {
                                 setIsCreateBatchOpen(true);
                               }}
                               style={{
-                                height: '30px',
-                                padding: '0 12px',
+                                height: '40px',
+                                padding: '0 16px',
                                 background: '#dc2626',
                                 color: '#ffffff',
                                 border: 'none',
-                                borderRadius: '6px',
-                                fontSize: '12px',
+                                borderRadius: '10px',
+                                fontSize: '14px',
                                 fontWeight: 700,
                                 cursor: 'pointer',
                               }}
@@ -4472,10 +4540,10 @@ export const InventoryManagerWorkspace: React.FC = () => {
                                       setIsExpiryActionOpen(true);
                                     }}
                                     style={{
-                                      height: '28px',
+                                      height: '32px',
                                       padding: '0 10px',
-                                      borderRadius: '6px',
-                                      fontSize: '11px',
+                                      borderRadius: '8px',
+                                      fontSize: '13px',
                                       fontWeight: 600,
                                       cursor: 'pointer',
                                       background: '#fff7ed',
@@ -4560,13 +4628,13 @@ export const InventoryManagerWorkspace: React.FC = () => {
                               }
                             }}
                             style={{
-                              height: '38px',
+                              height: '40px',
                               padding: '0 16px',
                               background: '#fffbeb',
                               color: '#b45309',
                               border: '1px solid #fde68a',
-                              borderRadius: '8px',
-                              fontSize: '13px',
+                              borderRadius: '10px',
+                              fontSize: '14px',
                               fontWeight: 700,
                               cursor: 'pointer',
                             }}
@@ -4582,13 +4650,13 @@ export const InventoryManagerWorkspace: React.FC = () => {
                             setIsReconOpen(true);
                           }}
                           style={{
-                            height: '38px',
+                            height: '40px',
                             padding: '0 16px',
                             background: '#f8fafc',
                             color: '#475569',
                             border: '1px solid #cbd5e1',
-                            borderRadius: '8px',
-                            fontSize: '13px',
+                            borderRadius: '10px',
+                            fontSize: '14px',
                             fontWeight: 600,
                             cursor: 'pointer',
                           }}

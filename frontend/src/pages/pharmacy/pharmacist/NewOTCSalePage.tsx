@@ -32,6 +32,7 @@ import api from '../../../services/api';
 import { patientJourneyService, SharedPatient } from '../../../services/patientJourneyService';
 import { pharmacyOpdService, OTCSale } from '../../../services/pharmacyOpdService';
 import { PatientRegistrationWizardModal } from '../../reception/components/PatientRegistrationWizardModal';
+import '../shared/pharmacyMotion.css';
 
 const MONO_FONT = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
 
@@ -122,6 +123,7 @@ export const NewOTCSalePage: React.FC<NewOTCSalePageProps> = ({
   const [medSearchResults, setMedSearchResults] = useState<MedicineResult[]>([]);
   const [medSearchLoading, setMedSearchLoading] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [cartFlash, setCartFlash] = useState<{ id: string | number; kind: 'new' | 'up' } | null>(null);
 
   // STEP 3: Compliance Check
   const [rxNumber, setRxNumber] = useState('');
@@ -324,6 +326,8 @@ export const NewOTCSalePage: React.FC<NewOTCSalePageProps> = ({
         line_total: lineTotal,
       };
       setCart(updated);
+      setCartFlash({ id: cur.medicine_id, kind: 'up' });
+      window.setTimeout(() => setCartFlash(null), 1100);
     } else {
       const newItem: CartItem = {
         medicine_id: med.id,
@@ -341,6 +345,8 @@ export const NewOTCSalePage: React.FC<NewOTCSalePageProps> = ({
         prescription_verified: !med.requires_prescription,
       };
       setCart([...cart, newItem]);
+      setCartFlash({ id: med.id, kind: 'new' });
+      window.setTimeout(() => setCartFlash(null), 1100);
     }
   };
 
@@ -485,7 +491,7 @@ export const NewOTCSalePage: React.FC<NewOTCSalePageProps> = ({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: embedded ? 'auto' : '100vh', background: embedded ? '#fff' : '#f8fafc', borderRadius: embedded ? '12px' : '0', border: embedded ? '1px solid #e5e7eb' : 'none', overflow: 'hidden' }}>
+    <div className="hms-motion" style={{ display: 'flex', flexDirection: 'column', minHeight: embedded ? 'auto' : '100vh', background: embedded ? '#fff' : '#f8fafc', borderRadius: embedded ? '12px' : '0', border: embedded ? '1px solid #e5e7eb' : 'none', overflow: 'hidden' }}>
       {/* Top Header */}
       {embedded ? (
         <div
@@ -508,13 +514,13 @@ export const NewOTCSalePage: React.FC<NewOTCSalePageProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                height: '34px',
+                height: '40px',
                 padding: '0 12px',
-                borderRadius: '8px',
+                borderRadius: '10px',
                 border: '1px solid #cbd5e1',
                 background: '#fff',
                 color: '#334155',
-                fontSize: '13px',
+                fontSize: '14px',
                 fontWeight: 600,
                 cursor: 'pointer',
               }}
@@ -565,13 +571,13 @@ export const NewOTCSalePage: React.FC<NewOTCSalePageProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                height: '34px',
+                height: '40px',
                 padding: '0 12px',
-                borderRadius: '8px',
+                borderRadius: '10px',
                 border: '1px solid #e2e8f0',
                 background: '#fff',
                 color: '#334155',
-                fontSize: '13px',
+                fontSize: '14px',
                 fontWeight: 600,
                 cursor: 'pointer',
               }}
@@ -629,6 +635,9 @@ export const NewOTCSalePage: React.FC<NewOTCSalePageProps> = ({
       {/* Floating Notification */}
       {notification && (
         <div
+          key={notification.message}
+          role="status"
+          className={`hms-toast${notification.type === 'error' ? ' hms-shake' : ''}`}
           style={{
             position: 'fixed',
             top: '20px',
@@ -777,13 +786,13 @@ export const NewOTCSalePage: React.FC<NewOTCSalePageProps> = ({
                         display: 'flex',
                         alignItems: 'center',
                         gap: '6px',
-                        height: '36px',
+                        height: '40px',
                         padding: '0 14px',
-                        borderRadius: '8px',
+                        borderRadius: '10px',
                         border: '1px solid #bfdbfe',
                         background: '#eff6ff',
                         color: '#2563eb',
-                        fontSize: '13px',
+                        fontSize: '14px',
                         fontWeight: 700,
                         cursor: 'pointer',
                         transition: 'all 0.15s ease',
@@ -1071,13 +1080,13 @@ export const NewOTCSalePage: React.FC<NewOTCSalePageProps> = ({
                                   display: 'flex',
                                   alignItems: 'center',
                                   gap: '6px',
-                                  height: '36px',
+                                  height: '40px',
                                   padding: '0 16px',
-                                  borderRadius: '8px',
+                                  borderRadius: '10px',
                                   background: '#2563eb',
                                   color: '#fff',
                                   border: 'none',
-                                  fontSize: '13px',
+                                  fontSize: '14px',
                                   fontWeight: 700,
                                   cursor: 'pointer',
                                   boxShadow: '0 2px 4px rgba(37,99,235,0.2)',
@@ -1090,13 +1099,13 @@ export const NewOTCSalePage: React.FC<NewOTCSalePageProps> = ({
                                 type="button"
                                 onClick={() => handleUseAsWalkIn(patientSearchQuery)}
                                 style={{
-                                  height: '36px',
+                                  height: '40px',
                                   padding: '0 16px',
-                                  borderRadius: '8px',
+                                  borderRadius: '10px',
                                   background: '#fff',
                                   color: '#334155',
                                   border: '1px solid #cbd5e1',
-                                  fontSize: '13px',
+                                  fontSize: '14px',
                                   fontWeight: 600,
                                   cursor: 'pointer',
                                 }}
@@ -1189,10 +1198,10 @@ export const NewOTCSalePage: React.FC<NewOTCSalePageProps> = ({
                         padding: '0 12px',
                         background: '#fff',
                         border: '1px solid #cbd5e1',
-                        borderRadius: '6px',
+                        borderRadius: '8px',
                         color: '#dc2626',
                         cursor: 'pointer',
-                        fontSize: '12px',
+                        fontSize: '13px',
                         fontWeight: 700,
                         display: 'flex',
                         alignItems: 'center',
@@ -1295,9 +1304,9 @@ export const NewOTCSalePage: React.FC<NewOTCSalePageProps> = ({
                   setCurrentStep(2);
                 }}
                 style={{
-                  height: '42px',
+                  height: '40px',
                   padding: '0 24px',
-                  borderRadius: '8px',
+                  borderRadius: '10px',
                   background: '#2563eb',
                   color: '#fff',
                   border: 'none',
@@ -1412,13 +1421,13 @@ export const NewOTCSalePage: React.FC<NewOTCSalePageProps> = ({
                             disabled={isOutOfStock}
                             onClick={() => addToCart(med)}
                             style={{
-                              height: '34px',
+                              height: '40px',
                               padding: '0 12px',
-                              borderRadius: '6px',
+                              borderRadius: '10px',
                               background: isOutOfStock ? '#e2e8f0' : '#2563eb',
                               color: isOutOfStock ? '#94a3b8' : '#fff',
                               border: 'none',
-                              fontSize: '12px',
+                              fontSize: '14px',
                               fontWeight: 600,
                               cursor: isOutOfStock ? 'not-allowed' : 'pointer',
                               display: 'flex',
@@ -1465,6 +1474,7 @@ export const NewOTCSalePage: React.FC<NewOTCSalePageProps> = ({
                   {cart.map((item) => (
                     <div
                       key={item.medicine_id}
+                      className={cartFlash?.id === item.medicine_id ? (cartFlash.kind === 'new' ? 'hms-row-in' : 'hms-flash-up') : undefined}
                       style={{
                         padding: '12px',
                         border: '1px solid #e2e8f0',
@@ -1557,7 +1567,7 @@ export const NewOTCSalePage: React.FC<NewOTCSalePageProps> = ({
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '8px', borderTop: '1px solid #cbd5e1', fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>
                     <span>Total Payable</span>
-                    <span>{formatINR(cartTotals.netTotal)}</span>
+                    <span key={cartTotals.netTotal} className="hms-bump" aria-live="polite">{formatINR(cartTotals.netTotal)}</span>
                   </div>
                 </div>
               )}
@@ -1566,7 +1576,7 @@ export const NewOTCSalePage: React.FC<NewOTCSalePageProps> = ({
                 <button
                   type="button"
                   onClick={() => setCurrentStep(1)}
-                  style={{ height: '40px', padding: '0 16px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+                  style={{ height: '40px', padding: '0 16px', borderRadius: '10px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
                 >
                   ← Back to Customer
                 </button>
@@ -1577,11 +1587,11 @@ export const NewOTCSalePage: React.FC<NewOTCSalePageProps> = ({
                   style={{
                     height: '40px',
                     padding: '0 20px',
-                    borderRadius: '8px',
+                    borderRadius: '10px',
                     background: cart.length === 0 ? '#cbd5e1' : '#2563eb',
                     color: '#fff',
                     border: 'none',
-                    fontSize: '13px',
+                    fontSize: '14px',
                     fontWeight: 600,
                     cursor: cart.length === 0 ? 'not-allowed' : 'pointer',
                   }}
@@ -1711,7 +1721,7 @@ export const NewOTCSalePage: React.FC<NewOTCSalePageProps> = ({
                       justifyContent: 'center',
                     }}
                   >
-                    {rxConfirmed && <Check size={14} color="#fff" strokeWidth={3} />}
+                    {rxConfirmed && <Check size={14} color="#fff" strokeWidth={3} className="hms-tick" />}
                   </span>
                   <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>
                     I confirm that I have physically verified the original valid doctor prescription and sighted proper medical credentials.
@@ -1744,7 +1754,7 @@ export const NewOTCSalePage: React.FC<NewOTCSalePageProps> = ({
               <button
                 type="button"
                 onClick={() => setCurrentStep(2)}
-                style={{ height: '40px', padding: '0 16px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+                style={{ height: '40px', padding: '0 16px', borderRadius: '10px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
               >
                 ← Back to Cart
               </button>
@@ -1755,11 +1765,11 @@ export const NewOTCSalePage: React.FC<NewOTCSalePageProps> = ({
                 style={{
                   height: '40px',
                   padding: '0 24px',
-                  borderRadius: '8px',
+                  borderRadius: '10px',
                   background: isCompliancePassed ? '#2563eb' : '#cbd5e1',
                   color: '#fff',
                   border: 'none',
-                  fontSize: '13px',
+                  fontSize: '14px',
                   fontWeight: 600,
                   cursor: isCompliancePassed ? 'pointer' : 'not-allowed',
                 }}
@@ -1850,7 +1860,7 @@ export const NewOTCSalePage: React.FC<NewOTCSalePageProps> = ({
                         type="button"
                         onClick={() => setCashTendered(String(chip.amt))}
                         style={{
-                          fontSize: '11px',
+                          fontSize: '12px',
                           fontWeight: 600,
                           padding: '2px 8px',
                           borderRadius: '4px',
@@ -1933,7 +1943,7 @@ export const NewOTCSalePage: React.FC<NewOTCSalePageProps> = ({
               <button
                 type="button"
                 onClick={() => setCurrentStep(3)}
-                style={{ height: '40px', padding: '0 16px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+                style={{ height: '40px', padding: '0 16px', borderRadius: '10px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
               >
                 ← Back to Compliance
               </button>
@@ -1942,9 +1952,9 @@ export const NewOTCSalePage: React.FC<NewOTCSalePageProps> = ({
                 disabled={isProcessingPayment}
                 onClick={handleExecuteSale}
                 style={{
-                  height: '42px',
+                  height: '40px',
                   padding: '0 28px',
-                  borderRadius: '8px',
+                  borderRadius: '10px',
                   background: '#16a34a',
                   color: '#fff',
                   border: 'none',
@@ -1989,13 +1999,13 @@ export const NewOTCSalePage: React.FC<NewOTCSalePageProps> = ({
                     display: 'flex',
                     alignItems: 'center',
                     gap: '6px',
-                    height: '36px',
+                    height: '40px',
                     padding: '0 12px',
-                    borderRadius: '6px',
+                    borderRadius: '10px',
                     border: '1px solid #cbd5e1',
                     background: '#fff',
                     color: '#0f172a',
-                    fontSize: '13px',
+                    fontSize: '14px',
                     fontWeight: 600,
                     cursor: 'pointer',
                   }}
@@ -2009,13 +2019,13 @@ export const NewOTCSalePage: React.FC<NewOTCSalePageProps> = ({
                     display: 'flex',
                     alignItems: 'center',
                     gap: '6px',
-                    height: '36px',
+                    height: '40px',
                     padding: '0 12px',
-                    borderRadius: '6px',
+                    borderRadius: '10px',
                     border: '1px solid #16a34a',
                     background: '#16a34a',
                     color: '#fff',
-                    fontSize: '13px',
+                    fontSize: '14px',
                     fontWeight: 600,
                     cursor: 'pointer',
                   }}
@@ -2136,13 +2146,13 @@ export const NewOTCSalePage: React.FC<NewOTCSalePageProps> = ({
                 type="button"
                 onClick={resetForNewSale}
                 style={{
-                  height: '42px',
+                  height: '40px',
                   padding: '0 20px',
-                  borderRadius: '8px',
+                  borderRadius: '10px',
                   background: '#2563eb',
                   color: '#fff',
                   border: 'none',
-                  fontSize: '13px',
+                  fontSize: '14px',
                   fontWeight: 600,
                   cursor: 'pointer',
                   display: 'flex',
@@ -2159,12 +2169,12 @@ export const NewOTCSalePage: React.FC<NewOTCSalePageProps> = ({
                   else navigate('/pharmacy/opd');
                 }}
                 style={{
-                  height: '42px',
+                  height: '40px',
                   padding: '0 20px',
-                  borderRadius: '8px',
+                  borderRadius: '10px',
                   border: '1px solid #cbd5e1',
                   background: '#fff',
-                  fontSize: '13px',
+                  fontSize: '14px',
                   fontWeight: 600,
                   cursor: 'pointer',
                 }}
