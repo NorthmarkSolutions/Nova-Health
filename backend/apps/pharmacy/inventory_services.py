@@ -211,7 +211,8 @@ class PharmacyInventoryService:
                 encounter = 'EMERGENCY_STAT' if order.is_emergency or order.priority == 'STAT' else order.encounter_type
 
                 results.append({
-                    'id': str(order.id),
+                    'id': str(item.id),
+                    'order_id': str(order.id),
                     'token_number': order.token_slip_number or f"TK-{order.order_number[-6:]}",
                     'source': source_name,
                     'encounter_type': encounter,

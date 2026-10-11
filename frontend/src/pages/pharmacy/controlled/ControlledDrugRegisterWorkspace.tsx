@@ -30,7 +30,17 @@ import pharmacyControlledDrugService, {
   InspectionReportData,
 } from '../../../services/pharmacyControlledDrugService';
 
-export const ControlledDrugRegisterWorkspace: React.FC = () => {
+export interface ControlledDrugRegisterWorkspaceProps {
+  isEmbedded?: boolean;
+  hideSidebar?: boolean;
+  hideHeader?: boolean;
+}
+
+export const ControlledDrugRegisterWorkspace: React.FC<ControlledDrugRegisterWorkspaceProps> = ({
+  isEmbedded = false,
+  hideSidebar = false,
+  hideHeader = false,
+}) => {
   const navigate = useNavigate();
 
   // Data States
@@ -180,15 +190,16 @@ export const ControlledDrugRegisterWorkspace: React.FC = () => {
     <div
       style={{
         display: 'flex',
-        height: '100vh',
-        width: '100vw',
-        overflow: 'hidden',
-        background: '#f8fafc',
+        height: isEmbedded ? 'auto' : '100vh',
+        width: isEmbedded ? '100%' : '100vw',
+        overflow: isEmbedded ? 'visible' : 'hidden',
+        background: isEmbedded ? 'transparent' : '#f8fafc',
         fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
       }}
     >
       {/* LEFT NAVIGATION SIDEBAR */}
-      <aside
+      {!hideSidebar && !isEmbedded && (
+        <aside
         style={{
           width: '260px',
           background: '#ffffff',
@@ -369,11 +380,14 @@ export const ControlledDrugRegisterWorkspace: React.FC = () => {
           </div>
         </div>
       </aside>
+      )}
 
       {/* MAIN CONTENT AREA */}
-      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: isEmbedded ? 'visible' : 'hidden' }}>
         {/* TOP BAR */}
-        <header
+        {!hideHeader && !isEmbedded && (
+          <>
+            <header
           style={{
             height: '60px',
             background: '#ffffff',
@@ -500,422 +514,489 @@ export const ControlledDrugRegisterWorkspace: React.FC = () => {
               0 unverified statutory releases
             </div>
           </div>
-        </section>
+          </section>
+        </>
+      )}
 
-        {/* WORKSPACE BODY WITH TABLE AND DRAWER */}
-        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-          {/* REGISTER TABLE COLUMN */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
-            {/* Filter Pills and Search */}
+      {/* WORKSPACE BODY WITH 4-COLUMN TWO-PANEL LAYOUT */}
+      <div style={{ flex: 1, overflowY: isEmbedded ? 'visible' : 'auto', padding: isEmbedded ? '0' : '24px', background: isEmbedded ? 'transparent' : '#f9fafb' }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+              gap: '16px',
+              alignItems: 'start',
+              width: '100%',
+              minWidth: 0,
+              boxSizing: 'border-box',
+            }}
+          >
+            {/* Left Panel: 1 Column */}
             <div
               style={{
-                padding: '12px 24px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                borderBottom: '1px solid #e5e7eb',
+                gridColumn: 'span 1',
+                width: '100%',
+                minWidth: 0,
+                maxWidth: '100%',
+                boxSizing: 'border-box',
                 background: '#ffffff',
-                flexShrink: 0,
+                border: '1px solid #e5e7eb',
+                borderRadius: '12px',
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
               }}
             >
-              {/* Pills */}
-              <div style={{ display: 'flex', gap: '8px' }}>
-                {[
-                  { key: 'all', label: 'All Entries' },
-                  { key: 'X', label: 'Schedule X (Narcotics)' },
-                  { key: 'H1', label: 'Schedule H1' },
-                  { key: 'disc', label: 'Discrepancies' },
-                ].map((p) => {
-                  const isActive = activePill === p.key;
-                  return (
-                    <button
-                      key={p.key}
-                      onClick={() => setActivePill(p.key as any)}
-                      style={{
-                        padding: '6px 14px',
-                        borderRadius: '20px',
-                        fontSize: '13px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        border: isActive ? '1px solid #2563eb' : '1px solid #e5e7eb',
-                        background: isActive ? '#eff6ff' : '#ffffff',
-                        color: isActive ? '#2563eb' : '#4b5563',
-                      }}
-                    >
-                      {p.label}
-                    </button>
-                  );
-                })}
+              {/* Header with Title and Count Badge */}
+              <div style={{ padding: '16px 16px 14px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                  <h2 style={{ fontSize: '15px', fontWeight: 600, color: '#111827', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    Statutory Register
+                  </h2>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      color: '#2563eb',
+                      background: '#eff6ff',
+                      border: '1px solid #bfdbfe',
+                      padding: '1px 8px',
+                      borderRadius: '9999px',
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {entries.length} Entries
+                  </span>
+                </div>
+                <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>
+                  Schedule X &amp; H1 immutable audit records
+                </p>
+
+                {/* 36px Search Bar */}
+                <div style={{ position: 'relative', width: '100%' }}>
+                  <Search size={15} style={{ position: 'absolute', left: '11px', top: '11px', color: '#9ca3af' }} />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search medicine, UHID, prescriber..."
+                    style={{
+                      width: '100%',
+                      height: '36px',
+                      padding: '0 12px 0 34px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '8px',
+                      fontSize: '13px',
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+
+                {/* Filter Pills */}
+                <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px', scrollbarWidth: 'none' }}>
+                  {[
+                    { key: 'all', label: 'All' },
+                    { key: 'X', label: 'Sched X' },
+                    { key: 'H1', label: 'Sched H1' },
+                    { key: 'disc', label: 'Discrepancies' },
+                  ].map((p) => {
+                    const isActive = activePill === p.key;
+                    return (
+                      <button
+                        key={p.key}
+                        onClick={() => setActivePill(p.key as any)}
+                        style={{
+                          height: '26px',
+                          padding: '0 10px',
+                          borderRadius: '6px',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap',
+                          background: isActive ? '#2563eb' : '#ffffff',
+                          color: isActive ? '#ffffff' : '#4b5563',
+                          border: `1px solid ${isActive ? '#2563eb' : '#e5e7eb'}`,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {p.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
-              {/* Search Bar */}
-              <div style={{ position: 'relative', width: '280px' }}>
-                <Search
-                  size={15}
-                  color="#9ca3af"
-                  style={{ position: 'absolute', left: '10px', top: '10px' }}
-                />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search entry #, medicine, patient..."
-                  style={{
-                    width: '100%',
-                    height: '34px',
-                    borderRadius: '8px',
-                    border: '1px solid #d1d5db',
-                    padding: '0 10px 0 32px',
-                    fontSize: '12px',
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* REGISTER TABLE */}
-            <div style={{ flex: 1, overflowY: 'auto' }}>
-              {/* Table Header */}
+              {/* Scrollable Entry Cards */}
               <div
                 style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'minmax(130px, 0.9fr) minmax(200px, 1.4fr) minmax(130px, 1fr) minmax(150px, 1.1fr) minmax(150px, 1.1fr) 70px 80px minmax(180px, 1.3fr) 110px',
-                  alignItems: 'center',
-                  height: '44px',
-                  background: '#f9fafb',
-                  borderBottom: '1px solid #e5e7eb',
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  letterSpacing: '0.05em',
-                  color: '#6b7280',
-                  position: 'sticky',
-                  top: 0,
-                  zIndex: 2,
+                  maxHeight: 'calc(100vh - 290px)',
+                  overflowY: 'auto',
+                  borderTop: '1px solid #f3f4f6',
+                  display: 'flex',
+                  flexDirection: 'column',
                 }}
               >
-                <div style={{ padding: '0 16px' }}>ENTRY #</div>
-                <div style={{ padding: '0 16px' }}>MEDICINE & SCHED</div>
-                <div style={{ padding: '0 16px' }}>VAULT BATCH</div>
-                <div style={{ padding: '0 16px' }}>PATIENT</div>
-                <div style={{ padding: '0 16px' }}>PRESCRIBER</div>
-                <div style={{ padding: '0 16px' }}>QTY</div>
-                <div style={{ padding: '0 16px' }}>BALANCE</div>
-                <div style={{ padding: '0 16px' }}>DISPENSER · WITNESS</div>
-                <div style={{ padding: '0 16px', textAlign: 'right' }}>SEAL</div>
-              </div>
+                {entries.length === 0 ? (
+                  <div style={{ padding: '36px 16px', textAlign: 'center', color: '#6b7280', fontSize: '13px' }}>
+                    No statutory controlled drug records found
+                  </div>
+                ) : (
+                  entries.map((entry) => {
+                    const isSelected = selectedEntry?.id === entry.id;
+                    const isScheduleX =
+                      entry.medicine_schedule === 'Schedule X' || entry.medicine_schedule === 'X';
 
-              {/* Rows */}
-              {entries.length === 0 ? (
-                <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280', fontSize: '14px' }}>
-                  No statutory controlled drug records found.
-                </div>
-              ) : (
-                entries.map((entry) => {
-                  const isSelected = selectedEntry?.id === entry.id;
-                  const isScheduleX =
-                    entry.medicine_schedule === 'Schedule X' || entry.medicine_schedule === 'X';
-
-                  return (
-                    <div
-                      key={entry.id}
-                      onClick={() => setSelectedEntry(entry)}
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'minmax(130px, 0.9fr) minmax(200px, 1.4fr) minmax(130px, 1fr) minmax(150px, 1.1fr) minmax(150px, 1.1fr) 70px 80px minmax(180px, 1.3fr) 110px',
-                        alignItems: 'center',
-                        minHeight: '56px',
-                        borderBottom: '1px solid #f3f4f6',
-                        cursor: 'pointer',
-                        background: isSelected ? '#eff6ff' : '#ffffff',
-                      }}
-                    >
-                      {/* Entry Number */}
-                      <div style={{ padding: '10px 16px', fontFamily: 'monospace', fontWeight: 700, color: '#1e40af', fontSize: '13px' }}>
-                        {entry.entry_number}
-                      </div>
-
-                      {/* Medicine */}
-                      <div style={{ padding: '10px 16px' }}>
-                        <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827' }}>
-                          {entry.medicine_name}
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
+                    return (
+                      <div
+                        key={entry.id}
+                        onClick={() => setSelectedEntry(entry)}
+                        style={{
+                          padding: '12px 14px',
+                          borderBottom: '1px solid #f1f5f9',
+                          borderLeft: isSelected ? '3px solid #2563eb' : '3px solid transparent',
+                          background: isSelected ? '#eff6ff' : '#ffffff',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '5px',
+                          transition: 'all 0.12s ease',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '14px', fontWeight: 600, color: isSelected ? '#1d4ed8' : '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '170px' }}>
+                            {entry.medicine_name}
+                          </span>
                           <span
                             style={{
                               fontSize: '10px',
                               fontWeight: 700,
                               color: '#ffffff',
-                              background: '#111827',
-                              padding: '1px 5px',
+                              background: isScheduleX ? '#111827' : '#0369a1',
+                              padding: '1px 6px',
                               borderRadius: '4px',
                             }}
                           >
-                            {entry.medicine_schedule}
-                          </span>
-                          <span style={{ fontSize: '11px', color: '#6b7280' }}>
-                            {entry.medicine_strength}
+                            {isScheduleX ? 'Sched X' : 'Sched H1'}
                           </span>
                         </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: '#64748b' }}>
+                          <span style={{ fontFamily: 'monospace', fontSize: '11px', color: '#475569' }}>
+                            {entry.entry_number}
+                          </span>
+                          <span style={{ fontSize: '11px', color: '#64748b' }}>
+                            {entry.vault_location || 'Vault Safe'} · {entry.batch_number}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          Pt: <strong>{entry.patient_name}</strong> ({entry.patient_uhid})
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <span style={{ fontSize: '12px', fontWeight: 700, color: '#dc2626' }}>
+                              −{entry.quantity_dispensed}
+                            </span>
+                            <span style={{ fontSize: '11px', color: '#15803d', fontWeight: 600 }}>
+                              Bal: {entry.balance_stock_after}
+                            </span>
+                          </div>
+                          {entry.discrepancy_noted ? (
+                            <span
+                              style={{
+                                fontSize: '10px',
+                                fontWeight: 700,
+                                color: '#b91c1c',
+                                background: '#fef2f2',
+                                border: '1px solid #fecaca',
+                                padding: '1px 6px',
+                                borderRadius: '4px',
+                              }}
+                            >
+                              DISCREPANCY
+                            </span>
+                          ) : (
+                            <span
+                              style={{
+                                fontSize: '10px',
+                                fontWeight: 700,
+                                color: '#15803d',
+                                background: '#f0fdf4',
+                                border: '1px solid #bbf7d0',
+                                padding: '1px 6px',
+                                borderRadius: '4px',
+                              }}
+                            >
+                              DUAL VERIFIED
+                            </span>
+                          )}
+                        </div>
                       </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
 
-                      {/* Batch & Vault Safe */}
-                      <div style={{ padding: '10px 16px' }}>
-                        <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827' }}>
-                          {entry.batch_number}
-                        </div>
-                        <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
-                          {entry.vault_location || 'Vault Safe A'}
-                        </div>
-                      </div>
-
-                      {/* Patient */}
-                      <div style={{ padding: '10px 16px' }}>
-                        <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827' }}>
-                          {entry.patient_name}
-                        </div>
-                        <div style={{ fontSize: '11px', color: '#6b7280', fontFamily: 'monospace', marginTop: '2px' }}>
-                          {entry.patient_uhid || '—'}
-                        </div>
-                      </div>
-
-                      {/* Prescriber */}
-                      <div style={{ padding: '10px 16px' }}>
-                        <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827' }}>
-                          {entry.prescribing_doctor_name}
-                        </div>
-                        <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
-                          {entry.doctor_license_number}
-                        </div>
-                      </div>
-
-                      {/* Quantity */}
-                      <div style={{ padding: '10px 16px', fontSize: '14px', fontWeight: 700, color: '#dc2626' }}>
-                        −{entry.quantity_dispensed}
-                      </div>
-
-                      {/* Balance Stock After */}
-                      <div style={{ padding: '10px 16px', fontSize: '14px', fontWeight: 700, color: '#15803d' }}>
-                        {entry.balance_stock_after}
-                      </div>
-
-                      {/* Dispenser & Witness */}
-                      <div style={{ padding: '10px 16px' }}>
-                        <div style={{ fontSize: '12px', fontWeight: 600, color: '#111827' }}>
-                          Ph: {entry.primary_pharmacist_name || 'Primary Pharmacist'}
-                        </div>
-                        <div style={{ fontSize: '11px', color: '#2563eb', marginTop: '2px' }}>
-                          Wit: {entry.witness_staff_name || entry.witness_role}
-                        </div>
-                      </div>
-
-                      {/* Seal */}
-                      <div style={{ padding: '10px 16px', textAlign: 'right' }}>
-                        {entry.discrepancy_noted ? (
+            {/* Right Panel: 3 Columns */}
+            <div
+              style={{
+                gridColumn: 'span 3',
+                width: '100%',
+                minWidth: 0,
+                maxWidth: '100%',
+                boxSizing: 'border-box',
+                background: '#ffffff',
+                border: '1px solid #e5e7eb',
+                borderRadius: '12px',
+                position: 'sticky',
+                top: '20px',
+                maxHeight: 'calc(100vh - 120px)',
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+              }}
+            >
+              {selectedEntry ? (
+                <>
+                  {/* Top Header */}
+                  <div
+                    style={{
+                      padding: '16px 24px',
+                      borderBottom: '1px solid #e5e7eb',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      background: '#ffffff',
+                      flexShrink: 0,
+                      gap: '12px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                      <Lock size={20} color="#2563eb" />
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#111827', margin: 0 }}>
+                            {selectedEntry.entry_number}
+                          </h3>
                           <span
                             style={{
                               fontSize: '11px',
                               fontWeight: 700,
-                              color: '#b91c1c',
-                              background: '#fef2f2',
-                              border: '1px solid #fecaca',
-                              padding: '3px 8px',
+                              color: '#ffffff',
+                              background: selectedEntry.medicine_schedule === 'Schedule X' || selectedEntry.medicine_schedule === 'X' ? '#111827' : '#0369a1',
+                              padding: '2px 8px',
                               borderRadius: '6px',
                             }}
                           >
-                            DISCREPANCY
+                            {selectedEntry.medicine_schedule}
                           </span>
-                        ) : (
-                          <span
-                            style={{
-                              fontSize: '11px',
-                              fontWeight: 700,
-                              color: '#15803d',
-                              background: '#f0fdf4',
-                              border: '1px solid #bbf7d0',
-                              padding: '3px 8px',
-                              borderRadius: '6px',
-                            }}
-                          >
-                            DUAL VERIFIED
-                          </span>
-                        )}
+                          {selectedEntry.discrepancy_noted ? (
+                            <span style={{ fontSize: '11px', fontWeight: 700, color: '#b91c1c', background: '#fef2f2', border: '1px solid #fecaca', padding: '2px 8px', borderRadius: '6px' }}>
+                              DISCREPANCY FLAGGED
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: '11px', fontWeight: 700, color: '#15803d', background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '2px 8px', borderRadius: '6px' }}>
+                              DUAL WITNESS VERIFIED
+                            </span>
+                          )}
+                        </div>
+                        <p style={{ fontSize: '12px', color: '#64748b', margin: '2px 0 0' }}>
+                          Logged on {new Date(selectedEntry.created_at).toLocaleString()} · Immutable statutory audit trail
+                        </p>
                       </div>
                     </div>
-                  );
-                })
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <button
+                        onClick={() => window.print()}
+                        style={{
+                          height: '36px',
+                          padding: '0 14px',
+                          borderRadius: '8px',
+                          background: '#ffffff',
+                          border: '1px solid #d1d5db',
+                          fontSize: '13px',
+                          fontWeight: 600,
+                          color: '#374151',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                        }}
+                      >
+                        <Printer size={15} />
+                        Print Certificate
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 4-Box Overview Strip */}
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                      gap: '12px',
+                      padding: '16px 24px',
+                      background: '#f8fafc',
+                      borderBottom: '1px solid #e5e7eb',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                        Medicine &amp; Strength
+                      </div>
+                      <div style={{ fontSize: '14px', fontWeight: 700, color: '#111827', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {selectedEntry.medicine_name}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#64748b', marginTop: '1px' }}>
+                        Strength: {selectedEntry.medicine_strength || 'Standard'}
+                      </div>
+                    </div>
+
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                        Vault &amp; Batch
+                      </div>
+                      <div style={{ fontSize: '14px', fontWeight: 700, color: '#111827', marginTop: '2px' }}>
+                        {selectedEntry.batch_number}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#64748b', marginTop: '1px' }}>
+                        Location: {selectedEntry.vault_location || 'Vault Safe A'}
+                      </div>
+                    </div>
+
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                        Dispensary Movement
+                      </div>
+                      <div style={{ fontSize: '14px', fontWeight: 700, color: '#dc2626', marginTop: '2px' }}>
+                        −{selectedEntry.quantity_dispensed} units dispensed
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#15803d', fontWeight: 600, marginTop: '1px' }}>
+                        Bal After: {selectedEntry.balance_stock_after} units
+                      </div>
+                    </div>
+
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                        Statutory Custody
+                      </div>
+                      <div style={{ fontSize: '14px', fontWeight: 700, color: '#111827', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {selectedEntry.primary_pharmacist_name || 'Pharmacist'}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#2563eb', fontWeight: 600, marginTop: '1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        Witness: {selectedEntry.witness_staff_name || selectedEntry.witness_role}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Scrollable Detail Body */}
+                  <div style={{ padding: '24px', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    {/* Patient & Prescriber Cards */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                      {/* Patient Details */}
+                      <div style={{ padding: '16px', background: '#ffffff', borderRadius: '10px', border: '1px solid #e5e7eb' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.05em', color: '#64748b', textTransform: 'uppercase' }}>
+                          Patient Information
+                        </div>
+                        <div style={{ fontSize: '15px', fontWeight: 700, color: '#111827', marginTop: '6px' }}>
+                          {selectedEntry.patient_name}
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#6b7280', fontFamily: 'monospace', marginTop: '3px' }}>
+                          UHID: {selectedEntry.patient_uhid}
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#4b5563', marginTop: '4px' }}>
+                          Rx / Token Number: <strong>{selectedEntry.rx_number || 'RX-VAULT-2026'}</strong>
+                        </div>
+                      </div>
+
+                      {/* Prescriber Details */}
+                      <div style={{ padding: '16px', background: '#ffffff', borderRadius: '10px', border: '1px solid #e5e7eb' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.05em', color: '#64748b', textTransform: 'uppercase' }}>
+                          Prescribing Practitioner
+                        </div>
+                        <div style={{ fontSize: '15px', fontWeight: 700, color: '#111827', marginTop: '6px' }}>
+                          {selectedEntry.prescribing_doctor_name}
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '3px' }}>
+                          License / Registration: <strong>{selectedEntry.doctor_license_number}</strong>
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#059669', fontWeight: 600, marginTop: '4px' }}>
+                          ✓ State Medical Council Verified
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Dual Witness Verification Strip */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <div style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.05em', color: '#64748b', textTransform: 'uppercase' }}>
+                        Statutory Dual Countersignatures
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                        <div style={{ padding: '14px', background: '#eff6ff', borderRadius: '10px', border: '1px solid #bfdbfe' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <ShieldCheck size={16} color="#1d4ed8" />
+                            <span style={{ fontSize: '12px', fontWeight: 700, color: '#1e3a8a' }}>
+                              Primary Dispensing Pharmacist
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '14px', fontWeight: 700, color: '#1e40af', marginTop: '6px' }}>
+                            {selectedEntry.primary_pharmacist_name || 'Staff Pharmacist'}
+                          </div>
+                          <div style={{ fontSize: '11px', color: '#3b82f6', marginTop: '2px' }}>
+                            PIN authenticated · Safe custody unlocked
+                          </div>
+                        </div>
+
+                        <div style={{ padding: '14px', background: '#f0fdf4', borderRadius: '10px', border: '1px solid #bbf7d0' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <CheckCircle2 size={16} color="#15803d" />
+                            <span style={{ fontSize: '12px', fontWeight: 700, color: '#166534' }}>
+                              Secondary Witness (Dual Countersigned)
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '14px', fontWeight: 700, color: '#15803d', marginTop: '6px' }}>
+                            {selectedEntry.witness_staff_name || selectedEntry.witness_role}
+                          </div>
+                          <div style={{ fontSize: '11px', color: '#16a34a', marginTop: '2px' }}>
+                            Physically verified dose count &amp; register log
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Clinical Remarks & Audit Notes */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.05em', color: '#64748b', textTransform: 'uppercase' }}>
+                        Clinical &amp; Statutory Notes
+                      </div>
+                      <div
+                        style={{
+                          fontSize: '13px',
+                          color: '#334155',
+                          padding: '14px',
+                          background: '#f8fafc',
+                          borderRadius: '10px',
+                          border: '1px solid #e2e8f0',
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        {selectedEntry.remarks || 'Statutory verification completed. Medicine inspected, count reconciled, dual witness seal applied.'}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div style={{ padding: '48px 24px', textAlign: 'center', color: '#6b7280', fontSize: '14px' }}>
+                  Select an entry from the left register to inspect statutory audit details.
+                </div>
               )}
             </div>
           </div>
-
-          {/* RIGHT-HAND AUDIT DETAIL PANEL (380px) */}
-          <aside
-            style={{
-              width: '380px',
-              background: '#ffffff',
-              borderLeft: '1px solid #e5e7eb',
-              display: 'flex',
-              flexDirection: 'column',
-              flexShrink: 0,
-              overflowY: 'auto',
-            }}
-          >
-            {selectedEntry ? (
-              <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div>
-                    <span
-                      style={{
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        color: '#15803d',
-                        background: '#f0fdf4',
-                        border: '1px solid #bbf7d0',
-                        padding: '2px 8px',
-                        borderRadius: '6px',
-                      }}
-                    >
-                      STATUTORY RECORD
-                    </span>
-                    <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#111827', margin: '6px 0 0' }}>
-                      {selectedEntry.entry_number}
-                    </h3>
-                    <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>
-                      Logged on {new Date(selectedEntry.created_at).toLocaleString()}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Medicine Box */}
-                <div style={{ padding: '14px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>
-                    {selectedEntry.medicine_name}
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
-                    Schedule: {selectedEntry.medicine_schedule} · Strength: {selectedEntry.medicine_strength}
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-                    Batch: <strong>{selectedEntry.batch_number}</strong> · Vault Safe: {selectedEntry.vault_location}
-                  </div>
-                </div>
-
-                {/* Audit Grid */}
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
-                    gap: '10px',
-                    padding: '12px',
-                    background: '#ffffff',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: '10px',
-                  }}
-                >
-                  <div>
-                    <div style={{ fontSize: '11px', color: '#6b7280' }}>Quantity Dispensed</div>
-                    <div style={{ fontSize: '16px', fontWeight: 700, color: '#dc2626' }}>
-                      {selectedEntry.quantity_dispensed} units
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '11px', color: '#6b7280' }}>Verified Balance After</div>
-                    <div style={{ fontSize: '16px', fontWeight: 700, color: '#15803d' }}>
-                      {selectedEntry.balance_stock_after} units
-                    </div>
-                  </div>
-                </div>
-
-                {/* Patient & Prescriber Info */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.05em', color: '#6b7280' }}>
-                    PATIENT & PRESCRIBER
-                  </div>
-                  <div style={{ fontSize: '13px', color: '#111827' }}>
-                    Patient: <strong>{selectedEntry.patient_name}</strong> ({selectedEntry.patient_uhid})
-                  </div>
-                  <div style={{ fontSize: '13px', color: '#111827' }}>
-                    Prescriber: <strong>{selectedEntry.prescribing_doctor_name}</strong>
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#4b5563' }}>
-                    Medical Registration: {selectedEntry.doctor_license_number}
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#4b5563' }}>
-                    Prescription / Token #: {selectedEntry.rx_number || 'RX-VAULT'}
-                  </div>
-                </div>
-
-                {/* Dual Signatures */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.05em', color: '#6b7280' }}>
-                    STATUTORY COUNTERSIGNATURES
-                  </div>
-                  <div style={{ padding: '10px', background: '#eff6ff', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
-                    <div style={{ fontSize: '12px', fontWeight: 600, color: '#1e3a8a' }}>
-                      Primary Dispensing Pharmacist
-                    </div>
-                    <div style={{ fontSize: '13px', color: '#1e40af', marginTop: '2px' }}>
-                      {selectedEntry.primary_pharmacist_name || 'Staff Pharmacist'}
-                    </div>
-                  </div>
-                  <div style={{ padding: '10px', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
-                    <div style={{ fontSize: '12px', fontWeight: 600, color: '#166534' }}>
-                      Secondary Witness (Dual Countersigned)
-                    </div>
-                    <div style={{ fontSize: '13px', color: '#15803d', marginTop: '2px' }}>
-                      {selectedEntry.witness_staff_name || selectedEntry.witness_role}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Clinical Remarks */}
-                <div>
-                  <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.05em', color: '#6b7280' }}>
-                    CLINICAL & STATUTORY REMARKS
-                  </div>
-                  <div
-                    style={{
-                      fontSize: '12px',
-                      color: '#334155',
-                      padding: '10px',
-                      background: '#f8fafc',
-                      borderRadius: '8px',
-                      border: '1px solid #e2e8f0',
-                      marginTop: '4px',
-                      lineHeight: 1.4,
-                    }}
-                  >
-                    {selectedEntry.remarks || 'Statutory verification complete.'}
-                  </div>
-                </div>
-
-                {/* Print Statutory Slip Button */}
-                <button
-                  onClick={() => window.print()}
-                  style={{
-                    height: '38px',
-                    borderRadius: '8px',
-                    background: '#ffffff',
-                    border: '1px solid #d1d5db',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    color: '#374151',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                    marginTop: '8px',
-                  }}
-                >
-                  <Printer size={15} />
-                  Print Statutory Slip
-                </button>
-              </div>
-            ) : (
-              <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280', fontSize: '13px' }}>
-                Select an entry to view statutory audit details.
-              </div>
-            )}
-          </aside>
         </div>
       </main>
 

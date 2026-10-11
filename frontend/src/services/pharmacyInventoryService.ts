@@ -52,6 +52,7 @@ export interface BatchItem {
   grn_reference: string | null;
   storage_location: string;
   months_left: number;
+  manufacturing_date?: string;
   medicine_name?: string;
   medicine_code?: string;
   medicine_category?: string;
@@ -94,6 +95,7 @@ export interface MedicineItem {
 
 export interface DemandItem {
   id: string;
+  order_id?: string;
   token_number: string;
   source: 'OPD Counter 1' | 'OPD Counter 2' | 'IPD Ward 4B' | 'ICU Satellite' | 'Trauma Emergency';
   encounter_type: 'OPD' | 'IPD' | 'EMERGENCY_STAT';
@@ -223,6 +225,8 @@ export interface SupplierItem {
   phone: string;
   email: string | null;
   open_prs_count: number;
+  is_preferred?: boolean;
+  rating?: string | number;
 }
 
 export interface StockAdjustmentItem {
@@ -510,28 +514,13 @@ export const pharmacyInventoryService = {
 
   // --- Batch Operations & Disposal ---
   async createBatch(medicineId: string, data: Partial<BatchItem>): Promise<BatchItem> {
-    try {
-      const res = await api.post('/pharmacy/batches/', { medicine_id: medicineId, ...data });
-      return res.data;
-    } catch {
-      return {
-        id: `bat-${Date.now()}`,
-        batch_number: data.batch_number || `BAT-${Date.now().toString().slice(-4)}`,
-        expiry_date: data.expiry_date || '2027-12-31',
-        initial_quantity: data.initial_quantity || 100,
-        available_quantity: data.available_quantity || data.initial_quantity || 100,
-        cost_price: data.cost_price || 10,
-        status: 'Active',
-        is_quarantined: false,
-        supplier_name: data.supplier_name || 'Cipla Institutional',
-        grn_reference: data.grn_reference || `GRN-${Date.now().toString().slice(-4)}`,
-        storage_location: data.storage_location || 'Central Store · Rack B-02',
-        months_left: 14,
-        medicine_name: data.medicine_name,
-        medicine_code: data.medicine_code,
-        medicine_schedule: data.medicine_schedule || 'H'
-      };
-    }
+    const payload = {
+      medicine: medicineId,
+      medicine_id: medicineId,
+      ...data,
+    };
+    const res = await api.post('/pharmacy/batches/', payload);
+    return res.data;
   },
 
   async quarantineBatch(batchId: string, reason: string): Promise<{ success: boolean; message: string }> {

@@ -411,6 +411,13 @@ export const PharmacyStaffModal: React.FC<PharmacyStaffModalProps> = ({
 
   return (
     <div
+      onKeyDown={e => {
+        // Esc closes the dialog (keyboard-first staff)
+        if (e.key === 'Escape' && !isSubmitting) {
+          e.stopPropagation();
+          onClose();
+        }
+      }}
       style={{
         position: 'fixed',
         inset: 0,
@@ -424,7 +431,13 @@ export const PharmacyStaffModal: React.FC<PharmacyStaffModalProps> = ({
       }}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={editingStaff ? `Edit pharmacy staff: ${editingStaff.name}` : 'Add or complete pharmacy staff'}
+        tabIndex={-1}
+        autoFocus
         style={{
+          outline: 'none',
           width: '840px',
           maxWidth: '95vw',
           height: '86vh',
@@ -478,6 +491,8 @@ export const PharmacyStaffModal: React.FC<PharmacyStaffModalProps> = ({
           <button
             type="button"
             onClick={onClose}
+            aria-label="Close (Esc)"
+            title="Close (Esc)"
             style={{
               background: 'none',
               border: 'none',

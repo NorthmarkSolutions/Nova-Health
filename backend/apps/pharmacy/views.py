@@ -145,13 +145,22 @@ class InventoryDashboardAlertsView(APIView):
             open_prs_by_med[item.medicine_id] = item.purchase_request
 
         for med in medicines:
-            stock = sum(
-                b.available_quantity for b in med.batches.all()
+            valid_batches = [
+                b for b in med.batches.all()
                 if not b.is_quarantined and b.status in ['ACTIVE', 'Active'] and b.expiry_date >= today
+            ]
+            stock = sum(b.available_quantity for b in valid_batches)
+            counter_stock = sum(
+                b.available_quantity for b in valid_batches
+                if any(kw in (b.storage_location or '').lower() for kw in ['counter', 'opd', 'shelf', 'desk'])
+            )
+            central_stock = sum(
+                b.available_quantity for b in valid_batches
+                if not any(kw in (b.storage_location or '').lower() for kw in ['counter', 'opd', 'shelf', 'desk'])
             )
             has_expiring = any(
-                b.available_quantity > 0 and b.status in ['ACTIVE', 'Active'] and not b.is_quarantined and b.expiry_date <= cutoff_90d
-                for b in med.batches.all()
+                b.available_quantity > 0 and b.expiry_date <= cutoff_90d
+                for b in valid_batches
             )
             open_pr = open_prs_by_med.get(med.id)
 
@@ -176,6 +185,10 @@ class InventoryDashboardAlertsView(APIView):
                 if q and q not in med.name.lower() and q not in med.item_code.lower() and q not in (med.generic_name or '').lower():
                     continue
 
+                batch_candidates = [b for b in valid_batches if b.available_quantity > 0]
+                if not batch_candidates:
+                    batch_candidates = valid_batches
+
                 results.append({
                     'id': str(med.id),
                     'code': med.item_code,
@@ -184,13 +197,31 @@ class InventoryDashboardAlertsView(APIView):
                     'category': med.category,
                     'schedule': med.schedule,
                     'in_stock': stock,
+                    'counter_stock': counter_stock,
+                    'central_stock': central_stock,
+                    'total_stock': stock,
                     'reorder_level': med.reorder_level,
                     'unit_price': float(med.unit_price),
                     'is_narcotic': med.is_narcotic,
                     'is_cold_chain': med.is_cold_chain,
                     'reorder_status': f"{open_pr.pr_number} · {open_pr.status}" if open_pr else ("Not raised" if stock < med.reorder_level else "—"),
                     'open_pr_id': str(open_pr.id) if open_pr else None,
-                    'status': 'Out of stock' if is_out else ('Low stock' if is_low else ('Expiring soon' if has_expiring else 'In stock'))
+                    'status': 'Out of stock' if is_out else ('Low stock' if is_low else ('Expiring soon' if has_expiring else 'In stock')),
+                    'batches': [
+                        {
+                            'id': str(b.id),
+                            'batch_number': b.batch_number,
+                            'expiry_date': str(b.expiry_date),
+                            'available_quantity': b.available_quantity,
+                            'cost_price': float(b.cost_price),
+                            'mrp_price': float(b.mrp_price or med.unit_price),
+                            'status': b.status,
+                            'storage_location': b.storage_location or 'Central Store - Main Rack',
+                            'is_counter_stock': any(kw in (b.storage_location or '').lower() for kw in ['counter', 'opd', 'shelf', 'desk']),
+                            'supplier_name': b.supplier.name if b.supplier else 'Direct Intake'
+                        }
+                        for b in batch_candidates
+                    ]
                 })
 
         # Sort: Out of stock first, then Low stock, then others
@@ -268,6 +299,42 @@ class PharmacyBatchViewSet(viewsets.ModelViewSet):
             qs = qs.filter(status__in=['ACTIVE', 'Active'], available_quantity__gt=0, expiry_date__lte=cutoff_90d)
 
         return qs.order_by('expiry_date', 'created_at')
+
+    def perform_create(self, serializer):
+        user = self.request.user if (self.request.user and self.request.user.is_authenticated) else User.objects.filter(is_superuser=True).first()
+        if not user:
+            user = User.objects.first()
+        batch = serializer.save(received_by=user)
+
+        # 1. Update medicine live stock audit trail
+        current_total = PharmacyStockService.get_medicine_stock(batch.medicine_id)
+        PharmacyStockTransaction.objects.create(
+            medicine=batch.medicine,
+            batch=batch,
+            transaction_type=StockTransactionType.RECEIVE_PO,
+            quantity_delta=batch.available_quantity,
+            balance_after=current_total,
+            reference_type='DIRECT_INTAKE',
+            reference_id=batch.id,
+            reason_or_notes=f"Direct batch intake {batch.batch_number} (GRN: {batch.grn_reference or 'Direct Intake'})",
+            performed_by=user
+        )
+
+        # 2. Narcotic register if controlled
+        if batch.medicine.is_narcotic:
+            cd_count = PharmacyControlledDrugRegister.objects.count() + 1
+            PharmacyControlledDrugRegister.objects.create(
+                entry_number=f"CDR-{cd_count:04d}",
+                medicine=batch.medicine,
+                batch=batch,
+                prescribing_doctor_name="Inbound Direct Intake",
+                witness_1_name=user.get_full_name() if user else "Inventory Manager",
+                witness_2_name="Chief Pharmacist",
+                quantity_dispensed=0,
+                closing_balance=batch.available_quantity,
+                status="VERIFIED",
+                notes=f"Direct batch intake for {batch.batch_number}"
+            )
 
     @action(detail=True, methods=['post'], url_path='action')
     def apply_action(self, request, pk=None):

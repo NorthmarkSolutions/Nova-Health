@@ -883,6 +883,41 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
                 </div>
               )}
 
+              {/* My Profile Page item */}
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setIsUserMenuOpen(false);
+                  navigate('/profile');
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  width: '100%',
+                  padding: '8px 10px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  backgroundColor: 'transparent',
+                  color: 'var(--secondary)',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'background-color 0.15s ease',
+                  textAlign: 'left',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = '#f1f5f9';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }}
+              >
+                <UserCircle size={15} color="var(--primary)" />
+                <span>My Profile</span>
+              </button>
+
               {/* Divider */}
               <div
                 style={{

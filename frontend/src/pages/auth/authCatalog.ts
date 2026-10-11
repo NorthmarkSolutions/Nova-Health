@@ -20,6 +20,7 @@ export type StaffCadre =
   | 'technician'
   | 'admin'
   | 'pathologist'
+  | 'pharmacist'
   | 'opd_pharmacist'
   | 'ipd_pharmacist'
   | 'inventory_manager'
@@ -94,19 +95,26 @@ export const CADRE_METADATA: Record<StaffCadre, CadreMeta> = {
     iconKey: 'ShieldCheck',
     badgeColor: '#059669',
   },
+  pharmacist: {
+    key: 'pharmacist',
+    label: 'Pharmacist',
+    pluralLabel: 'Pharmacists',
+    iconKey: 'Pill',
+    badgeColor: '#0284c7',
+  },
   opd_pharmacist: {
     key: 'opd_pharmacist',
-    label: 'OPD Pharmacist',
-    pluralLabel: 'OPD Pharmacist',
+    label: 'Pharmacist',
+    pluralLabel: 'Pharmacists',
     iconKey: 'Pill',
-    badgeColor: '#ec4899',
+    badgeColor: '#0284c7',
   },
   ipd_pharmacist: {
     key: 'ipd_pharmacist',
-    label: 'IPD Pharmacist',
-    pluralLabel: 'IPD Pharmacist',
-    iconKey: 'BedDouble',
-    badgeColor: '#a855f7',
+    label: 'Pharmacist',
+    pluralLabel: 'Pharmacists',
+    iconKey: 'Pill',
+    badgeColor: '#0284c7',
   },
   inventory_manager: {
     key: 'inventory_manager',
@@ -922,12 +930,12 @@ export const DEPARTMENT_LOGIN_NODES: DepartmentNode[] = [
         id: 'demo-pharm-02',
         employeeId: 'EMP-PHARM-02',
         name: 'Arjun Varma',
-        designation: 'Senior OPD Dispensing Pharmacist (Counter 2)',
+        designation: 'Senior Clinical Pharmacist · Dispensing & Ward Supply',
         role: RoleType.PHARMACIST,
-        cadre: 'opd_pharmacist',
+        cadre: 'pharmacist',
         email: 'arjun.varma@northhospital.com',
         targetRoute: '/pharmacy/opd',
-        badge: 'OPD Pharmacist',
+        badge: 'Pharmacist',
         departmentId: 'dept-pharmacy',
         departmentCode: 'PHARMACY',
         departmentName: 'Pharmacy & Dispensing Counter',
@@ -937,12 +945,12 @@ export const DEPARTMENT_LOGIN_NODES: DepartmentNode[] = [
         id: 'demo-pharm-03',
         employeeId: 'EMP-PHARM-03',
         name: 'Sneha Nair',
-        designation: 'Inpatient Clinical & Ward Supply Pharmacist',
+        designation: 'Clinical Pharmacist · Ward Supply & Dispensing',
         role: RoleType.PHARMACIST,
-        cadre: 'ipd_pharmacist',
+        cadre: 'pharmacist',
         email: 'sneha.nair@northhospital.com',
         targetRoute: '/pharmacy/ipd',
-        badge: 'IPD Pharmacist',
+        badge: 'Pharmacist',
         departmentId: 'dept-pharmacy',
         departmentCode: 'PHARMACY',
         departmentName: 'Pharmacy & Dispensing Counter',
@@ -1100,7 +1108,8 @@ export function findDemoStaffByCredential(identifier: string): DemoStaffAccount 
     query === 'sneha.nair@northhospital.com' ||
     query === 'emp-pharm-03' ||
     query === 'ipd pharmacist' ||
-    query === 'ipd pharmacy'
+    query === 'ipd pharmacy' ||
+    query === 'pharmacist'
   ) {
     return DEPARTMENT_LOGIN_NODES.find((d) => d.id === 'dept-pharmacy')?.demoAccounts.find((a) => a.id === 'demo-pharm-03');
   }
@@ -1121,7 +1130,8 @@ export function findDemoStaffByCredential(identifier: string): DemoStaffAccount 
     query === 'arjun varma' ||
     query === 'arjun.varma@northhospital.com' ||
     query === 'emp-pharm-02' ||
-    query === 'opd pharmacist'
+    query === 'opd pharmacist' ||
+    query === 'clinical pharmacist'
   ) {
     return DEPARTMENT_LOGIN_NODES.find((d) => d.id === 'dept-pharmacy')?.demoAccounts.find((a) => a.id === 'demo-pharm-02');
   }
@@ -1243,8 +1253,7 @@ export function getCadrePluralLabel(cadreKey: StaffCadre, deptId?: string): stri
   }
   if (deptId === 'dept-pharmacy') {
     if (cadreKey === 'admin') return 'Pharmacy Admin';
-    if (cadreKey === 'opd_pharmacist') return 'OPD Pharmacist';
-    if (cadreKey === 'ipd_pharmacist') return 'IPD Pharmacist';
+    if (cadreKey === 'pharmacist' || cadreKey === 'opd_pharmacist' || cadreKey === 'ipd_pharmacist') return 'Pharmacists';
     if (cadreKey === 'inventory_manager') return 'Inventory Manager';
   }
   if (deptId === 'dept-billing') {
@@ -1273,8 +1282,7 @@ export function getCadreSingleLabel(cadreKey: StaffCadre, deptId?: string): stri
   }
   if (deptId === 'dept-pharmacy') {
     if (cadreKey === 'admin') return 'Chief Pharmacist / Admin';
-    if (cadreKey === 'opd_pharmacist') return 'OPD Dispensing Pharmacist';
-    if (cadreKey === 'ipd_pharmacist') return 'IPD Ward Supply Pharmacist';
+    if (cadreKey === 'pharmacist' || cadreKey === 'opd_pharmacist' || cadreKey === 'ipd_pharmacist') return 'Clinical Pharmacist';
     if (cadreKey === 'inventory_manager') return 'Central Store & Inventory Manager';
   }
   if (deptId === 'dept-billing') {

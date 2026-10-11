@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { RoleType } from '../../../types';
@@ -43,7 +43,19 @@ import {
   ShieldCheck,
   BarChart3,
   Calendar,
-  AlertTriangle
+  AlertTriangle,
+  Phone,
+  Mail,
+  MapPin,
+  Building,
+  Activity,
+  DollarSign,
+  UserCheck,
+  Shield,
+  User as UserIcon,
+  KeyRound,
+  X,
+  ExternalLink
 } from 'lucide-react';
 import {
   pharmacyInventoryService,
@@ -68,6 +80,8 @@ import { CreateBatchModal } from './modals/CreateBatchModal';
 import { CreateTransferModal } from './modals/CreateTransferModal';
 import { StockReconciliationModal } from './modals/StockReconciliationModal';
 import { ExpiryActionModal } from './modals/ExpiryActionModal';
+import { MyProfileModal } from './modals/MyProfileModal';
+import { ChangePasswordModal } from './modals/ChangePasswordModal';
 
 // Badge Styles matching HMS Design Bible
 const B = {
@@ -214,6 +228,33 @@ export const InventoryManagerWorkspace: React.FC = () => {
 
   const [isExpiryActionOpen, setIsExpiryActionOpen] = useState(false);
   const [expiryBatchTarget, setExpiryBatchTarget] = useState<BatchItem | null>(null);
+
+  // Profile Dropdown & Modal States
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isMyProfileOpen, setIsMyProfileOpen] = useState(false);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target as Node)) {
+        setIsProfileOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsProfileOpen(false);
+      }
+    };
+    if (isProfileOpen) {
+      document.addEventListener('mousedown', handleOutsideClick);
+      document.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isProfileOpen]);
 
   // Action Drawer Sub-states
   const [drawerMode, setDrawerMode] = useState<'pr' | 'tr' | 'adj'>('pr');
@@ -441,65 +482,606 @@ export const InventoryManagerWorkspace: React.FC = () => {
     };
   }, [kpis, medicines, batches, purchaseRequests, goodsReceipts, suppliers, adjustments, transfers, controlledDrugs, deadStock, reconciliations, forecasting, demands]);
 
-  // Selected item references
+  // Active tab is medicine inventory tab
+  const isMedicineTab = activeTab === 'dash' || activeTab === 'ledger' || activeTab === 'master';
+
+  // Extract compact card fields for whatever item is in activeItems
+  const getItemDetails = useCallback((item: any) => {
+    switch (activeTab) {
+      case 'dash': {
+        const code = item.code || item.item_code;
+        const med = medicines.find((m) => m.item_code === code) || (item.batches ? (item as MedicineItem) : null);
+        const strength = med?.strength;
+        const displayName = strength && !item.name.toLowerCase().includes(strength.toLowerCase())
+          ? `${item.name} ${strength}`
+          : item.name;
+        const stock = item.in_stock !== undefined ? item.in_stock : (item.available_stock || 0);
+        const par = item.reorder_level || (med ? med.reorder_level : 0);
+        const hasExp = (med?.batches || item.batches || []).some((b: any) => b.months_left !== undefined && b.months_left <= 3);
+        const isExpSoon = item.status === 'Expiring soon' || hasExp;
+        const openPr = item.open_pr_id;
+        let b: { bg: string; fg: string; bd: string; text: string };
+        if (stock === 0) b = { ...B.red, text: 'Critical · Out of Stock' };
+        else if (stock < par && !openPr) b = { ...B.red, text: 'Urgent · No PR Raised' };
+        else if (stock < par) b = { ...B.amber, text: 'Warning · Low Stock' };
+        else if (isExpSoon) b = { ...B.amber, text: 'Urgent · Expiring ≤90d' };
+        else b = { ...B.green, text: 'In Stock' };
+        return {
+          key: item.id || code,
+          title: displayName,
+          badge: b,
+          sub: `${code} · ${item.generic || item.category || 'Formulary'}`,
+          metric: `${stock} in stock`,
+          metricColor: stock === 0 ? '#dc2626' : stock < par ? '#b45309' : '#15803d',
+          par: par > 0 ? `Min: ${par}` : undefined,
+        };
+      }
+      case 'master': {
+        const schedBadge = getScheduleBadge(item.schedule, item.is_narcotic);
+        return {
+          key: item.id || item.item_code,
+          title: item.name,
+          badge: schedBadge,
+          sub: `${item.item_code} · ${item.generic_name || item.category || 'General'}`,
+          metric: `${item.available_stock} ${item.unit_of_measure || 'units'}`,
+          metricColor: item.available_stock < item.reorder_level ? '#b45309' : '#111827',
+          par: item.reorder_level > 0 ? `Par: ${item.reorder_level}` : undefined,
+        };
+      }
+      case 'ledger': {
+        const stock = item.available_stock !== undefined ? item.available_stock : (item.in_stock || 0);
+        const par = item.reorder_level || 0;
+        const stBadge = getMedicineStatusBadge({ available_stock: stock, reorder_level: par });
+        return {
+          key: item.id || item.item_code,
+          title: item.name,
+          badge: stBadge,
+          sub: `${item.item_code} · ${item.storage_rack || 'Rack A-01'}`,
+          metric: `${stock} in stock`,
+          metricColor: stock === 0 ? '#dc2626' : stock < par ? '#b45309' : '#15803d',
+          par: par > 0 ? `Par: ${par}` : undefined,
+        };
+      }
+      case 'batch': {
+        return {
+          key: item.id || item.batch_number,
+          title: item.medicine_name,
+          badge: getBatchStatusBadge(item),
+          sub: `Batch #${item.batch_number} · Exp: ${formatDateMonth(item.expiry_date)}`,
+          metric: `${item.available_quantity} units`,
+          metricColor: item.available_quantity === 0 ? '#dc2626' : '#111827',
+          par: item.storage_location || undefined,
+        };
+      }
+      case 'expiry': {
+        const isExp = item.months_left <= 0;
+        const isCrit = item.months_left <= 1;
+        const badge = isExp
+          ? { ...B.red, text: 'Expired' }
+          : isCrit
+          ? { ...B.red, text: '≤ 30 Days' }
+          : { ...B.amber, text: `≤ ${item.months_left * 30}d` };
+        return {
+          key: item.id || item.batch_number,
+          title: item.medicine_name,
+          badge,
+          sub: `Batch #${item.batch_number} · ${isExp ? 'Expired' : `${item.months_left} mo left`}`,
+          metric: `${item.available_quantity} units`,
+          metricColor: '#dc2626',
+          par: item.storage_location || undefined,
+        };
+      }
+      case 'dead': {
+        return {
+          key: item.id || item.item_code,
+          title: item.name,
+          badge: item.recommendation === 'BUYBACK_RETURN' ? { ...B.red, text: 'Buyback' } : { ...B.blue, text: item.recommendation || 'Transfer' },
+          sub: `${item.item_code} · ${item.days_without_movement}d inactive`,
+          metric: `${item.units_in_stock} u (${formatINR(item.total_valuation)})`,
+          metricColor: '#b91c1c',
+          par: undefined,
+        };
+      }
+      case 'adj': {
+        return {
+          key: item.id || item.adjustment_number,
+          title: item.medicine_name,
+          badge: item.quantity_delta < 0 ? { ...B.red, text: 'Scrap/Loss' } : { ...B.green, text: 'Surplus' },
+          sub: `${item.adjustment_number} · Batch: ${item.batch_number}`,
+          metric: `${item.quantity_delta > 0 ? `+${item.quantity_delta}` : item.quantity_delta} units`,
+          metricColor: item.quantity_delta < 0 ? '#dc2626' : '#15803d',
+          par: item.reason,
+        };
+      }
+      case 'recon': {
+        return {
+          key: item.id || item.reconciliation_number,
+          title: item.medicine_name,
+          badge: item.status === 'RECONCILED' ? { ...B.green, text: 'Verified' } : { ...B.amber, text: 'Approval Req' },
+          sub: `${item.reconciliation_number} · Batch: ${item.batch_number}`,
+          metric: `Var: ${item.variance_units > 0 ? `+${item.variance_units}` : item.variance_units} u`,
+          metricColor: item.variance_units === 0 ? '#15803d' : '#dc2626',
+          par: formatINR(Math.abs(item.variance_value)),
+        };
+      }
+      case 'fc': {
+        return {
+          key: item.id || item.item_code,
+          title: item.name,
+          badge: getForecastRiskBadge(item.risk_level),
+          sub: `${item.item_code} · Burn: ${item.daily_burn_rate} u/d`,
+          metric: `${item.days_of_stock_remaining}d cover`,
+          metricColor: item.days_of_stock_remaining < 7 ? '#dc2626' : item.days_of_stock_remaining < 14 ? '#b45309' : '#15803d',
+          par: `Reorder: ${item.suggested_reorder_quantity}`,
+        };
+      }
+      case 'pr': {
+        return {
+          key: item.id || item.pr_number,
+          title: item.medicine_name,
+          badge: getPRBadge(item.status),
+          sub: `${item.pr_number} · ${item.supplier_name || 'Vendor'}`,
+          metric: `${item.requested_quantity} u (${formatINR(item.total_estimated_value)})`,
+          metricColor: '#111827',
+          par: `Stage ${item.workflow_stage}/8`,
+        };
+      }
+      case 'appr': {
+        return {
+          key: item.id || item.pr_number,
+          title: item.medicine_name,
+          badge: { ...B.amber, text: 'Pending Approval' },
+          sub: `${item.pr_number} · ${item.supplier_name || 'Requisition'}`,
+          metric: `${item.requested_quantity} u (${formatINR(item.total_estimated_value)})`,
+          metricColor: '#b45309',
+          par: `Stage ${item.workflow_stage}/8`,
+        };
+      }
+      case 'grn': {
+        return {
+          key: item.id || item.grn_number,
+          title: item.grn_number,
+          badge: item.status === 'Posted' ? { ...B.green, text: 'Posted' } : { ...B.blue, text: 'Intake / QC' },
+          sub: `${item.supplier_name} · Inv: ${item.invoice_number}`,
+          metric: `${item.lines?.length || 0} lines (${formatINR(item.total_value)})`,
+          metricColor: '#111827',
+          par: new Date(item.received_at).toLocaleDateString(),
+        };
+      }
+      case 'supp': {
+        return {
+          key: item.id || item.supplier_code,
+          title: item.name,
+          badge: item.is_preferred ? { ...B.blue, text: 'Preferred' } : { ...B.gray, text: item.category || 'Vendor' },
+          sub: `${item.supplier_code} · Lead: ${item.lead_time_days}d`,
+          metric: `★ ${item.rating || '4.8'}`,
+          metricColor: '#2563eb',
+          par: `${item.open_prs_count || 0} Open PRs`,
+        };
+      }
+      case 'demand': {
+        return {
+          key: item.id || item.token_number,
+          title: item.medicine_name,
+          badge: getDemandPriorityBadge(item.priority),
+          sub: `#${item.token_number} · ${item.source}`,
+          metric: `${item.requested_quantity} units req`,
+          metricColor: item.priority === 'STAT' ? '#dc2626' : '#111827',
+          par: `${item.central_stock} in store`,
+        };
+      }
+      case 'tr': {
+        return {
+          key: item.id || item.transfer_number,
+          title: item.medicine_name,
+          badge: item.status === 'Received' ? { ...B.green, text: 'Received' } : { ...B.amber, text: 'In Transit' },
+          sub: `${item.transfer_number} · to ${item.destination}`,
+          metric: `${item.quantity} units`,
+          metricColor: '#111827',
+          par: item.destination,
+        };
+      }
+      case 'cd': {
+        return {
+          key: item.id || item.entry_number,
+          title: item.medicine_name,
+          badge: { ...B.red, text: `Disp: ${item.quantity_dispensed}` },
+          sub: `#${item.entry_number} · Dr. ${item.prescribing_doctor_name}`,
+          metric: `Bal: ${item.balance_stock_after} units`,
+          metricColor: '#111827',
+          par: `Batch ${item.batch_number}`,
+        };
+      }
+      default: {
+        return {
+          key: item.id,
+          title: item.name || 'Item',
+          badge: { ...B.gray, text: 'Active' },
+          sub: item.code || '',
+          metric: '—',
+          metricColor: '#111827',
+          par: undefined,
+        };
+      }
+    }
+  }, [activeTab, medicines]);
+
+  // Active items for current tab filtered by query and activePill
+  const activeItems = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    switch (activeTab) {
+      case 'dash': {
+        return alerts.filter((item: any) => {
+          const code = (item.code || item.item_code || '').toLowerCase();
+          const name = (item.name || '').toLowerCase();
+          const gen = (item.generic || item.generic_name || '').toLowerCase();
+          if (q && !code.includes(q) && !name.includes(q) && !gen.includes(q)) return false;
+          return true;
+        });
+      }
+      case 'master':
+      case 'ledger': {
+        return medicines.filter((m) => {
+          const code = (m.item_code || '').toLowerCase();
+          const name = (m.name || '').toLowerCase();
+          const gen = (m.generic_name || '').toLowerCase();
+          if (q && !code.includes(q) && !name.includes(q) && !gen.includes(q)) return false;
+          if (activeTab === 'master') {
+            if (activePill === 'core') return m.is_core_formulary !== false;
+            if (activePill === 'sch') return ['H', 'H1', 'X'].includes(m.schedule);
+            if (activePill === 'cold') return m.is_cold_chain;
+            if (activePill === 'archived') return m.is_archived;
+          } else if (activeTab === 'ledger') {
+            if (activePill === 'low') return m.available_stock < m.reorder_level && m.available_stock > 0;
+            if (activePill === 'out') return m.available_stock === 0;
+            if (activePill === 'cd') return m.is_narcotic || ['H1', 'X'].includes(m.schedule);
+            if (activePill === 'cold') return m.is_cold_chain;
+            if (activePill === 'otc') return m.schedule === 'OTC';
+          }
+          return true;
+        });
+      }
+      case 'batch': {
+        return batches.filter((b) => {
+          const num = (b.batch_number || '').toLowerCase();
+          const medName = (b.medicine_name || '').toLowerCase();
+          if (q && !num.includes(q) && !medName.includes(q)) return false;
+          if (activePill === 'exp3') return b.months_left <= 3;
+          if (activePill === 'quar') return b.is_quarantined || b.status === 'Quarantined';
+          if (activePill === 'active') return !b.is_quarantined && b.months_left > 3;
+          return true;
+        });
+      }
+      case 'expiry': {
+        return expiringBatches.filter((b) => {
+          const num = (b.batch_number || '').toLowerCase();
+          const medName = (b.medicine_name || '').toLowerCase();
+          if (q && !num.includes(q) && !medName.includes(q)) return false;
+          if (activePill === 'crit') return b.months_left <= 1;
+          if (activePill === 'warn') return b.months_left > 1 && b.months_left <= 3;
+          if (activePill === 'exp') return b.months_left <= 0;
+          return true;
+        });
+      }
+      case 'dead': {
+        return deadStock.filter((d) => {
+          const code = (d.item_code || '').toLowerCase();
+          const name = (d.name || '').toLowerCase();
+          if (q && !code.includes(q) && !name.includes(q)) return false;
+          if (activePill === 'return') return d.recommendation === 'BUYBACK_RETURN';
+          if (activePill === 'transfer') return d.recommendation !== 'BUYBACK_RETURN';
+          return true;
+        });
+      }
+      case 'adj': {
+        return adjustments.filter((a) => {
+          const num = (a.adjustment_number || '').toLowerCase();
+          const medName = (a.medicine_name || '').toLowerCase();
+          const batch = (a.batch_number || '').toLowerCase();
+          if (q && !num.includes(q) && !medName.includes(q) && !batch.includes(q)) return false;
+          if (activePill === 'scrap') return a.quantity_delta < 0;
+          if (activePill === 'surplus') return a.quantity_delta > 0;
+          return true;
+        });
+      }
+      case 'recon': {
+        return reconciliations.filter((r) => {
+          const num = (r.reconciliation_number || '').toLowerCase();
+          const medName = (r.medicine_name || '').toLowerCase();
+          const batch = (r.batch_number || '').toLowerCase();
+          if (q && !num.includes(q) && !medName.includes(q) && !batch.includes(q)) return false;
+          if (activePill === 'pending') return r.status === 'PENDING_ADMIN_APPROVAL';
+          if (activePill === 'reconciled') return r.status === 'RECONCILED';
+          return true;
+        });
+      }
+      case 'fc': {
+        return forecasting.filter((f) => {
+          const code = (f.item_code || '').toLowerCase();
+          const name = (f.name || '').toLowerCase();
+          if (q && !code.includes(q) && !name.includes(q)) return false;
+          if (activePill === 'critical') return f.risk_level === 'CRITICAL';
+          if (activePill === 'warning') return f.risk_level === 'WARNING';
+          if (activePill === 'healthy') return f.risk_level !== 'CRITICAL' && f.risk_level !== 'WARNING';
+          return true;
+        });
+      }
+      case 'pr': {
+        return purchaseRequests.filter((p) => {
+          const num = (p.pr_number || '').toLowerCase();
+          const medName = (p.medicine_name || '').toLowerCase();
+          const supp = (p.supplier_name || '').toLowerCase();
+          if (q && !num.includes(q) && !medName.includes(q) && !supp.includes(q)) return false;
+          if (activePill !== 'all' && p.status !== activePill) return false;
+          return true;
+        });
+      }
+      case 'appr': {
+        const list = purchaseRequests.filter(
+          (p) => ['Submitted', 'SUBMITTED', 'Pending approval', 'UNDER_REVIEW'].includes(p.status) || p.workflow_stage === 2
+        );
+        const targetList = list.length > 0 ? list : purchaseRequests;
+        return targetList.filter((p) => {
+          const num = (p.pr_number || '').toLowerCase();
+          const medName = (p.medicine_name || '').toLowerCase();
+          if (q && !num.includes(q) && !medName.includes(q)) return false;
+          return true;
+        });
+      }
+      case 'grn': {
+        return goodsReceipts.filter((g) => {
+          const num = (g.grn_number || '').toLowerCase();
+          const supp = (g.supplier_name || '').toLowerCase();
+          const inv = (g.invoice_number || '').toLowerCase();
+          if (q && !num.includes(q) && !supp.includes(q) && !inv.includes(q)) return false;
+          if (activePill === 'pending') return g.status !== 'Posted';
+          if (activePill === 'posted') return g.status === 'Posted';
+          return true;
+        });
+      }
+      case 'supp': {
+        return suppliers.filter((s) => {
+          const code = (s.supplier_code || '').toLowerCase();
+          const name = (s.name || '').toLowerCase();
+          if (q && !code.includes(q) && !name.includes(q)) return false;
+          if (activePill === 'preferred') return s.is_preferred;
+          return true;
+        });
+      }
+      case 'demand': {
+        return demands.filter((d) => {
+          const num = (d.token_number || '').toLowerCase();
+          const medName = (d.medicine_name || '').toLowerCase();
+          const src = (d.source || '').toLowerCase();
+          if (q && !num.includes(q) && !medName.includes(q) && !src.includes(q)) return false;
+          if (activePill === 'stat') return d.priority === 'STAT';
+          if (activePill === 'urgent') return d.priority === 'URGENT';
+          if (activePill === 'routine') return d.priority === 'ROUTINE';
+          return true;
+        });
+      }
+      case 'tr': {
+        return transfers.filter((t) => {
+          const num = (t.transfer_number || '').toLowerCase();
+          const medName = (t.medicine_name || '').toLowerCase();
+          const dest = (t.destination || '').toLowerCase();
+          if (q && !num.includes(q) && !medName.includes(q) && !dest.includes(q)) return false;
+          if (activePill === 'transit') return t.status !== 'Received';
+          if (activePill === 'received') return t.status === 'Received';
+          return true;
+        });
+      }
+      case 'cd': {
+        return controlledDrugs.filter((c) => {
+          const num = (c.entry_number || '').toLowerCase();
+          const medName = (c.medicine_name || '').toLowerCase();
+          const batch = (c.batch_number || '').toLowerCase();
+          const doc = (c.prescribing_doctor_name || '').toLowerCase();
+          if (q && !num.includes(q) && !medName.includes(q) && !batch.includes(q) && !doc.includes(q)) return false;
+          return true;
+        });
+      }
+      default:
+        return medicines;
+    }
+  }, [
+    activeTab,
+    query,
+    activePill,
+    alerts,
+    medicines,
+    batches,
+    expiringBatches,
+    deadStock,
+    adjustments,
+    reconciliations,
+    forecasting,
+    purchaseRequests,
+    goodsReceipts,
+    suppliers,
+    demands,
+    transfers,
+    controlledDrugs,
+  ]);
+
+  // Unified single-selection resolution: guarantees exactly 1 selected item
+  const selectedItem = useMemo(() => {
+    if (!activeItems || activeItems.length === 0) return null;
+    if (selectedId) {
+      const match = activeItems.find((item: any) => {
+        const d = getItemDetails(item);
+        return (
+          d.key === selectedId ||
+          item.id === selectedId ||
+          item.item_code === selectedId ||
+          item.code === selectedId ||
+          item.batch_number === selectedId ||
+          item.pr_number === selectedId ||
+          item.grn_number === selectedId ||
+          item.token_number === selectedId ||
+          item.transfer_number === selectedId ||
+          item.entry_number === selectedId ||
+          item.reconciliation_number === selectedId ||
+          item.adjustment_number === selectedId ||
+          item.supplier_code === selectedId
+        );
+      });
+      if (match) return match;
+    }
+    return activeItems[0];
+  }, [activeItems, selectedId, getItemDetails]);
+
+  // Unique key identifying the currently active selection
+  const activeSelectionKey = useMemo(() => {
+    return selectedItem ? getItemDetails(selectedItem).key : null;
+  }, [selectedItem, getItemDetails]);
+
+  // Keep selected row visible and accessible in list viewport
+  useEffect(() => {
+    if (activeSelectionKey) {
+      const el = document.getElementById(`compact-item-${activeSelectionKey}`);
+      if (el) {
+        el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    }
+  }, [activeSelectionKey]);
+
+  // Selected item references for Right Context Drawers (strictly synchronized with selectedItem)
   const selectedMedicine = useMemo(() => {
+    if (!selectedItem) return medicines[0] || null;
+    const it = selectedItem as any;
     if (activeTab === 'dash') {
-      const match = alerts.find((a) => a.code === selectedId || a.id === selectedId) || alerts[0];
-      return match ? medicines.find((m) => m.item_code === match.code) || null : null;
+      const found = medicines.find((m) => m.item_code === it.code || m.id === it.id);
+      if (found) return found;
+      return {
+        id: it.id,
+        item_code: it.code || it.item_code,
+        name: it.name,
+        generic_name: it.generic || it.generic_name,
+        category: it.category,
+        schedule: it.schedule,
+        therapeutic_class: null,
+        strength: null,
+        unit_of_measure: 'units',
+        unit_price: it.unit_price,
+        cost_price: it.unit_price,
+        reorder_level: it.reorder_level,
+        reorder_quantity: (it.reorder_level || 0) * 2,
+        is_narcotic: !!it.is_narcotic,
+        is_cold_chain: !!it.is_cold_chain,
+        available_stock: it.in_stock ?? it.available_stock ?? 0,
+        supplier_name: null,
+        active_pr: it.open_pr_id ? { id: it.open_pr_id, pr_number: 'PR-AUTO', status: 'Pending Review', stage: 2, qty: 100 } : null,
+        batches: []
+      } as MedicineItem;
     }
     if (activeTab === 'ledger' || activeTab === 'master') {
-      return medicines.find((m) => m.item_code === selectedId || m.id === selectedId) || medicines[0] || null;
+      return it as MedicineItem;
     }
-    return null;
-  }, [activeTab, selectedId, alerts, medicines]);
-
-  const selectedPR = useMemo(() => {
-    return purchaseRequests.find((p) => p.id === selectedId || p.pr_number === selectedId) || purchaseRequests[0] || null;
-  }, [selectedId, purchaseRequests]);
-
-  const selectedBatch = useMemo(() => {
-    const list = activeTab === 'expiry' ? expiringBatches : batches;
-    return list.find((b) => b.batch_number === selectedId || b.id === selectedId) || list[0] || null;
-  }, [activeTab, selectedId, batches, expiringBatches]);
-
-  const selectedGRN = useMemo(() => {
-    return goodsReceipts.find((g) => g.id === selectedId || g.grn_number === selectedId) || goodsReceipts[0] || null;
-  }, [selectedId, goodsReceipts]);
-
-  const selectedSupplier = useMemo(() => {
-    return suppliers.find((s) => s.supplier_code === selectedId || s.id === selectedId) || suppliers[0] || null;
-  }, [selectedId, suppliers]);
-
-  const selectedAdj = useMemo(() => {
-    return adjustments.find((a) => a.id === selectedId || a.adjustment_number === selectedId) || adjustments[0] || null;
-  }, [selectedId, adjustments]);
-
-  const selectedTransfer = useMemo(() => {
-    return transfers.find((t) => t.id === selectedId || t.transfer_number === selectedId) || transfers[0] || null;
-  }, [selectedId, transfers]);
-
-  const selectedCD = useMemo(() => {
-    return controlledDrugs.find((c) => c.id === selectedId || c.entry_number === selectedId) || controlledDrugs[0] || null;
-  }, [selectedId, controlledDrugs]);
+    if (activeTab === 'batch' || activeTab === 'expiry') {
+      const found = medicines.find((m) => m.name?.toLowerCase() === it.medicine_name?.toLowerCase() || m.item_code === it.item_code);
+      return found || medicines[0] || null;
+    }
+    if (activeTab === 'dead' || activeTab === 'fc') {
+      const found = medicines.find((m) => m.item_code === it.item_code || m.id === (it.medicine_id || it.id));
+      return found || medicines[0] || null;
+    }
+    if (activeTab === 'recon') {
+      const found = medicines.find((m) => m.name?.toLowerCase() === it.medicine_name?.toLowerCase() || m.id === it.medicine_id);
+      return found || medicines[0] || null;
+    }
+    if (activeTab === 'pr' || activeTab === 'appr') {
+      const found = medicines.find((m) => m.id === it.medicine_id || m.name?.toLowerCase() === it.medicine_name?.toLowerCase());
+      return found || medicines[0] || null;
+    }
+    if (activeTab === 'grn') {
+      if (it.lines && it.lines[0]) {
+        const found = medicines.find((m) => m.item_code === it.lines[0].medicine_code || m.name?.toLowerCase() === it.lines[0].medicine_name?.toLowerCase());
+        if (found) return found;
+      }
+      return medicines[0] || null;
+    }
+    if (activeTab === 'adj' || activeTab === 'tr' || activeTab === 'cd') {
+      const found = medicines.find((m) => m.name?.toLowerCase() === it.medicine_name?.toLowerCase() || m.item_code === it.medicine_code || m.id === it.medicine);
+      return found || medicines[0] || null;
+    }
+    return medicines.find((m) => m.item_code === it.item_code || m.id === it.id) || medicines[0] || null;
+  }, [activeTab, selectedItem, medicines]);
 
   const selectedDemand = useMemo(() => {
+    if (activeTab === 'demand' && selectedItem) return selectedItem as DemandItem;
     return demands.find((d) => d.id === selectedId || d.token_number === selectedId) || demands[0] || null;
-  }, [selectedId, demands]);
+  }, [activeTab, selectedItem, selectedId, demands]);
+
+  const selectedBatch = useMemo(() => {
+    if ((activeTab === 'batch' || activeTab === 'expiry') && selectedItem) return selectedItem as BatchItem;
+    const list = activeTab === 'expiry' ? expiringBatches : batches;
+    return list.find((b) => b.batch_number === selectedId || b.id === selectedId) || list[0] || null;
+  }, [activeTab, selectedItem, selectedId, batches, expiringBatches]);
+
+  const selectedPR = useMemo(() => {
+    if ((activeTab === 'pr' || activeTab === 'appr') && selectedItem) return selectedItem as PurchaseRequestItem;
+    return purchaseRequests.find((p) => p.id === selectedId || p.pr_number === selectedId) || purchaseRequests[0] || null;
+  }, [activeTab, selectedItem, selectedId, purchaseRequests]);
+
+  const selectedGRN = useMemo(() => {
+    if (activeTab === 'grn' && selectedItem) return selectedItem as GoodsReceiptItem;
+    return goodsReceipts.find((g) => g.id === selectedId || g.grn_number === selectedId) || goodsReceipts[0] || null;
+  }, [activeTab, selectedItem, selectedId, goodsReceipts]);
+
+  const selectedSupplier = useMemo(() => {
+    if (activeTab === 'supp' && selectedItem) return selectedItem as SupplierItem;
+    return suppliers.find((s) => s.supplier_code === selectedId || s.id === selectedId) || suppliers[0] || null;
+  }, [activeTab, selectedItem, selectedId, suppliers]);
+
+  const selectedAdj = useMemo(() => {
+    if (activeTab === 'adj' && selectedItem) return selectedItem as StockAdjustmentItem;
+    return adjustments.find((a) => a.id === selectedId || a.adjustment_number === selectedId) || adjustments[0] || null;
+  }, [activeTab, selectedItem, selectedId, adjustments]);
+
+  const selectedTransfer = useMemo(() => {
+    if (activeTab === 'tr' && selectedItem) return selectedItem as TransferRequestItem;
+    return transfers.find((t) => t.id === selectedId || t.transfer_number === selectedId) || transfers[0] || null;
+  }, [activeTab, selectedItem, selectedId, transfers]);
+
+  const selectedCD = useMemo(() => {
+    if (activeTab === 'cd' && selectedItem) return selectedItem as ControlledDrugItem;
+    return controlledDrugs.find((c) => c.id === selectedId || c.entry_number === selectedId) || controlledDrugs[0] || null;
+  }, [activeTab, selectedItem, selectedId, controlledDrugs]);
 
   const selectedDeadStock = useMemo(() => {
+    if (activeTab === 'dead' && selectedItem) return selectedItem as DeadStockItem;
     return deadStock.find((d) => d.id === selectedId || d.item_code === selectedId) || deadStock[0] || null;
-  }, [selectedId, deadStock]);
+  }, [activeTab, selectedItem, selectedId, deadStock]);
 
   const selectedForecasting = useMemo(() => {
+    if (activeTab === 'fc' && selectedItem) return selectedItem as ForecastingItem;
     return forecasting.find((f) => f.id === selectedId || f.item_code === selectedId) || forecasting[0] || null;
-  }, [selectedId, forecasting]);
+  }, [activeTab, selectedItem, selectedId, forecasting]);
 
   const selectedRecon = useMemo(() => {
+    if (activeTab === 'recon' && selectedItem) return selectedItem as ReconciliationItem;
     return reconciliations.find((r) => r.id === selectedId || r.reconciliation_number === selectedId) || reconciliations[0] || null;
-  }, [selectedId, reconciliations]);
+  }, [activeTab, selectedItem, selectedId, reconciliations]);
+
+  // Pill styling helper for wrapping chips
+  const getPillStyle = (isActive: boolean) => ({
+    height: '28px',
+    padding: '0 10px',
+    borderRadius: '9999px',
+    fontSize: '12px',
+    fontWeight: 600,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap' as const,
+    background: isActive ? '#2563eb' : '#ffffff',
+    color: isActive ? '#ffffff' : '#374151',
+    border: `1px solid ${isActive ? '#2563eb' : '#e5e7eb'}`,
+    outline: 'none',
+    transition: 'all 0.15s ease',
+  });
 
   return (
-    <div style={{ display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', background: '#f9fafb' }}>
+    <div style={{ display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', background: '#f9fafb', fontFamily: "'Inter', sans-serif" }}>
       {/* 1. SIDEBAR (260px) */}
       <aside
         style={{
@@ -513,6 +1095,7 @@ export const InventoryManagerWorkspace: React.FC = () => {
         }}
       >
         <style>{`
+          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
           .pharmacy-nav-item {
             transition: all 0.15s ease;
             outline: none;
@@ -551,6 +1134,31 @@ export const InventoryManagerWorkspace: React.FC = () => {
           .pharmacy-dept-btn:hover {
             color: #1d4ed8 !important;
           }
+          .med-compact-row {
+            transition: background-color 0.15s ease, border-color 0.15s ease;
+            outline: none;
+          }
+          .med-compact-row:hover:not(.med-selected) {
+            background-color: #f8fafc !important;
+          }
+          .med-compact-row:focus-visible,
+          [role="button"]:focus-visible {
+            outline: 2px solid #2563eb !important;
+            outline-offset: -2px;
+          }
+          .med-compact-scroll::-webkit-scrollbar {
+            width: 5px;
+          }
+          .med-compact-scroll::-webkit-scrollbar-track {
+            background: #f8fafc;
+          }
+          .med-compact-scroll::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+          }
+          .med-compact-scroll::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+          }
         `}</style>
 
         {/* Brand */}
@@ -579,90 +1187,82 @@ export const InventoryManagerWorkspace: React.FC = () => {
           </div>
         </div>
 
-        {/* Department Info */}
-        <div style={{ margin: '12px 12px 6px', padding: '12px 14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Current department</span>
-            <span
-              style={{
-                fontSize: '10px',
-                fontWeight: 700,
-                color: '#2563eb',
-                background: '#eff6ff',
-                border: '1px solid #bfdbfe',
-                borderRadius: '4px',
-                padding: '1px 6px',
-                letterSpacing: '0.04em',
-              }}
-            >
-              STORE
-            </span>
+        {/* Working Location & Operating Role Block */}
+        <div
+          style={{
+            margin: '12px 14px 8px',
+            padding: '14px 16px',
+            background: '#f8fafc',
+            border: '1px solid #e2e8f0',
+            borderRadius: '12px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+          }}
+        >
+          {/* Where the user is working */}
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+              <span style={{ fontSize: '10px', fontWeight: 700, color: '#64748b', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                Working Location
+              </span>
+              <span
+                style={{
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  color: '#2563eb',
+                  background: '#eff6ff',
+                  border: '1px solid #bfdbfe',
+                  borderRadius: '4px',
+                  padding: '1px 6px',
+                  letterSpacing: '0.04em',
+                }}
+              >
+                STORE
+              </span>
+            </div>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>Pharmacy Central Medical Store</div>
+            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <MapPin size={12} style={{ color: '#94a3b8', flexShrink: 0 }} />
+              <span>Block B, Basement · Main Vault</span>
+            </div>
           </div>
-          <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', marginTop: '4px' }}>Pharmacy</div>
-          <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
-            Central medical store · Block B, basement
-          </div>
-          <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px dashed #e2e8f0', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <button
-              onClick={() => navigate('/pharmacy/ipd')}
-              className="pharmacy-dept-btn"
-              style={{
-                fontSize: '11px',
-                fontWeight: 600,
-                color: '#2563eb',
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: 0,
-                transition: 'color 0.15s ease',
-              }}
-            >
-              <BedDouble size={12} />
-              Switch to IPD Ward Supply →
-            </button>
-            <button
-              onClick={() => navigate('/pharmacy/opd')}
-              className="pharmacy-dept-btn"
-              style={{
-                fontSize: '11px',
-                fontWeight: 600,
-                color: '#475569',
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: 0,
-                transition: 'color 0.15s ease',
-              }}
-            >
-              <Pill size={12} />
-              Switch to OPD Counter →
-            </button>
-            <button
-              onClick={() => navigate('/pharmacy/controlled-drugs')}
-              className="pharmacy-dept-btn"
-              style={{
-                fontSize: '11px',
-                fontWeight: 600,
-                color: '#b45309',
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: 0,
-                transition: 'color 0.15s ease',
-              }}
-            >
-              <Lock size={12} />
-              Controlled Drugs Register →
-            </button>
+
+          {/* Which role they are operating as */}
+          <div
+            style={{
+              paddingTop: '8px',
+              borderTop: '1px dashed #e2e8f0',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+              <span style={{ fontSize: '10px', fontWeight: 700, color: '#64748b', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                Operating As
+              </span>
+              <span
+                style={{
+                  fontSize: '9px',
+                  fontWeight: 700,
+                  color: '#16a34a',
+                  background: '#f0fdf4',
+                  border: '1px solid #bbf7d0',
+                  borderRadius: '4px',
+                  padding: '1px 5px',
+                  letterSpacing: '0.03em',
+                }}
+              >
+                ACTIVE
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <ShieldCheck size={14} style={{ color: '#16a34a', flexShrink: 0 }} />
+              <span style={{ fontSize: '12px', fontWeight: 600, color: '#0f172a' }}>
+                {role === RoleType.INVENTORY_MANAGER ? 'Inventory Manager' : (role ? role.replace(/_/g, ' ') : 'Inventory Manager')}
+              </span>
+            </div>
+            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+              Badge ID: IM-2207 · Store Custodian
+            </div>
           </div>
         </div>
 
@@ -1026,6 +1626,7 @@ export const InventoryManagerWorkspace: React.FC = () => {
             </button>
             <div
               onClick={refreshData}
+              title="Click to refresh inventory cache"
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -1041,6 +1642,306 @@ export const InventoryManagerWorkspace: React.FC = () => {
               }}
             >
               <Clock size={14} /> Last stock sync · {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </div>
+
+            <div style={{ width: '1px', height: '20px', background: '#e5e7eb', margin: '0 2px' }} />
+
+            {/* Profile Dropdown Trigger */}
+            <div style={{ position: 'relative' }} ref={profileMenuRef}>
+              <button
+                type="button"
+                onClick={() => setIsProfileOpen((prev) => !prev)}
+                aria-expanded={isProfileOpen}
+                title="Account Profile & Settings"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  height: '34px',
+                  padding: '0 10px 0 6px',
+                  background: isProfileOpen ? '#f1f5f9' : '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  boxShadow: isProfileOpen ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isProfileOpen) e.currentTarget.style.background = '#f8fafc';
+                }}
+                onMouseLeave={(e) => {
+                  if (!isProfileOpen) e.currentTarget.style.background = isProfileOpen ? '#f1f5f9' : '#ffffff';
+                }}
+              >
+                {/* Initials Avatar */}
+                <div
+                  style={{
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '50%',
+                    background: '#eff6ff',
+                    color: '#2563eb',
+                    border: '1px solid #bfdbfe',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    flexShrink: 0,
+                  }}
+                >
+                  {initials}
+                </div>
+
+                {/* Name & Role */}
+                <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'left', lineHeight: 1.15 }}>
+                  <span
+                    style={{
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      color: '#0f172a',
+                      maxWidth: '125px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {displayName}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '10px',
+                      color: '#64748b',
+                      maxWidth: '125px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {designation}
+                  </span>
+                </div>
+
+                <ChevronDown
+                  size={14}
+                  style={{
+                    color: '#64748b',
+                    marginLeft: '2px',
+                    transform: isProfileOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                    transition: 'transform 0.2s ease',
+                  }}
+                />
+              </button>
+
+              {/* Profile Dropdown Popover */}
+              {isProfileOpen && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 6px)',
+                    right: 0,
+                    width: '285px',
+                    background: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '12px',
+                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                    zIndex: 100,
+                    overflow: 'hidden',
+                    animation: 'fadeIn 0.15s ease-out',
+                  }}
+                >
+                  {/* Top Header Card */}
+                  <div style={{ padding: '16px 18px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div
+                        style={{
+                          width: '40px',
+                          height: '40px',
+                          borderRadius: '50%',
+                          background: '#eff6ff',
+                          color: '#2563eb',
+                          border: '2px solid #bfdbfe',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '14px',
+                          fontWeight: 700,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {initials}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontSize: '14px',
+                            fontWeight: 700,
+                            color: '#0f172a',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {displayName}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: '12px',
+                            color: '#64748b',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            marginTop: '1px',
+                          }}
+                        >
+                          {user?.email || 'r.kumar@northhospital.org'}
+                        </div>
+                        <div
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            marginTop: '6px',
+                            fontSize: '10px',
+                            fontWeight: 600,
+                            color: '#16a34a',
+                            background: '#f0fdf4',
+                            border: '1px solid #bbf7d0',
+                            borderRadius: '4px',
+                            padding: '1px 7px',
+                          }}
+                        >
+                          <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#16a34a' }}></span>
+                          {designation}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Menu Items */}
+                  <div style={{ padding: '8px 6px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsProfileOpen(false);
+                        setIsMyProfileOpen(true);
+                      }}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        padding: '9px 12px',
+                        fontSize: '13px',
+                        fontWeight: 500,
+                        color: '#334155',
+                        background: 'transparent',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        transition: 'background 0.15s ease',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = '#f1f5f9')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <UserIcon size={16} style={{ color: '#64748b' }} />
+                      <span>My Profile (Quick Card)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsProfileOpen(false);
+                        navigate('/profile');
+                      }}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        padding: '9px 12px',
+                        fontSize: '13px',
+                        fontWeight: 500,
+                        color: '#2563eb',
+                        background: 'transparent',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        transition: 'background 0.15s ease',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = '#eff6ff')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <ExternalLink size={16} style={{ color: '#2563eb' }} />
+                      <span style={{ fontWeight: 600 }}>Dedicated Profile Page</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsProfileOpen(false);
+                        setIsChangePasswordOpen(true);
+                      }}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        padding: '9px 12px',
+                        fontSize: '13px',
+                        fontWeight: 500,
+                        color: '#334155',
+                        background: 'transparent',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        transition: 'background 0.15s ease',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = '#f1f5f9')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <KeyRound size={16} style={{ color: '#64748b' }} />
+                      <span>Change Password</span>
+                    </button>
+                  </div>
+
+                  {/* Sign Out Option */}
+                  <div style={{ borderTop: '1px solid #e2e8f0', padding: '6px' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsProfileOpen(false);
+                        logout();
+                        navigate('/login');
+                      }}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        padding: '9px 12px',
+                        fontSize: '13px',
+                        fontWeight: 500,
+                        color: '#dc2626',
+                        background: 'transparent',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        transition: 'background 0.15s ease',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = '#fef2f2')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <LogOut size={16} style={{ color: '#dc2626' }} />
+                      <span>Sign Out</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1258,7 +2159,7 @@ export const InventoryManagerWorkspace: React.FC = () => {
             };
 
             return (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '16px', width: '100%', boxSizing: 'border-box' }}>
                 {/* Card 1: Total Master SKUs & Valuation */}
                 <div onClick={() => updateURL('master')} style={cardStyle}>
                   <div style={headerStyle}>
@@ -1350,91 +2251,168 @@ export const InventoryManagerWorkspace: React.FC = () => {
             );
           })()}
 
-          {/* 3. SPLIT-SCREEN WORKSPACE: Table (Left) + Sticky Context Drawer (Right) */}
-          <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-            {/* LEFT DATA TABLE CONTAINER */}
-            <div style={{ flex: '1 1 640px', minWidth: 0, background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '12px', overflow: 'hidden' }}>
+          {/* 3. SPLIT-SCREEN WORKSPACE: Aligned with 4-Column KPI Grid across ALL screens */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+              gap: '16px',
+              alignItems: 'start',
+              width: '100%',
+              minWidth: 0,
+              boxSizing: 'border-box',
+            }}
+          >
+            {/* LEFT CONTAINER (Matches KPI Card 1 - Column 1 across ALL screens) */}
+            <div
+              style={{
+                gridColumn: 'span 1',
+                width: '100%',
+                minWidth: 0,
+                maxWidth: '100%',
+                boxSizing: 'border-box',
+                background: '#ffffff',
+                border: '1px solid #e5e7eb',
+                borderRadius: '12px',
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+            >
               {/* Header Filters & Search */}
-              <div style={{ padding: '20px 20px 16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
+              <div style={{ padding: '16px 16px 14px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    alignItems: 'stretch',
+                    gap: '10px',
+                    flexWrap: 'nowrap',
+                  }}
+                >
                   <div>
-                    <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#111827' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                      <h2 style={{ fontSize: '15px', fontWeight: 600, color: '#111827', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+                        {activeTab === 'dash'
+                          ? 'Action Alerts'
+                          : activeTab === 'master'
+                          ? 'Formulary Master'
+                          : activeTab === 'ledger'
+                          ? 'Stock Ledger'
+                          : activeTab === 'batch'
+                          ? 'Batch Management'
+                          : activeTab === 'expiry'
+                          ? 'Expiry Monitoring'
+                          : activeTab === 'dead'
+                          ? 'Dead Stock (> 180 Days)'
+                          : activeTab === 'recon'
+                          ? 'Physical Reconciliation'
+                          : activeTab === 'fc'
+                          ? 'Demand Forecasting'
+                          : activeTab === 'pr'
+                          ? 'Purchase Requests'
+                          : activeTab === 'appr'
+                          ? 'Pending Approvals'
+                          : activeTab === 'grn'
+                          ? 'Purchase Receipts (GRN)'
+                          : activeTab === 'supp'
+                          ? 'Suppliers Directory'
+                          : activeTab === 'demand'
+                          ? 'Department Demand Hub'
+                          : activeTab === 'tr'
+                          ? 'Transfer Requests'
+                          : 'Controlled Drug Register'}
+                      </h2>
+                      <span
+                        style={{
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          color: '#2563eb',
+                          background: '#eff6ff',
+                          border: '1px solid #bfdbfe',
+                          padding: '1px 8px',
+                          borderRadius: '9999px',
+                          whiteSpace: 'nowrap',
+                          flexShrink: 0,
+                        }}
+                      >
+                        {(() => {
+                          if (activeTab === 'dash') return `${alerts.length} Alerts`;
+                          if (activeTab === 'master') return `${medicines.length} SKUs`;
+                          if (activeTab === 'ledger') return `${medicines.length} Items`;
+                          if (activeTab === 'batch') return `${batches.length} Batches`;
+                          if (activeTab === 'expiry') return `${expiringBatches.length} Expiring`;
+                          if (activeTab === 'dead') return `${deadStock.length} Items`;
+                          if (activeTab === 'adj') return `${adjustments.length} Adjustments`;
+                          if (activeTab === 'recon') return `${reconciliations.length} Audits`;
+                          if (activeTab === 'fc') return `${forecasting.length} Forecasts`;
+                          if (activeTab === 'pr') return `${purchaseRequests.length} PRs`;
+                          if (activeTab === 'appr') return `${purchaseRequests.filter(p => ['Submitted', 'SUBMITTED', 'Pending approval', 'UNDER_REVIEW'].includes(p.status) || p.workflow_stage === 2).length} Pending`;
+                          if (activeTab === 'grn') return `${goodsReceipts.length} GRNs`;
+                          if (activeTab === 'supp') return `${suppliers.length} Suppliers`;
+                          if (activeTab === 'demand') return `${demands.length} Demands`;
+                          if (activeTab === 'tr') return `${transfers.length} Transfers`;
+                          if (activeTab === 'cd') return `${controlledDrugs.length} Entries`;
+                          return `${medicines.length} SKUs`;
+                        })()}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
                       {activeTab === 'dash'
-                        ? 'Items needing action'
+                        ? 'Stock deficits, ≤90d expiry risks & unraised reorders'
                         : activeTab === 'master'
-                        ? 'Medicine Master (Hospital Formulary Catalog)'
+                        ? 'Formulary catalog, schedule rules & core flags'
                         : activeTab === 'ledger'
-                        ? 'Central Stock Ledger'
+                        ? 'Central store balances & batch availability'
                         : activeTab === 'batch'
-                        ? 'Batch Management & FEFO Queue'
+                        ? 'Batch inventory with FEFO expiry queue'
                         : activeTab === 'expiry'
-                        ? 'Expiry Monitoring & Disposition'
+                        ? 'Expiring batches requiring disposition or scrap'
                         : activeTab === 'dead'
-                        ? 'Dead Stock Capital Lockup (> 180 Days)'
+                        ? 'Zero movement >180 days: capital lockup'
                         : activeTab === 'recon'
-                        ? 'Physical Stock Reconciliation (Cycle Count Audits)'
+                        ? 'Physical cycle count audit vs system records'
                         : activeTab === 'fc'
-                        ? 'Demand Forecasting & 30-Day Run-Rate'
+                        ? '30-day run-rate burn and cover projection'
                         : activeTab === 'pr'
-                        ? 'Purchase Requests Workflow'
+                        ? 'Requisitions & purchase orders pipeline'
                         : activeTab === 'appr'
-                        ? 'Pending Admin Approvals'
+                        ? 'Requisitions awaiting admin approval'
                         : activeTab === 'grn'
-                        ? 'Purchase Receipts (GRN)'
+                        ? 'Goods receipts intake & inspection log'
                         : activeTab === 'supp'
-                        ? 'Approved Suppliers Directory'
+                        ? 'Approved vendors & delivery lead times'
                         : activeTab === 'demand'
-                        ? 'Department Demand Hub (Ward & OPD Queue)'
+                        ? 'Real-time patient indents from wards & OPD'
                         : activeTab === 'tr'
-                        ? 'Internal Stock Transfers'
-                        : 'Controlled Drug Register'}
-                    </h2>
-                    <p style={{ fontSize: '13px', color: '#4b5563', marginTop: '2px' }}>
-                      {activeTab === 'dash'
-                        ? 'Low stock is detected automatically · create a reorder to start the purchase workflow'
-                        : activeTab === 'master'
-                        ? 'Full hospital formulary catalog: add, edit, schedule classification (OTC/H/H1/X), and core formulary flags'
-                        : activeTab === 'ledger'
-                        ? 'Live balance across all batches · OPD and IPD issue from this central ledger'
-                        : activeTab === 'batch'
-                        ? 'Every batch on hand with FEFO expiry queueing, storage rack allocation, and trace'
-                        : activeTab === 'expiry'
-                        ? 'Batches expiring soon: execute isolation quarantine, vendor debit return, or bio-destruction scrap'
-                        : activeTab === 'dead'
-                        ? 'SKUs with zero consumption over 180 days: capital locked and AI recommendations to transfer or return'
-                        : activeTab === 'recon'
-                        ? 'Physical shelf count verification: live variances calculated with > ₹1,000 threshold approval routing'
-                        : activeTab === 'fc'
-                        ? 'Consumption run-rate analytics, daily burn, and days of cover with 1-click PR requisition'
-                        : activeTab === 'pr'
-                        ? 'Draft → Submitted → Admin Approval → PO Issued → GRN Intake → Inventory Updated'
-                        : activeTab === 'appr'
-                        ? 'Awaiting review by Pharmacy Admin (Dr. Pooja Shah) or Hospital Admin'
-                        : activeTab === 'grn'
-                        ? 'Receive stock against purchase orders with physical seal & COA checklist'
-                        : activeTab === 'supp'
-                        ? 'Approved pharma vendors: lead time, preferred status, and on-time performance trace'
-                        : activeTab === 'demand'
-                        ? 'Real-time patient indents from OPD counters, IPD wards, and Emergency STAT with 1-click transfer'
-                        : activeTab === 'tr'
-                        ? 'Central store stock movements to OPD counters, IPD ward satellite, and Trauma Emergency'
-                        : 'Every receipt, issue, return and destruction · dual witnessed with running balance'}
+                        ? 'Stock movements to department counters'
+                        : 'Schedule X/H1 dual-witness dispense trace'}
                     </p>
                   </div>
 
-                  <div style={{ position: 'relative' }}>
-                    <Search size={16} style={{ position: 'absolute', left: '12px', top: '12px', color: '#9ca3af' }} />
+                  <div style={{ position: 'relative', width: '100%', minWidth: 0 }}>
+                    <Search size={15} style={{ position: 'absolute', left: '11px', top: '11px', color: '#9ca3af' }} />
                     <input
+                      id="med-search-input"
                       value={query}
                       onChange={(e) => updateURL(activeTab, selectedId, activePill, e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'ArrowDown' && activeItems.length > 0) {
+                          e.preventDefault();
+                          const firstKey = getItemDetails(activeItems[0]).key;
+                          const firstEl = document.getElementById(`compact-item-${firstKey}`);
+                          if (firstEl) firstEl.focus();
+                        }
+                      }}
                       placeholder="Search items, code or batch"
                       style={{
-                        height: '40px',
-                        width: '260px',
-                        maxWidth: '100%',
-                        padding: '0 12px 0 36px',
+                        height: '36px',
+                        width: '100%',
+                        boxSizing: 'border-box',
+                        padding: '0 12px 0 34px',
                         border: '1px solid #e5e7eb',
-                        borderRadius: '10px',
+                        borderRadius: '8px',
                         fontSize: '13px',
                         color: '#111827',
                         outline: 'none',
@@ -1443,32 +2421,21 @@ export const InventoryManagerWorkspace: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Filter Pills */}
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {/* Filter Pills with intentional wrapping to prevent horizontal clipping & nested scrollbars */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', minWidth: 0, width: '100%', marginBottom: '4px' }}>
                   {activeTab === 'dash' && (
                     <>
                       {[
-                        ['all', 'All alerts'],
-                        ['out', 'Out of stock'],
-                        ['low', 'Low stock'],
-                        ['exp', 'Expiring soon'],
-                        ['nopr', 'No reorder yet'],
+                        ['all', 'All Alerts'],
+                        ['out', 'Out of Stock'],
+                        ['low', 'Low Stock'],
+                        ['exp', 'Expiring ≤90d'],
+                        ['nopr', 'No Reorder PR'],
                       ].map(([k, l]) => (
                         <button
                           key={k}
                           onClick={() => updateURL(activeTab, selectedId, k, query)}
-                          style={{
-                            height: '32px',
-                            padding: '0 12px',
-                            borderRadius: '9999px',
-                            fontSize: '13px',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            whiteSpace: 'nowrap',
-                            background: activePill === k ? '#2563eb' : '#ffffff',
-                            color: activePill === k ? '#ffffff' : '#374151',
-                            border: `1px solid ${activePill === k ? '#2563eb' : '#e5e7eb'}`,
-                          }}
+                          style={getPillStyle(activePill === k)}
                         >
                           {l}
                         </button>
@@ -1488,18 +2455,208 @@ export const InventoryManagerWorkspace: React.FC = () => {
                         <button
                           key={k}
                           onClick={() => updateURL(activeTab, selectedId, k, query)}
-                          style={{
-                            height: '32px',
-                            padding: '0 12px',
-                            borderRadius: '9999px',
-                            fontSize: '13px',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            whiteSpace: 'nowrap',
-                            background: activePill === k ? '#2563eb' : '#ffffff',
-                            color: activePill === k ? '#ffffff' : '#374151',
-                            border: `1px solid ${activePill === k ? '#2563eb' : '#e5e7eb'}`,
-                          }}
+                          style={getPillStyle(activePill === k)}
+                        >
+                          {l}
+                        </button>
+                      ))}
+                    </>
+                  )}
+
+                  {activeTab === 'ledger' && (
+                    <>
+                      {[
+                        ['all', 'All Items'],
+                        ['low', 'Low Stock'],
+                        ['out', 'Out of Stock'],
+                        ['cd', 'Controlled'],
+                        ['cold', 'Cold Chain'],
+                        ['otc', 'OTC'],
+                      ].map(([k, l]) => (
+                        <button
+                          key={k}
+                          onClick={() => updateURL(activeTab, selectedId, k, query)}
+                          style={getPillStyle(activePill === k)}
+                        >
+                          {l}
+                        </button>
+                      ))}
+                    </>
+                  )}
+
+                  {activeTab === 'batch' && (
+                    <>
+                      {[
+                        ['all', 'All Batches'],
+                        ['exp3', 'Expiring ≤90d'],
+                        ['quar', 'Quarantined'],
+                        ['active', 'Active Stock'],
+                      ].map(([k, l]) => (
+                        <button
+                          key={k}
+                          onClick={() => updateURL(activeTab, selectedId, k, query)}
+                          style={getPillStyle(activePill === k)}
+                        >
+                          {l}
+                        </button>
+                      ))}
+                    </>
+                  )}
+
+                  {activeTab === 'expiry' && (
+                    <>
+                      {[
+                        ['all', 'All Expiring'],
+                        ['crit', 'Critical (≤30d)'],
+                        ['warn', 'Warning (≤90d)'],
+                        ['exp', 'Expired'],
+                      ].map(([k, l]) => (
+                        <button
+                          key={k}
+                          onClick={() => updateURL(activeTab, selectedId, k, query)}
+                          style={getPillStyle(activePill === k)}
+                        >
+                          {l}
+                        </button>
+                      ))}
+                    </>
+                  )}
+
+                  {activeTab === 'dead' && (
+                    <>
+                      {[
+                        ['all', 'All (>180d)'],
+                        ['return', 'Buyback Return'],
+                        ['transfer', 'Transfer Rec'],
+                      ].map(([k, l]) => (
+                        <button
+                          key={k}
+                          onClick={() => updateURL(activeTab, selectedId, k, query)}
+                          style={getPillStyle(activePill === k)}
+                        >
+                          {l}
+                        </button>
+                      ))}
+                    </>
+                  )}
+
+                  {activeTab === 'adj' && (
+                    <>
+                      {[
+                        ['all', 'All Adjustments'],
+                        ['scrap', 'Scrap / Loss'],
+                        ['surplus', 'Surplus Intake'],
+                      ].map(([k, l]) => (
+                        <button
+                          key={k}
+                          onClick={() => updateURL(activeTab, selectedId, k, query)}
+                          style={getPillStyle(activePill === k)}
+                        >
+                          {l}
+                        </button>
+                      ))}
+                    </>
+                  )}
+
+                  {activeTab === 'recon' && (
+                    <>
+                      {[
+                        ['all', 'All Audits'],
+                        ['pending', 'Needs Approval'],
+                        ['reconciled', 'Reconciled'],
+                      ].map(([k, l]) => (
+                        <button
+                          key={k}
+                          onClick={() => updateURL(activeTab, selectedId, k, query)}
+                          style={getPillStyle(activePill === k)}
+                        >
+                          {l}
+                        </button>
+                      ))}
+                    </>
+                  )}
+
+                  {activeTab === 'fc' && (
+                    <>
+                      {[
+                        ['all', 'All Forecasts'],
+                        ['critical', 'Critical (<7d)'],
+                        ['warning', 'Warning (<14d)'],
+                        ['healthy', 'Healthy Cover'],
+                      ].map(([k, l]) => (
+                        <button
+                          key={k}
+                          onClick={() => updateURL(activeTab, selectedId, k, query)}
+                          style={getPillStyle(activePill === k)}
+                        >
+                          {l}
+                        </button>
+                      ))}
+                    </>
+                  )}
+
+                  {activeTab === 'pr' && (
+                    <>
+                      {['all', 'Draft', 'Pending approval', 'Approved', 'PO issued', 'Closed'].map(
+                        (k) => (
+                          <button
+                            key={k}
+                            onClick={() => updateURL(activeTab, selectedId, k, query)}
+                            style={getPillStyle(activePill === k)}
+                          >
+                            {k === 'all' ? 'All' : k}
+                          </button>
+                        ),
+                      )}
+                    </>
+                  )}
+
+                  {activeTab === 'appr' && (
+                    <>
+                      {[
+                        ['all', 'All Pending'],
+                        ['stat', 'STAT Priority'],
+                        ['routine', 'Routine'],
+                      ].map(([k, l]) => (
+                        <button
+                          key={k}
+                          onClick={() => updateURL(activeTab, selectedId, k, query)}
+                          style={getPillStyle(activePill === k)}
+                        >
+                          {l}
+                        </button>
+                      ))}
+                    </>
+                  )}
+
+                  {activeTab === 'grn' && (
+                    <>
+                      {[
+                        ['all', 'All Receipts'],
+                        ['pending', 'Intake / QC'],
+                        ['posted', 'Posted'],
+                      ].map(([k, l]) => (
+                        <button
+                          key={k}
+                          onClick={() => updateURL(activeTab, selectedId, k, query)}
+                          style={getPillStyle(activePill === k)}
+                        >
+                          {l}
+                        </button>
+                      ))}
+                    </>
+                  )}
+
+                  {activeTab === 'supp' && (
+                    <>
+                      {[
+                        ['all', 'All Suppliers'],
+                        ['preferred', 'Preferred Vendors'],
+                      ].map(([k, l]) => (
+                        <button
+                          key={k}
+                          onClick={() => updateURL(activeTab, selectedId, k, query)}
+                          style={getPillStyle(activePill === k)}
                         >
                           {l}
                         </button>
@@ -1513,23 +2670,12 @@ export const InventoryManagerWorkspace: React.FC = () => {
                         ['all', 'All Demands'],
                         ['stat', 'STAT Emergency'],
                         ['urgent', 'Urgent Indents'],
-                        ['routine', 'Routine Replenishment'],
+                        ['routine', 'Routine'],
                       ].map(([k, l]) => (
                         <button
                           key={k}
                           onClick={() => updateURL(activeTab, selectedId, k, query)}
-                          style={{
-                            height: '32px',
-                            padding: '0 12px',
-                            borderRadius: '9999px',
-                            fontSize: '13px',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            whiteSpace: 'nowrap',
-                            background: activePill === k ? '#2563eb' : '#ffffff',
-                            color: activePill === k ? '#ffffff' : '#374151',
-                            border: `1px solid ${activePill === k ? '#2563eb' : '#e5e7eb'}`,
-                          }}
+                          style={getPillStyle(activePill === k)}
                         >
                           {l}
                         </button>
@@ -1537,30 +2683,17 @@ export const InventoryManagerWorkspace: React.FC = () => {
                     </>
                   )}
 
-                  {activeTab === 'fc' && (
+                  {activeTab === 'tr' && (
                     <>
                       {[
-                        ['all', 'All Forecasts'],
-                        ['critical', 'Critical Risk (<7d)'],
-                        ['warning', 'Warning (<14d)'],
-                        ['healthy', 'Healthy'],
-                        ['surplus', 'Surplus Cover'],
+                        ['all', 'All Transfers'],
+                        ['transit', 'In Transit'],
+                        ['received', 'Received'],
                       ].map(([k, l]) => (
                         <button
                           key={k}
                           onClick={() => updateURL(activeTab, selectedId, k, query)}
-                          style={{
-                            height: '32px',
-                            padding: '0 12px',
-                            borderRadius: '9999px',
-                            fontSize: '13px',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            whiteSpace: 'nowrap',
-                            background: activePill === k ? '#2563eb' : '#ffffff',
-                            color: activePill === k ? '#ffffff' : '#374151',
-                            border: `1px solid ${activePill === k ? '#2563eb' : '#e5e7eb'}`,
-                          }}
+                          style={getPillStyle(activePill === k)}
                         >
                           {l}
                         </button>
@@ -1568,1306 +2701,175 @@ export const InventoryManagerWorkspace: React.FC = () => {
                     </>
                   )}
 
-                  {activeTab === 'recon' && (
+                  {activeTab === 'cd' && (
                     <>
                       {[
-                        ['all', 'All Reconciliations'],
-                        ['reconciled', 'Reconciled (Matched)'],
-                        ['pending', 'Pending Admin Approval (> ₹1,000)'],
+                        ['all', 'All Entries'],
+                        ['today', 'Today'],
+                        ['narcotic', 'Schedule X/H1'],
                       ].map(([k, l]) => (
                         <button
                           key={k}
                           onClick={() => updateURL(activeTab, selectedId, k, query)}
-                          style={{
-                            height: '32px',
-                            padding: '0 12px',
-                            borderRadius: '9999px',
-                            fontSize: '13px',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            whiteSpace: 'nowrap',
-                            background: activePill === k ? '#2563eb' : '#ffffff',
-                            color: activePill === k ? '#ffffff' : '#374151',
-                            border: `1px solid ${activePill === k ? '#2563eb' : '#e5e7eb'}`,
-                          }}
+                          style={getPillStyle(activePill === k)}
                         >
                           {l}
                         </button>
                       ))}
-                    </>
-                  )}
-
-                  {activeTab === 'ledger' && (
-                    <>
-                      {[
-                        ['all', 'All'],
-                        ['low', 'Low stock'],
-                        ['out', 'Out of stock'],
-                        ['cd', 'Controlled'],
-                        ['cold', 'Cold chain'],
-                        ['otc', 'OTC'],
-                      ].map(([k, l]) => (
-                        <button
-                          key={k}
-                          onClick={() => updateURL(activeTab, selectedId, k, query)}
-                          style={{
-                            height: '32px',
-                            padding: '0 12px',
-                            borderRadius: '9999px',
-                            fontSize: '13px',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            whiteSpace: 'nowrap',
-                            background: activePill === k ? '#2563eb' : '#ffffff',
-                            color: activePill === k ? '#ffffff' : '#374151',
-                            border: `1px solid ${activePill === k ? '#2563eb' : '#e5e7eb'}`,
-                          }}
-                        >
-                          {l}
-                        </button>
-                      ))}
-                    </>
-                  )}
-
-                  {activeTab === 'pr' && (
-                    <>
-                      {['all', 'Draft', 'Pending approval', 'Approved', 'PO issued', 'Receiving', 'Closed', 'Rejected'].map(
-                        (k) => (
-                          <button
-                            key={k}
-                            onClick={() => updateURL(activeTab, selectedId, k, query)}
-                            style={{
-                              height: '32px',
-                              padding: '0 12px',
-                              borderRadius: '9999px',
-                              fontSize: '13px',
-                              fontWeight: 600,
-                              cursor: 'pointer',
-                              whiteSpace: 'nowrap',
-                              background: activePill === k ? '#2563eb' : '#ffffff',
-                              color: activePill === k ? '#ffffff' : '#374151',
-                              border: `1px solid ${activePill === k ? '#2563eb' : '#e5e7eb'}`,
-                            }}
-                          >
-                            {k === 'all' ? 'All' : k}
-                          </button>
-                        ),
-                      )}
                     </>
                   )}
                 </div>
               </div>
 
-              {/* Table Data View */}
-              <div style={{ overflowX: 'auto' }}>
-                <div style={{ minWidth: '820px' }}>
-                  {/* 1. MEDICINE MASTER TABLE (activeTab === 'master') */}
-                  {activeTab === 'master' && (
-                    <>
+              {/* Data View: Unified Compact Row List Across ALL Screens (Vital Info Only) */}
+              <div
+                className="med-compact-scroll"
+                style={{
+                  overflowY: 'auto',
+                  flex: 1,
+                  maxHeight: 'calc(100vh - 290px)',
+                  borderTop: '1px solid #e5e7eb',
+                  minWidth: 0,
+                  width: '100%',
+                  boxSizing: 'border-box',
+                }}
+              >
+                {loading ? (
+                  <div style={{ padding: '40px 16px', textAlign: 'center', color: '#6b7280', fontSize: '13px' }}>
+                    Loading inventory records...
+                  </div>
+                ) : activeItems.length === 0 ? (
+                  <div style={{ padding: '40px 16px', textAlign: 'center', color: '#6b7280', fontSize: '13px' }}>
+                    No items match the selected filter.
+                  </div>
+                ) : (
+                  activeItems.map((item: any, idx: number, arr: any[]) => {
+                    const details = getItemDetails(item);
+                    // Strictly single-selection invariant: exactly one row is selected
+                    const isSel = activeSelectionKey !== null && details.key === activeSelectionKey;
+
+                    return (
                       <div
+                        key={details.key || idx}
+                        id={`compact-item-${details.key}`}
+                        tabIndex={0}
+                        role="button"
+                        aria-selected={isSel}
+                        onClick={() => updateURL(activeTab, details.key, activePill, query)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            updateURL(activeTab, details.key, activePill, query);
+                          } else if (e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            const nextIdx = Math.min(idx + 1, arr.length - 1);
+                            const nextDetails = getItemDetails(arr[nextIdx]);
+                            updateURL(activeTab, nextDetails.key, activePill, query);
+                            const el = document.getElementById(`compact-item-${nextDetails.key}`);
+                            if (el) {
+                              el.focus();
+                              el.scrollIntoView({ block: 'nearest' });
+                            }
+                          } else if (e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            if (idx === 0) {
+                              const searchEl = document.getElementById('med-search-input');
+                              if (searchEl) searchEl.focus();
+                            } else {
+                              const prevIdx = idx - 1;
+                              const prevDetails = getItemDetails(arr[prevIdx]);
+                              updateURL(activeTab, prevDetails.key, activePill, query);
+                              const el = document.getElementById(`compact-item-${prevDetails.key}`);
+                              if (el) {
+                                el.focus();
+                                el.scrollIntoView({ block: 'nearest' });
+                              }
+                            }
+                          }
+                        }}
+                        className={`med-compact-row ${isSel ? 'med-selected' : ''}`}
                         style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'minmax(220px, 1.8fr) 110px 100px 90px minmax(130px, 1fr) 100px 140px',
-                          alignItems: 'center',
-                          height: '44px',
-                          background: '#f9fafb',
-                          borderTop: '1px solid #e5e7eb',
-                          borderBottom: '1px solid #e5e7eb',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          letterSpacing: '0.04em',
-                          color: '#4b5563',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '6px',
+                          padding: '11px 16px',
+                          borderBottom: '1px solid #f3f4f6',
+                          borderLeft: isSel ? '3px solid #2563eb' : '3px solid transparent',
+                          background: isSel ? '#eff6ff' : '#ffffff',
+                          cursor: 'pointer',
+                          userSelect: 'none',
+                          minWidth: 0,
+                          width: '100%',
+                          boxSizing: 'border-box',
                         }}
                       >
-                        <div style={{ padding: '0 16px' }}>MEDICINE · GENERIC</div>
-                        <div style={{ padding: '0 16px' }}>SCHEDULE</div>
-                        <div style={{ padding: '0 16px' }}>FORMULARY</div>
-                        <div style={{ padding: '0 16px' }}>REORDER</div>
-                        <div style={{ padding: '0 16px' }}>STORAGE RACK</div>
-                        <div style={{ padding: '0 16px' }}>STOCK</div>
-                        <div style={{ padding: '0 16px', textAlign: 'right' }}>OPERATIONS</div>
-                      </div>
-
-                      {loading ? (
-                        <div style={{ padding: '48px', textAlign: 'center', color: '#6b7280' }}>Loading master formulary...</div>
-                      ) : medicines.length === 0 ? (
-                        <div style={{ padding: '48px', textAlign: 'center', color: '#6b7280' }}>No medicines found in master catalog</div>
-                      ) : (
-                        medicines.map((m) => {
-                          const isSel = selectedId === m.item_code || selectedId === m.id;
-                          const schedBadge = getScheduleBadge(m.schedule, m.is_narcotic);
-                          return (
-                            <div
-                              key={m.id}
-                              onClick={() => updateURL(activeTab, m.item_code, activePill, query)}
-                              style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'minmax(220px, 1.8fr) 110px 100px 90px minmax(130px, 1fr) 100px 140px',
-                                alignItems: 'center',
-                                minHeight: '56px',
-                                borderBottom: '1px solid #f3f4f6',
-                                cursor: 'pointer',
-                                background: isSel ? '#eff6ff' : '#ffffff',
-                                transition: 'background 0.15s ease',
-                              }}
-                            >
-                              <div style={{ padding: '10px 16px' }}>
-                                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                                  <span style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>{m.name}</span>
-                                  {m.is_archived && (
-                                    <span style={{ fontSize: '10px', fontWeight: 700, color: '#991b1b', background: '#fee2e2', padding: '1px 5px', borderRadius: '4px' }}>
-                                      ARCHIVED
-                                    </span>
-                                  )}
-                                </div>
-                                <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>
-                                  {m.item_code} · {m.generic_name || 'Generic'} ({m.category})
-                                </div>
-                              </div>
-
-                              <div style={{ padding: '10px 16px' }}>{renderBadge(schedBadge)}</div>
-
-                              <div style={{ padding: '10px 16px' }}>
-                                <span
-                                  style={{
-                                    fontSize: '11px',
-                                    fontWeight: 700,
-                                    color: m.is_core_formulary !== false ? '#15803d' : '#64748b',
-                                    background: m.is_core_formulary !== false ? '#f0fdf4' : '#f1f5f9',
-                                    padding: '2px 6px',
-                                    borderRadius: '4px',
-                                  }}
-                                >
-                                  {m.is_core_formulary !== false ? 'Core Formulary' : 'Non-Core'}
-                                </span>
-                              </div>
-
-                              <div style={{ padding: '10px 16px', fontSize: '13px', fontWeight: 600, color: '#4b5563' }}>
-                                {m.reorder_level} {m.unit_of_measure}
-                              </div>
-
-                              <div style={{ padding: '10px 16px', fontSize: '12px', color: '#475569' }}>
-                                {m.storage_rack || (m.is_cold_chain ? 'Cold Refrigerator 01' : 'Rack A-01 · Ambient')}
-                              </div>
-
-                              <div style={{ padding: '10px 16px', fontSize: '14px', fontWeight: 700, color: m.available_stock < m.reorder_level ? '#dc2626' : '#111827' }}>
-                                {m.available_stock}
-                              </div>
-
-                              <div style={{ padding: '10px 16px', display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setEditingMedicine(m);
-                                    setIsAddEditMedOpen(true);
-                                  }}
-                                  title="Edit Medicine"
-                                  style={{
-                                    height: '32px',
-                                    padding: '0 10px',
-                                    borderRadius: '8px',
-                                    fontSize: '12px',
-                                    fontWeight: 600,
-                                    cursor: 'pointer',
-                                    background: '#ffffff',
-                                    color: '#2563eb',
-                                    border: '1px solid #bfdbfe',
-                                  }}
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setBatchMedTarget(m);
-                                    setIsCreateBatchOpen(true);
-                                  }}
-                                  title="Receive Batch"
-                                  style={{
-                                    height: '32px',
-                                    padding: '0 10px',
-                                    borderRadius: '8px',
-                                    fontSize: '12px',
-                                    fontWeight: 600,
-                                    cursor: 'pointer',
-                                    background: '#eff6ff',
-                                    color: '#1d4ed8',
-                                    border: '1px solid #93c5fd',
-                                  }}
-                                >
-                                  + Batch
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })
-                      )}
-                    </>
-                  )}
-
-                  {/* 2. DEPARTMENT DEMAND QUEUE TABLE (activeTab === 'demand') */}
-                  {activeTab === 'demand' && (
-                    <>
-                      <div
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'minmax(140px, 1fr) minmax(160px, 1.2fr) minmax(180px, 1.4fr) 90px 90px 110px 130px',
-                          alignItems: 'center',
-                          height: '44px',
-                          background: '#f9fafb',
-                          borderTop: '1px solid #e5e7eb',
-                          borderBottom: '1px solid #e5e7eb',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          letterSpacing: '0.04em',
-                          color: '#4b5563',
-                        }}
-                      >
-                        <div style={{ padding: '0 16px' }}>TOKEN · TIME</div>
-                        <div style={{ padding: '0 16px' }}>SOURCE LOCATION</div>
-                        <div style={{ padding: '0 16px' }}>MEDICINE · PRESCRIBER</div>
-                        <div style={{ padding: '0 16px' }}>DEMAND</div>
-                        <div style={{ padding: '0 16px' }}>STORE STOCK</div>
-                        <div style={{ padding: '0 16px' }}>PRIORITY</div>
-                        <div style={{ padding: '0 16px', textAlign: 'right' }}>FULFILLMENT</div>
-                      </div>
-
-                      {demands.length === 0 ? (
-                        <div style={{ padding: '48px', textAlign: 'center', color: '#6b7280' }}>All ward & counter demands fulfilled</div>
-                      ) : (
-                        demands.map((d) => {
-                          const isSel = selectedDemand?.id === d.id;
-                          return (
-                            <div
-                              key={d.id}
-                              onClick={() => updateURL(activeTab, d.id, activePill, query)}
-                              style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'minmax(140px, 1fr) minmax(160px, 1.2fr) minmax(180px, 1.4fr) 90px 90px 110px 130px',
-                                alignItems: 'center',
-                                minHeight: '56px',
-                                borderBottom: '1px solid #f3f4f6',
-                                cursor: 'pointer',
-                                background: isSel ? '#eff6ff' : '#ffffff',
-                              }}
-                            >
-                              <div style={{ padding: '10px 16px' }}>
-                                <div style={{ fontFamily: MONO_FONT, fontWeight: 700, fontSize: '13px', color: '#111827' }}>
-                                  #{d.token_number}
-                                </div>
-                                <div style={{ fontSize: '11px', color: '#6b7280' }}>
-                                  {new Date(d.requested_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                </div>
-                              </div>
-
-                              <div style={{ padding: '10px 16px' }}>
-                                <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827' }}>{d.source}</div>
-                                <div style={{ fontSize: '11px', color: '#64748b' }}>Stock at counter: {d.counter_stock} units</div>
-                              </div>
-
-                              <div style={{ padding: '10px 16px' }}>
-                                <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827' }}>{d.medicine_name}</div>
-                                <div style={{ fontSize: '11px', color: '#6b7280' }}>Dr. {d.doctor_name} · Pt: {d.patient_name}</div>
-                              </div>
-
-                              <div style={{ padding: '10px 16px', fontSize: '14px', fontWeight: 700, color: '#111827' }}>
-                                {d.requested_quantity} units
-                              </div>
-
-                              <div style={{ padding: '10px 16px', fontSize: '13px', fontWeight: 600, color: d.central_stock < d.requested_quantity ? '#dc2626' : '#15803d' }}>
-                                {d.central_stock} units
-                              </div>
-
-                              <div style={{ padding: '10px 16px' }}>
-                                {renderBadge(getDemandPriorityBadge(d.priority))}
-                              </div>
-
-                              <div style={{ padding: '10px 16px', display: 'flex', justifyContent: 'flex-end' }}>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setDemandTransferTarget(d);
-                                    setIsCreateTransferOpen(true);
-                                  }}
-                                  style={{
-                                    height: '34px',
-                                    padding: '0 12px',
-                                    borderRadius: '8px',
-                                    fontSize: '12px',
-                                    fontWeight: 700,
-                                    cursor: 'pointer',
-                                    background: d.priority === 'STAT' ? '#dc2626' : '#2563eb',
-                                    color: '#ffffff',
-                                    border: 'none',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '4px'
-                                  }}
-                                >
-                                  <ArrowLeftRight size={13} /> 1-Click Transfer
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })
-                      )}
-                    </>
-                  )}
-
-                  {/* 3. DEAD STOCK TABLE (activeTab === 'dead') */}
-                  {activeTab === 'dead' && (
-                    <>
-                      <div
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'minmax(200px, 1.8fr) 100px 90px 120px 120px 140px 120px',
-                          alignItems: 'center',
-                          height: '44px',
-                          background: '#f9fafb',
-                          borderTop: '1px solid #e5e7eb',
-                          borderBottom: '1px solid #e5e7eb',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          letterSpacing: '0.04em',
-                          color: '#4b5563',
-                        }}
-                      >
-                        <div style={{ padding: '0 16px' }}>MEDICINE · CODE</div>
-                        <div style={{ padding: '0 16px' }}>SCHEDULE</div>
-                        <div style={{ padding: '0 16px' }}>LOCKED UNITS</div>
-                        <div style={{ padding: '0 16px' }}>VALUATION</div>
-                        <div style={{ padding: '0 16px' }}>DAYS INACTIVE</div>
-                        <div style={{ padding: '0 16px' }}>RECOMMENDATION</div>
-                        <div style={{ padding: '0 16px', textAlign: 'right' }}>ACTION</div>
-                      </div>
-
-                      {deadStock.length === 0 ? (
-                        <div style={{ padding: '48px', textAlign: 'center', color: '#6b7280' }}>No dead stock detected &gt; 180 days</div>
-                      ) : (
-                        deadStock.map((d) => {
-                          const isSel = selectedDeadStock?.id === d.id;
-                          return (
-                            <div
-                              key={d.id}
-                              onClick={() => updateURL(activeTab, d.id, activePill, query)}
-                              style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'minmax(200px, 1.8fr) 100px 90px 120px 120px 140px 120px',
-                                alignItems: 'center',
-                                minHeight: '56px',
-                                borderBottom: '1px solid #f3f4f6',
-                                cursor: 'pointer',
-                                background: isSel ? '#eff6ff' : '#ffffff',
-                              }}
-                            >
-                              <div style={{ padding: '10px 16px' }}>
-                                <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827' }}>{d.name}</div>
-                                <div style={{ fontSize: '11px', color: '#6b7280' }}>{d.item_code} · {d.category}</div>
-                              </div>
-
-                              <div style={{ padding: '10px 16px' }}>{renderBadge(getScheduleBadge(d.schedule, false))}</div>
-
-                              <div style={{ padding: '10px 16px', fontSize: '14px', fontWeight: 700, color: '#b91c1c' }}>
-                                {d.units_in_stock}
-                              </div>
-
-                              <div style={{ padding: '10px 16px', fontSize: '13px', fontWeight: 700, color: '#111827' }}>
-                                {formatINR(d.total_valuation)}
-                              </div>
-
-                              <div style={{ padding: '10px 16px', fontSize: '13px', color: '#dc2626', fontWeight: 600 }}>
-                                {d.days_without_movement} days
-                              </div>
-
-                              <div style={{ padding: '10px 16px' }}>
-                                <span
-                                  style={{
-                                    fontSize: '11px',
-                                    fontWeight: 700,
-                                    borderRadius: '4px',
-                                    padding: '2px 6px',
-                                    background: d.recommendation === 'BUYBACK_RETURN' ? '#fef2f2' : '#eff6ff',
-                                    color: d.recommendation === 'BUYBACK_RETURN' ? '#dc2626' : '#1d4ed8'
-                                  }}
-                                >
-                                  {d.recommendation}
-                                </span>
-                              </div>
-
-                              <div style={{ padding: '10px 16px', display: 'flex', justifyContent: 'flex-end' }}>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    const med = medicines.find(m => m.id === d.medicine_id);
-                                    if (med) {
-                                      setBatchMedTarget(med);
-                                      setIsCreateTransferOpen(true);
-                                    }
-                                  }}
-                                  style={{
-                                    height: '32px',
-                                    padding: '0 12px',
-                                    borderRadius: '8px',
-                                    fontSize: '12px',
-                                    fontWeight: 600,
-                                    cursor: 'pointer',
-                                    background: '#ffffff',
-                                    color: '#2563eb',
-                                    border: '1px solid #bfdbfe'
-                                  }}
-                                >
-                                  Transfer
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })
-                      )}
-                    </>
-                  )}
-
-                  {/* 4. DEMAND FORECASTING TABLE (activeTab === 'fc') */}
-                  {activeTab === 'fc' && (
-                    <>
-                      <div
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'minmax(200px, 1.8fr) 90px 90px 110px 110px 130px 120px',
-                          alignItems: 'center',
-                          height: '44px',
-                          background: '#f9fafb',
-                          borderTop: '1px solid #e5e7eb',
-                          borderBottom: '1px solid #e5e7eb',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          letterSpacing: '0.04em',
-                          color: '#4b5563',
-                        }}
-                      >
-                        <div style={{ padding: '0 16px' }}>MEDICINE · SKU</div>
-                        <div style={{ padding: '0 16px' }}>STOCK</div>
-                        <div style={{ padding: '0 16px' }}>DAILY BURN</div>
-                        <div style={{ padding: '0 16px' }}>DAYS COVER</div>
-                        <div style={{ padding: '0 16px' }}>PROJECTED OUT</div>
-                        <div style={{ padding: '0 16px' }}>RISK LEVEL</div>
-                        <div style={{ padding: '0 16px', textAlign: 'right' }}>REORDER</div>
-                      </div>
-
-                      {forecasting.length === 0 ? (
-                        <div style={{ padding: '48px', textAlign: 'center', color: '#6b7280' }}>No run-rate projections computed</div>
-                      ) : (
-                        forecasting.map((f) => {
-                          const isSel = selectedForecasting?.id === f.id;
-                          return (
-                            <div
-                              key={f.id}
-                              onClick={() => updateURL(activeTab, f.id, activePill, query)}
-                              style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'minmax(200px, 1.8fr) 90px 90px 110px 110px 130px 120px',
-                                alignItems: 'center',
-                                minHeight: '56px',
-                                borderBottom: '1px solid #f3f4f6',
-                                cursor: 'pointer',
-                                background: isSel ? '#eff6ff' : '#ffffff',
-                              }}
-                            >
-                              <div style={{ padding: '10px 16px' }}>
-                                <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827' }}>{f.name}</div>
-                                <div style={{ fontSize: '11px', color: '#6b7280' }}>{f.item_code} · 30d Burn: {f.monthly_consumption_units} units</div>
-                              </div>
-
-                              <div style={{ padding: '10px 16px', fontSize: '14px', fontWeight: 700, color: '#111827' }}>
-                                {f.current_stock}
-                              </div>
-
-                              <div style={{ padding: '10px 16px', fontSize: '13px', color: '#475569', fontWeight: 600 }}>
-                                {f.daily_burn_rate} / day
-                              </div>
-
-                              <div style={{ padding: '10px 16px', fontSize: '14px', fontWeight: 700, color: f.days_of_stock_remaining < 7 ? '#dc2626' : f.days_of_stock_remaining < 14 ? '#b45309' : '#15803d' }}>
-                                {f.days_of_stock_remaining} days
-                              </div>
-
-                              <div style={{ padding: '10px 16px', fontSize: '12px', color: '#dc2626', fontWeight: 600 }}>
-                                {f.projected_stockout_date}
-                              </div>
-
-                              <div style={{ padding: '10px 16px' }}>
-                                {renderBadge(getForecastRiskBadge(f.risk_level))}
-                              </div>
-
-                              <div style={{ padding: '10px 16px', display: 'flex', justifyContent: 'flex-end' }}>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    const med = medicines.find(m => m.id === f.medicine_id);
-                                    if (med) {
-                                      pharmacyInventoryService.createPurchaseRequest({
-                                        medicine_id: med.id,
-                                        quantity: f.suggested_reorder_quantity,
-                                        notes: `Automated 30-day run rate replenishment (${f.days_of_stock_remaining} days cover remaining)`
-                                      }).then((res) => {
-                                        setStatusNotice({
-                                          type: 'green',
-                                          title: `PR ${res.pr_number} Drafted`,
-                                          sub: `Reorder of ${f.suggested_reorder_quantity} units drafted for Dr. Pooja Shah review.`
-                                        });
-                                        refreshData();
-                                      });
-                                    }
-                                  }}
-                                  style={{
-                                    height: '32px',
-                                    padding: '0 12px',
-                                    borderRadius: '8px',
-                                    fontSize: '12px',
-                                    fontWeight: 700,
-                                    cursor: 'pointer',
-                                    background: f.risk_level === 'CRITICAL' ? '#dc2626' : '#2563eb',
-                                    color: '#ffffff',
-                                    border: 'none'
-                                  }}
-                                >
-                                  Reorder {f.suggested_reorder_quantity}
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })
-                      )}
-                    </>
-                  )}
-
-                  {/* 5. PHYSICAL STOCK RECONCILIATION TABLE (activeTab === 'recon') */}
-                  {activeTab === 'recon' && (
-                    <>
-                      <div
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'minmax(120px, 0.9fr) minmax(180px, 1.4fr) 80px 80px 110px 120px 130px',
-                          alignItems: 'center',
-                          height: '44px',
-                          background: '#f9fafb',
-                          borderTop: '1px solid #e5e7eb',
-                          borderBottom: '1px solid #e5e7eb',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          letterSpacing: '0.04em',
-                          color: '#4b5563',
-                        }}
-                      >
-                        <div style={{ padding: '0 16px' }}>RECON # · DATE</div>
-                        <div style={{ padding: '0 16px' }}>MEDICINE · BATCH</div>
-                        <div style={{ padding: '0 16px' }}>SYSTEM</div>
-                        <div style={{ padding: '0 16px' }}>COUNT</div>
-                        <div style={{ padding: '0 16px' }}>VARIANCE</div>
-                        <div style={{ padding: '0 16px' }}>REASON CODE</div>
-                        <div style={{ padding: '0 16px', textAlign: 'right' }}>STATUS</div>
-                      </div>
-
-                      {reconciliations.length === 0 ? (
-                        <div style={{ padding: '48px', textAlign: 'center', color: '#6b7280' }}>No physical cycle counts logged</div>
-                      ) : (
-                        reconciliations.map((r) => {
-                          const isSel = selectedRecon?.id === r.id;
-                          return (
-                            <div
-                              key={r.id}
-                              onClick={() => updateURL(activeTab, r.id, activePill, query)}
-                              style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'minmax(120px, 0.9fr) minmax(180px, 1.4fr) 80px 80px 110px 120px 130px',
-                                alignItems: 'center',
-                                minHeight: '56px',
-                                borderBottom: '1px solid #f3f4f6',
-                                cursor: 'pointer',
-                                background: isSel ? '#eff6ff' : '#ffffff',
-                              }}
-                            >
-                              <div style={{ padding: '10px 16px' }}>
-                                <div style={{ fontFamily: MONO_FONT, fontWeight: 700, fontSize: '13px', color: '#111827' }}>
-                                  {r.reconciliation_number}
-                                </div>
-                                <div style={{ fontSize: '11px', color: '#6b7280' }}>
-                                  {new Date(r.reconciled_at).toLocaleDateString([], { day: '2-digit', month: 'short' })}
-                                </div>
-                              </div>
-
-                              <div style={{ padding: '10px 16px' }}>
-                                <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827' }}>{r.medicine_name}</div>
-                                <div style={{ fontSize: '11px', color: '#6b7280', fontFamily: 'monospace' }}>Batch: {r.batch_number}</div>
-                              </div>
-
-                              <div style={{ padding: '10px 16px', fontSize: '13px', color: '#4b5563' }}>{r.system_balance}</div>
-
-                              <div style={{ padding: '10px 16px', fontSize: '14px', fontWeight: 700, color: '#7c3aed' }}>
-                                {r.physical_count}
-                              </div>
-
-                              <div style={{ padding: '10px 16px' }}>
-                                <div style={{ fontSize: '13px', fontWeight: 700, color: r.variance_units === 0 ? '#15803d' : r.variance_units > 0 ? '#1d4ed8' : '#b91c1c' }}>
-                                  {r.variance_units > 0 ? `+${r.variance_units}` : r.variance_units} units
-                                </div>
-                                <div style={{ fontSize: '11px', color: '#6b7280' }}>
-                                  ₹{Math.abs(r.variance_value).toLocaleString('en-IN', { maximumFractionDigits: 1 })}
-                                </div>
-                              </div>
-
-                              <div style={{ padding: '10px 16px' }}>
-                                <span style={{ fontSize: '11px', fontWeight: 600, color: '#475569', background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px' }}>
-                                  {r.reason_code}
-                                </span>
-                              </div>
-
-                              <div style={{ padding: '10px 16px', display: 'flex', justifyContent: 'flex-end' }}>
-                                <span
-                                  style={{
-                                    fontSize: '11px',
-                                    fontWeight: 700,
-                                    borderRadius: '4px',
-                                    padding: '2px 8px',
-                                    background: r.status === 'RECONCILED' ? '#f0fdf4' : '#fffbeb',
-                                    color: r.status === 'RECONCILED' ? '#15803d' : '#b45309',
-                                    border: `1px solid ${r.status === 'RECONCILED' ? '#bbf7d0' : '#fde68a'}`
-                                  }}
-                                >
-                                  {r.status === 'RECONCILED' ? 'RECONCILED' : 'ADMIN APPROVAL'}
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        })
-                      )}
-                    </>
-                  )}
-
-                  {/* 6. DASHBOARD & STOCK LEDGER TABLE */}
-                  {(activeTab === 'dash' || activeTab === 'ledger') && (
-                    <>
-                      <div
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'minmax(220px, 1.8fr) 110px 90px 90px minmax(130px, 1fr) 140px 96px',
-                          alignItems: 'center',
-                          height: '44px',
-                          background: '#f9fafb',
-                          borderTop: '1px solid #e5e7eb',
-                          borderBottom: '1px solid #e5e7eb',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          letterSpacing: '0.04em',
-                          color: '#4b5563',
-                        }}
-                      >
-                        <div style={{ padding: '0 16px' }}>ITEM · CODE</div>
-                        <div style={{ padding: '0 16px' }}>SCHEDULE</div>
-                        <div style={{ padding: '0 16px' }}>IN STOCK</div>
-                        <div style={{ padding: '0 16px' }}>REORDER</div>
-                        <div style={{ padding: '0 16px' }}>REORDER STATUS</div>
-                        <div style={{ padding: '0 16px' }}>STATUS</div>
-                        <div style={{ padding: '0 16px', textAlign: 'right' }}>ACTION</div>
-                      </div>
-
-                      {loading ? (
-                        <div style={{ padding: '48px', textAlign: 'center', color: '#6b7280' }}>Loading inventory records...</div>
-                      ) : (activeTab === 'dash' ? alerts : medicines).length === 0 ? (
-                        <div style={{ padding: '48px', textAlign: 'center', color: '#6b7280' }}>No items match filter</div>
-                      ) : (
-                        (activeTab === 'dash' ? alerts : medicines).map((item: any) => {
-                          const code = item.code || item.item_code;
-                          const name = item.name;
-                          const generic = item.generic || item.generic_name;
-                          const sched = item.schedule;
-                          const isCD = item.is_narcotic;
-                          const stock = item.in_stock !== undefined ? item.in_stock : item.available_stock;
-                          const par = item.reorder_level;
-                          const isSel = selectedId === code || (selectedMedicine && selectedMedicine.item_code === code);
-                          const stBadge = getMedicineStatusBadge({ in_stock: stock, reorder_level: par });
-                          const schedBadge = getScheduleBadge(sched, isCD);
-
-                          return (
-                            <div
-                              key={code}
-                              onClick={() => updateURL(activeTab, code, activePill, query)}
-                              style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'minmax(220px, 1.8fr) 110px 90px 90px minmax(130px, 1fr) 140px 96px',
-                                alignItems: 'center',
-                                minHeight: '56px',
-                                borderBottom: '1px solid #f3f4f6',
-                                cursor: 'pointer',
-                                background: isSel ? '#eff6ff' : '#ffffff',
-                                transition: 'background 0.15s ease',
-                              }}
-                            >
-                              <div style={{ padding: '10px 16px' }}>
-                                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                                  <span style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>{name}</span>
-                                  {isCD && (
-                                    <span
-                                      style={{
-                                        fontSize: '11px',
-                                        fontWeight: 700,
-                                        color: '#ffffff',
-                                        background: '#111827',
-                                        borderRadius: '4px',
-                                        padding: '1px 6px',
-                                      }}
-                                    >
-                                      CD
-                                    </span>
-                                  )}
-                                </div>
-                                <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>
-                                  {code} · {generic}
-                                </div>
-                              </div>
-
-                              <div style={{ padding: '10px 16px' }}>{renderBadge(schedBadge)}</div>
-
-                              <div style={{ padding: '10px 16px', fontSize: '14px', fontWeight: 600, color: stock === 0 ? '#dc2626' : stock < par ? '#b45309' : '#111827' }}>
-                                {stock}
-                              </div>
-
-                              <div style={{ padding: '10px 16px', fontSize: '14px', color: '#4b5563' }}>{par}</div>
-
-                              <div style={{ padding: '10px 16px' }}>
-                                {item.reorder_status ? (
-                                  <span style={{ fontSize: '12px', fontWeight: 500, color: item.reorder_status.includes('Draft') || item.reorder_status.includes('Pending') ? '#b45309' : '#6b7280' }}>
-                                    {item.reorder_status}
-                                  </span>
-                                ) : (
-                                  <span style={{ fontSize: '12px', color: stock < par ? '#dc2626' : '#9ca3af' }}>
-                                    {stock < par ? 'Not raised' : '—'}
-                                  </span>
-                                )}
-                              </div>
-
-                              <div style={{ padding: '10px 16px' }}>{renderBadge(stBadge)}</div>
-
-                              <div style={{ padding: '10px 16px', display: 'flex', justifyContent: 'flex-end' }}>
-                                <button
-                                  style={{
-                                    height: '36px',
-                                    padding: '0 14px',
-                                    borderRadius: '10px',
-                                    fontSize: '13px',
-                                    fontWeight: 600,
-                                    cursor: 'pointer',
-                                    whiteSpace: 'nowrap',
-                                    background: isSel ? '#2563eb' : '#ffffff',
-                                    color: isSel ? '#ffffff' : '#1d4ed8',
-                                    border: `1px solid ${isSel ? '#2563eb' : '#bfdbfe'}`,
-                                  }}
-                                >
-                                  {stock < par && !item.active_pr ? 'Reorder' : 'Details'}
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })
-                      )}
-                    </>
-                  )}
-
-                  {/* 7. PURCHASE REQUESTS TABLE */}
-                  {activeTab === 'pr' && (
-                    <>
-                      <div
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'minmax(130px, 0.9fr) minmax(200px, 1.6fr) 100px minmax(150px, 1.1fr) 90px 150px 96px',
-                          alignItems: 'center',
-                          height: '44px',
-                          background: '#f9fafb',
-                          borderTop: '1px solid #e5e7eb',
-                          borderBottom: '1px solid #e5e7eb',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          letterSpacing: '0.04em',
-                          color: '#4b5563',
-                        }}
-                      >
-                        <div style={{ padding: '0 16px' }}>PR · CREATED</div>
-                        <div style={{ padding: '0 16px' }}>ITEM</div>
-                        <div style={{ padding: '0 16px' }}>QTY · VALUE</div>
-                        <div style={{ padding: '0 16px' }}>SUPPLIER</div>
-                        <div style={{ padding: '0 16px' }}>STAGE</div>
-                        <div style={{ padding: '0 16px' }}>STATUS</div>
-                        <div style={{ padding: '0 16px', textAlign: 'right' }}>ACTION</div>
-                      </div>
-
-                      {purchaseRequests.length === 0 ? (
-                        <div style={{ padding: '48px', textAlign: 'center', color: '#6b7280' }}>No purchase requests found</div>
-                      ) : (
-                        purchaseRequests.map((p) => {
-                          const isSel = selectedPR?.id === p.id;
-                          return (
-                            <div
-                              key={p.id}
-                              onClick={() => updateURL('pr', p.id, activePill, query)}
-                              style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'minmax(130px, 0.9fr) minmax(200px, 1.6fr) 100px minmax(150px, 1.1fr) 90px 150px 96px',
-                                alignItems: 'center',
-                                minHeight: '56px',
-                                borderBottom: '1px solid #f3f4f6',
-                                cursor: 'pointer',
-                                background: isSel ? '#eff6ff' : '#ffffff',
-                              }}
-                            >
-                              <div style={{ padding: '10px 16px' }}>
-                                <div style={{ fontFamily: MONO_FONT, fontWeight: 600, fontSize: '13px', color: '#111827' }}>
-                                  {p.pr_number}
-                                </div>
-                                <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                                  {new Date(p.created_at).toLocaleDateString([], { day: '2-digit', month: 'short' })}
-                                </div>
-                              </div>
-
-                              <div style={{ padding: '10px 16px' }}>
-                                <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>{p.medicine_name}</div>
-                                <div style={{ fontSize: '12px', color: '#6b7280' }}>{p.notes || 'Requisition item'}</div>
-                              </div>
-
-                              <div style={{ padding: '10px 16px' }}>
-                                <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>{p.requested_quantity}</div>
-                                <div style={{ fontSize: '12px', color: '#6b7280' }}>{formatINR(p.total_estimated_value)}</div>
-                              </div>
-
-                              <div style={{ padding: '10px 16px' }}>
-                                <div style={{ fontSize: '13px', color: '#111827' }}>{p.supplier_name}</div>
-                                <div style={{ fontSize: '12px', color: '#6b7280' }}>{p.purchase_order_number || ''}</div>
-                              </div>
-
-                              <div style={{ padding: '10px 16px', fontSize: '13px', fontWeight: 600, color: '#111827' }}>
-                                {p.workflow_stage} / 8
-                              </div>
-
-                              <div style={{ padding: '10px 16px' }}>{renderBadge(getPRBadge(p.status))}</div>
-
-                              <div style={{ padding: '10px 16px', display: 'flex', justifyContent: 'flex-end' }}>
-                                <button
-                                  style={{
-                                    height: '36px',
-                                    padding: '0 14px',
-                                    borderRadius: '10px',
-                                    fontSize: '13px',
-                                    fontWeight: 600,
-                                    cursor: 'pointer',
-                                    background: isSel ? '#2563eb' : '#ffffff',
-                                    color: isSel ? '#ffffff' : '#1d4ed8',
-                                    border: `1px solid ${isSel ? '#2563eb' : '#bfdbfe'}`,
-                                  }}
-                                >
-                                  {p.status === 'Draft' ? 'Submit' : p.status === 'Approved' ? 'Issue PO' : p.status === 'PO issued' ? 'Receive' : 'Track'}
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })
-                      )}
-                    </>
-                  )}
-
-                  {/* 8. GOODS RECEIPTS (GRN) TABLE */}
-                  {activeTab === 'grn' && (
-                    <>
-                      <div
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'minmax(150px, 1fr) minmax(170px, 1.3fr) 130px 80px 110px 150px 96px',
-                          alignItems: 'center',
-                          height: '44px',
-                          background: '#f9fafb',
-                          borderTop: '1px solid #e5e7eb',
-                          borderBottom: '1px solid #e5e7eb',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          letterSpacing: '0.04em',
-                          color: '#4b5563',
-                        }}
-                      >
-                        <div style={{ padding: '0 16px' }}>GRN · RECEIVED</div>
-                        <div style={{ padding: '0 16px' }}>SUPPLIER</div>
-                        <div style={{ padding: '0 16px' }}>PO · PR</div>
-                        <div style={{ padding: '0 16px' }}>LINES</div>
-                        <div style={{ padding: '0 16px' }}>VALUE</div>
-                        <div style={{ padding: '0 16px' }}>STATUS</div>
-                        <div style={{ padding: '0 16px', textAlign: 'right' }}>ACTION</div>
-                      </div>
-
-                      {goodsReceipts.length === 0 ? (
-                        <div style={{ padding: '48px', textAlign: 'center', color: '#6b7280' }}>No goods receipts found</div>
-                      ) : (
-                        goodsReceipts.map((g) => {
-                          const isSel = selectedGRN?.id === g.id;
-                          return (
-                            <div
-                              key={g.id}
-                              onClick={() => updateURL('grn', g.id, activePill, query)}
-                              style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'minmax(150px, 1fr) minmax(170px, 1.3fr) 130px 80px 110px 150px 96px',
-                                alignItems: 'center',
-                                minHeight: '56px',
-                                borderBottom: '1px solid #f3f4f6',
-                                cursor: 'pointer',
-                                background: isSel ? '#eff6ff' : '#ffffff',
-                              }}
-                            >
-                              <div style={{ padding: '10px 16px' }}>
-                                <div style={{ fontFamily: MONO_FONT, fontWeight: 600, fontSize: '13px' }}>{g.grn_number}</div>
-                                <div style={{ fontSize: '12px', color: '#6b7280' }}>{new Date(g.received_at).toLocaleDateString()}</div>
-                              </div>
-                              <div style={{ padding: '10px 16px' }}>
-                                <div style={{ fontSize: '13px', fontWeight: 600 }}>{g.supplier_name}</div>
-                                <div style={{ fontSize: '12px', color: '#6b7280' }}>{g.invoice_number}</div>
-                              </div>
-                              <div style={{ padding: '10px 16px', fontFamily: MONO_FONT, fontSize: '12px' }}>
-                                {g.po_number || '—'}
-                              </div>
-                              <div style={{ padding: '10px 16px', fontWeight: 600 }}>{g.lines.length}</div>
-                              <div style={{ padding: '10px 16px' }}>{formatINR(g.total_value)}</div>
-                              <div style={{ padding: '10px 16px' }}>
-                                {renderBadge(
-                                  g.status === 'Posted'
-                                    ? { ...B.green, text: 'Inventory updated' }
-                                    : { ...B.amber, text: 'Batch verification' },
-                                )}
-                              </div>
-                              <div style={{ padding: '10px 16px', display: 'flex', justifyContent: 'flex-end' }}>
-                                <button
-                                  style={{
-                                    height: '36px',
-                                    padding: '0 14px',
-                                    borderRadius: '10px',
-                                    fontSize: '13px',
-                                    fontWeight: 600,
-                                    cursor: 'pointer',
-                                    background: isSel ? '#2563eb' : '#ffffff',
-                                    color: isSel ? '#ffffff' : '#1d4ed8',
-                                    border: `1px solid ${isSel ? '#2563eb' : '#bfdbfe'}`,
-                                  }}
-                                >
-                                  {g.status === 'Posted' ? 'View' : 'Verify'}
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })
-                      )}
-                    </>
-                  )}
-
-                  {/* 9. BATCH MANAGEMENT & EXPIRY TABLE */}
-                  {(activeTab === 'batch' || activeTab === 'expiry') && (
-                    <>
-                      <div
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'minmax(130px, 0.9fr) minmax(200px, 1.6fr) 80px minmax(120px, 1fr) minmax(140px, 1fr) 140px 120px',
-                          alignItems: 'center',
-                          height: '44px',
-                          background: '#f9fafb',
-                          borderTop: '1px solid #e5e7eb',
-                          borderBottom: '1px solid #e5e7eb',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          letterSpacing: '0.04em',
-                          color: '#4b5563',
-                        }}
-                      >
-                        <div style={{ padding: '0 16px' }}>BATCH</div>
-                        <div style={{ padding: '0 16px' }}>ITEM</div>
-                        <div style={{ padding: '0 16px' }}>QTY</div>
-                        <div style={{ padding: '0 16px' }}>EXPIRY</div>
-                        <div style={{ padding: '0 16px' }}>SUPPLIER · GRN</div>
-                        <div style={{ padding: '0 16px' }}>STATUS</div>
-                        <div style={{ padding: '0 16px', textAlign: 'right' }}>ACTION</div>
-                      </div>
-
-                      {(activeTab === 'expiry' ? expiringBatches : batches).map((b) => {
-                        const isSel = selectedBatch?.id === b.id;
-                        const bBadge = getBatchStatusBadge(b);
-                        return (
-                          <div
-                            key={b.id}
-                            onClick={() => updateURL(activeTab, b.batch_number, activePill, query)}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                          <span
                             style={{
-                              display: 'grid',
-                              gridTemplateColumns: 'minmax(130px, 0.9fr) minmax(200px, 1.6fr) 80px minmax(120px, 1fr) minmax(140px, 1fr) 140px 120px',
-                              alignItems: 'center',
-                              minHeight: '56px',
-                              borderBottom: '1px solid #f3f4f6',
-                              cursor: 'pointer',
-                              background: isSel ? '#eff6ff' : '#ffffff',
+                              fontSize: '13px',
+                              fontWeight: isSel ? 700 : 600,
+                              color: isSel ? '#1d4ed8' : '#111827',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              flex: 1,
+                              minWidth: 0,
                             }}
+                            title={details.title}
                           >
-                            <div style={{ padding: '10px 16px', fontFamily: MONO_FONT, fontWeight: 600, fontSize: '13px' }}>
-                              {b.batch_number}
-                            </div>
-                            <div style={{ padding: '10px 16px' }}>
-                              <div style={{ fontSize: '13px', fontWeight: 600 }}>{b.medicine_name}</div>
-                              <div style={{ fontSize: '12px', color: '#6b7280' }}>{b.medicine_code} · {b.storage_location}</div>
-                            </div>
-                            <div style={{ padding: '10px 16px', fontWeight: 600 }}>{b.available_quantity}</div>
-                            <div style={{ padding: '10px 16px' }}>
-                              <div style={{ fontSize: '13px', color: b.months_left <= 3 ? '#b45309' : '#111827' }}>
-                                {formatDateMonth(b.expiry_date)}
-                              </div>
-                              <div style={{ fontSize: '11px', color: '#6b7280' }}>
-                                {b.months_left <= 0 ? 'expired' : `${b.months_left} mo left`}
-                              </div>
-                            </div>
-                            <div style={{ padding: '10px 16px' }}>
-                              <div style={{ fontSize: '13px' }}>{b.supplier_name}</div>
-                              <div style={{ fontSize: '11px', color: '#6b7280' }}>{b.grn_reference || '—'}</div>
-                            </div>
-                            <div style={{ padding: '10px 16px' }}>{renderBadge(bBadge)}</div>
-                            <div style={{ padding: '10px 16px', display: 'flex', justifyContent: 'flex-end', gap: '4px' }}>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setExpiryBatchTarget(b);
-                                  setIsExpiryActionOpen(true);
-                                }}
-                                style={{
-                                  height: '32px',
-                                  padding: '0 10px',
-                                  borderRadius: '8px',
-                                  fontSize: '12px',
-                                  fontWeight: 600,
-                                  cursor: 'pointer',
-                                  background: '#fff7ed',
-                                  color: '#c2410c',
-                                  border: '1px solid #fdba74',
-                                }}
-                              >
-                                Dispose
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </>
-                  )}
+                            {details.title}
+                          </span>
+                          <span style={{ flexShrink: 0 }}>{renderBadge(details.badge)}</span>
+                        </div>
 
-                  {/* 10. STOCK ADJUSTMENTS TABLE */}
-                  {activeTab === 'adj' && (
-                    <>
-                      <div
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'minmax(120px, 0.9fr) minmax(200px, 1.6fr) minmax(110px, 0.9fr) 80px 120px 140px',
-                          alignItems: 'center',
-                          height: '44px',
-                          background: '#f9fafb',
-                          borderTop: '1px solid #e5e7eb',
-                          borderBottom: '1px solid #e5e7eb',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          letterSpacing: '0.04em',
-                          color: '#4b5563',
-                        }}
-                      >
-                        <div style={{ padding: '0 16px' }}>ADJUSTMENT</div>
-                        <div style={{ padding: '0 16px' }}>ITEM</div>
-                        <div style={{ padding: '0 16px' }}>BATCH</div>
-                        <div style={{ padding: '0 16px' }}>CHANGE</div>
-                        <div style={{ padding: '0 16px' }}>REASON</div>
-                        <div style={{ padding: '0 16px' }}>STATUS</div>
-                      </div>
-
-                      {adjustments.map((a) => {
-                        const isSel = selectedAdj?.id === a.id;
-                        return (
-                          <div
-                            key={a.id}
-                            onClick={() => updateURL('adj', a.id, activePill, query)}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', minWidth: 0, gap: '8px' }}>
+                          <span
                             style={{
-                              display: 'grid',
-                              gridTemplateColumns: 'minmax(120px, 0.9fr) minmax(200px, 1.6fr) minmax(110px, 0.9fr) 80px 120px 140px',
-                              alignItems: 'center',
-                              minHeight: '56px',
-                              borderBottom: '1px solid #f3f4f6',
-                              cursor: 'pointer',
-                              background: isSel ? '#eff6ff' : '#ffffff',
+                              color: '#6b7280',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              flex: 1,
+                              minWidth: 0,
                             }}
+                            title={details.sub}
                           >
-                            <div style={{ padding: '10px 16px', fontFamily: MONO_FONT, fontWeight: 600 }}>{a.adjustment_number}</div>
-                            <div style={{ padding: '10px 16px' }}>
-                              <div style={{ fontSize: '13px', fontWeight: 600 }}>{a.medicine_name}</div>
-                              <div style={{ fontSize: '12px', color: '#6b7280' }}>{a.note || 'Audit record'}</div>
-                            </div>
-                            <div style={{ padding: '10px 16px', fontFamily: MONO_FONT, fontSize: '13px' }}>{a.batch_number}</div>
-                            <div
+                            {details.sub}
+                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                            <span
                               style={{
-                                padding: '10px 16px',
                                 fontWeight: 600,
-                                color: a.quantity_delta < 0 ? '#dc2626' : '#15803d',
+                                color: details.metricColor || '#111827',
+                                whiteSpace: 'nowrap',
                               }}
                             >
-                              {a.quantity_delta > 0 ? `+${a.quantity_delta}` : a.quantity_delta}
-                            </div>
-                            <div style={{ padding: '10px 16px', fontSize: '13px', color: '#4b5563' }}>{a.reason}</div>
-                            <div style={{ padding: '10px 16px' }}>
-                              {renderBadge(
-                                a.status === 'Applied'
-                                  ? { ...B.green, text: 'Inventory updated' }
-                                  : { ...B.amber, text: 'Pending approval' },
-                              )}
-                            </div>
+                              {details.metric}
+                            </span>
+                            {details.par && (
+                              <span style={{ color: '#6b7280', fontSize: '11px', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                                {details.par}
+                              </span>
+                            )}
                           </div>
-                        );
-                      })}
-                    </>
-                  )}
-
-                  {/* 11. TRANSFER REQUESTS TABLE */}
-                  {activeTab === 'tr' && (
-                    <>
-                      <div
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'minmax(120px, 0.9fr) minmax(200px, 1.6fr) 80px minmax(150px, 1.2fr) 140px 96px',
-                          alignItems: 'center',
-                          height: '44px',
-                          background: '#f9fafb',
-                          borderTop: '1px solid #e5e7eb',
-                          borderBottom: '1px solid #e5e7eb',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          letterSpacing: '0.04em',
-                          color: '#4b5563',
-                        }}
-                      >
-                        <div style={{ padding: '0 16px' }}>TRANSFER #</div>
-                        <div style={{ padding: '0 16px' }}>ITEM</div>
-                        <div style={{ padding: '0 16px' }}>QTY</div>
-                        <div style={{ padding: '0 16px' }}>DESTINATION</div>
-                        <div style={{ padding: '0 16px' }}>STATUS</div>
-                        <div style={{ padding: '0 16px', textAlign: 'right' }}>ACTION</div>
+                        </div>
                       </div>
-
-                      {transfers.map((t) => {
-                        const isSel = selectedTransfer?.id === t.id;
-                        return (
-                          <div
-                            key={t.id}
-                            onClick={() => updateURL('tr', t.id, activePill, query)}
-                            style={{
-                              display: 'grid',
-                              gridTemplateColumns: 'minmax(120px, 0.9fr) minmax(200px, 1.6fr) 80px minmax(150px, 1.2fr) 140px 96px',
-                              alignItems: 'center',
-                              minHeight: '56px',
-                              borderBottom: '1px solid #f3f4f6',
-                              cursor: 'pointer',
-                              background: isSel ? '#eff6ff' : '#ffffff',
-                            }}
-                          >
-                            <div style={{ padding: '10px 16px', fontFamily: MONO_FONT, fontWeight: 600 }}>{t.transfer_number}</div>
-                            <div style={{ padding: '10px 16px' }}>
-                              <div style={{ fontSize: '13px', fontWeight: 600 }}>{t.medicine_name}</div>
-                              <div style={{ fontSize: '12px', color: '#6b7280' }}>{t.medicine_code}</div>
-                            </div>
-                            <div style={{ padding: '10px 16px', fontWeight: 600 }}>{t.quantity}</div>
-                            <div style={{ padding: '10px 16px', fontSize: '13px' }}>{t.destination}</div>
-                            <div style={{ padding: '10px 16px' }}>
-                              {renderBadge(
-                                t.status === 'Received'
-                                  ? { ...B.green, text: 'Received at counter' }
-                                  : { ...B.blue, text: 'In transit' },
-                              )}
-                            </div>
-                            <div style={{ padding: '10px 16px', display: 'flex', justifyContent: 'flex-end' }}>
-                              <button
-                                style={{
-                                  height: '36px',
-                                  padding: '0 14px',
-                                  borderRadius: '10px',
-                                  fontSize: '13px',
-                                  fontWeight: 600,
-                                  cursor: 'pointer',
-                                  background: isSel ? '#2563eb' : '#ffffff',
-                                  color: isSel ? '#ffffff' : '#1d4ed8',
-                                  border: `1px solid ${isSel ? '#2563eb' : '#bfdbfe'}`,
-                                }}
-                              >
-                                View
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </>
-                  )}
-
-                  {/* 12. CONTROLLED DRUGS TABLE */}
-                  {activeTab === 'cd' && (
-                    <>
-                      <div
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'minmax(120px, 0.9fr) minmax(200px, 1.6fr) minmax(110px, 0.9fr) 80px 120px 140px',
-                          alignItems: 'center',
-                          height: '44px',
-                          background: '#f9fafb',
-                          borderTop: '1px solid #e5e7eb',
-                          borderBottom: '1px solid #e5e7eb',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          letterSpacing: '0.04em',
-                          color: '#4b5563',
-                        }}
-                      >
-                        <div style={{ padding: '0 16px' }}>REGISTER #</div>
-                        <div style={{ padding: '0 16px' }}>ITEM</div>
-                        <div style={{ padding: '0 16px' }}>BATCH</div>
-                        <div style={{ padding: '0 16px' }}>DISPENSED</div>
-                        <div style={{ padding: '0 16px' }}>BALANCE AFTER</div>
-                        <div style={{ padding: '0 16px' }}>WITNESS PHARMACIST</div>
-                      </div>
-
-                      {controlledDrugs.map((c) => {
-                        const isSel = selectedCD?.id === c.id;
-                        return (
-                          <div
-                            key={c.id}
-                            onClick={() => updateURL('cd', c.id, activePill, query)}
-                            style={{
-                              display: 'grid',
-                              gridTemplateColumns: 'minmax(120px, 0.9fr) minmax(200px, 1.6fr) minmax(110px, 0.9fr) 80px 120px 140px',
-                              alignItems: 'center',
-                              minHeight: '56px',
-                              borderBottom: '1px solid #f3f4f6',
-                              cursor: 'pointer',
-                              background: isSel ? '#eff6ff' : '#ffffff',
-                            }}
-                          >
-                            <div style={{ padding: '10px 16px', fontFamily: MONO_FONT, fontWeight: 600 }}>{c.entry_number}</div>
-                            <div style={{ padding: '10px 16px' }}>
-                              <div style={{ fontSize: '13px', fontWeight: 600 }}>{c.medicine_name}</div>
-                              <div style={{ fontSize: '12px', color: '#6b7280' }}>Dr. {c.prescribing_doctor_name}</div>
-                            </div>
-                            <div style={{ padding: '10px 16px', fontFamily: MONO_FONT, fontSize: '13px' }}>{c.batch_number}</div>
-                            <div style={{ padding: '10px 16px', fontWeight: 600, color: '#dc2626' }}>{c.quantity_dispensed}</div>
-                            <div style={{ padding: '10px 16px', fontWeight: 700, color: '#111827' }}>{c.balance_stock_after}</div>
-                            <div style={{ padding: '10px 16px', fontSize: '12px', color: '#4b5563' }}>
-                              {c.witness_staff_name} ({c.witness_role})
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </>
-                  )}
-                </div>
+                    );
+                  })
+                )}
               </div>
             </div>
 
-            {/* RIGHT STICKY CONTEXT INSPECTION DRAWER */}
-            <div style={{ flex: '1 1 360px', minWidth: '320px', maxWidth: '420px', position: 'sticky', top: '70px' }}>
+            {/* RIGHT STICKY CONTEXT INSPECTION DRAWER (Matches KPI Cards 2-4 - Columns 2 to 4 across ALL screens) */}
+            <div
+              style={{
+                gridColumn: 'span 3',
+                width: '100%',
+                minWidth: 0,
+                position: 'sticky',
+                top: '70px',
+              }}
+            >
               <div style={{ fontSize: '12px', fontWeight: 600, letterSpacing: '0.06em', color: '#6b7280', marginBottom: '8px' }}>
                 INSPECTION · CONTEXT DETAILS
               </div>
@@ -2878,7 +2880,7 @@ export const InventoryManagerWorkspace: React.FC = () => {
                   border: '1px solid #e5e7eb',
                   borderRadius: '12px',
                   overflow: 'hidden',
-                  maxHeight: 'calc(100vh - 110px)',
+                  maxHeight: 'calc(100vh - 120px)',
                   display: 'flex',
                   flexDirection: 'column',
                 }}
@@ -2907,22 +2909,1369 @@ export const InventoryManagerWorkspace: React.FC = () => {
                   </div>
                 )}
 
-                {/* DRAWER FOR MEDICINE (dash/ledger/master) */}
-                {(activeTab === 'dash' || activeTab === 'ledger' || activeTab === 'master') && selectedMedicine && (
-                  <div style={{ overflowY: 'auto', flex: 1, padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                        <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#111827' }}>{selectedMedicine.name}</h3>
-                        {renderBadge(getMedicineStatusBadge(selectedMedicine))}
+                {/* ========================================================================= */}
+                {/* 1. DRAWER FOR DEPARTMENT DEMAND HUB (demand)                              */}
+                {/* ========================================================================= */}
+                {activeTab === 'demand' && selectedDemand ? (
+                  <div style={{ overflowY: 'auto', flex: 1, padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <h3 style={{ fontSize: '20px', fontWeight: 700, color: '#111827', margin: 0 }}>
+                            Demand #{selectedDemand.token_number}
+                          </h3>
+                          {renderBadge(getDemandPriorityBadge(selectedDemand.priority))}
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>
+                          Origin: <strong style={{ color: '#111827' }}>{selectedDemand.source}</strong> ({selectedDemand.encounter_type}) · Requested: <strong>{selectedDemand.requested_at}</strong>
+                        </div>
                       </div>
-                      <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>
-                        {selectedMedicine.item_code} · {selectedMedicine.generic_name}
+
+                      <button
+                        onClick={() => {
+                          setDemandTransferTarget(selectedDemand);
+                          setIsCreateTransferOpen(true);
+                        }}
+                        style={{
+                          height: '36px',
+                          padding: '0 16px',
+                          background: selectedDemand.priority === 'STAT' ? '#dc2626' : '#2563eb',
+                          color: '#ffffff',
+                          border: 'none',
+                          borderRadius: '8px',
+                          fontWeight: 700,
+                          fontSize: '13px',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        <ArrowLeftRight size={16} /> Fulfill Demand Transfer
+                      </button>
+                    </div>
+
+                    {/* 4-Card Metric Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '12px' }}>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Requested Qty</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>{selectedDemand.requested_quantity} u</div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Patient Prescribed</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Counter Stock</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: selectedDemand.counter_stock === 0 ? '#dc2626' : '#0f172a', marginTop: '4px' }}>{selectedDemand.counter_stock} u</div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Satellite On-Hand</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#166534', textTransform: 'uppercase' }}>Central Store Stock</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: '#15803d', marginTop: '4px' }}>{selectedDemand.central_stock} u</div>
+                        <div style={{ fontSize: '11px', color: '#166534', marginTop: '2px' }}>Available to Dispatch</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Indent Status</div>
+                        <div style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>{selectedDemand.status}</div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Queue Priority: {selectedDemand.priority}</div>
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                      {renderBadge(getScheduleBadge(selectedMedicine.schedule, selectedMedicine.is_narcotic))}
-                      {selectedMedicine.is_cold_chain && (
+                    {/* Clinical Details Card */}
+                    <div style={{ padding: '16px', borderRadius: '10px', background: '#ffffff', border: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#111827', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Pill size={16} color="#2563eb" /> Clinical Medication Specification
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', fontSize: '13px' }}>
+                        <div>
+                          <span style={{ color: '#6b7280' }}>Medicine Name:</span> <strong style={{ color: '#111827' }}>{selectedDemand.medicine_name}</strong>
+                        </div>
+                        <div>
+                          <span style={{ color: '#6b7280' }}>Medicine Code:</span> <strong style={{ fontFamily: MONO_FONT, color: '#111827' }}>{selectedDemand.medicine_code}</strong>
+                        </div>
+                        <div>
+                          <span style={{ color: '#6b7280' }}>Prescribing Clinician:</span> <strong style={{ color: '#111827' }}>Dr. {selectedDemand.doctor_name}</strong>
+                        </div>
+                        <div>
+                          <span style={{ color: '#6b7280' }}>Patient Name:</span> <strong style={{ color: '#111827' }}>{selectedDemand.patient_name}</strong>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                /* ========================================================================= */
+                /* 2. DRAWER FOR BATCH MANAGEMENT (batch)                                    */
+                /* ========================================================================= */
+                ) : activeTab === 'batch' && selectedBatch ? (
+                  <div style={{ overflowY: 'auto', flex: 1, padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <h3 style={{ fontSize: '20px', fontWeight: 700, color: '#111827', margin: 0 }}>
+                            Batch #{selectedBatch.batch_number}
+                          </h3>
+                          {renderBadge(getBatchStatusBadge(selectedBatch))}
+                          {selectedBatch.is_quarantined && (
+                            <span style={{ fontSize: '11px', fontWeight: 700, color: '#dc2626', background: '#fee2e2', padding: '2px 8px', borderRadius: '4px' }}>
+                              QUARANTINED
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>
+                          Medicine: <strong style={{ color: '#111827' }}>{selectedBatch.medicine_name || 'Item'}</strong> · Code: <strong style={{ fontFamily: MONO_FONT, color: '#111827' }}>{selectedBatch.medicine_code || '—'}</strong>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const med = medicines.find(m => m.id === (selectedBatch as any).medicine_id || m.item_code === selectedBatch.medicine_code || m.name === selectedBatch.medicine_name) || medicines[0];
+                            setReconMedTarget(med);
+                            setIsReconOpen(true);
+                          }}
+                          style={{
+                            height: '36px',
+                            padding: '0 14px',
+                            background: '#ffffff',
+                            color: '#475569',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: '8px',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          <ClipboardCheck size={15} /> Audit Shelf Count
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExpiryBatchTarget(selectedBatch);
+                            setIsExpiryActionOpen(true);
+                          }}
+                          style={{
+                            height: '36px',
+                            padding: '0 14px',
+                            background: '#fee2e2',
+                            color: '#dc2626',
+                            border: '1px solid #fecaca',
+                            borderRadius: '8px',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          <PackageX size={15} /> Dispose / Return
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 4-Card Metric Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '12px' }}>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Available Units</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: selectedBatch.available_quantity === 0 ? '#dc2626' : '#0f172a', marginTop: '4px' }}>
+                          {selectedBatch.available_quantity} u
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Initial: {selectedBatch.initial_quantity} u</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: selectedBatch.months_left <= 3 ? '#fef2f2' : '#f8fafc', border: `1px solid ${selectedBatch.months_left <= 3 ? '#fecaca' : '#e2e8f0'}` }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: selectedBatch.months_left <= 3 ? '#dc2626' : '#64748b', textTransform: 'uppercase' }}>Expiry Window</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: selectedBatch.months_left <= 3 ? '#dc2626' : '#0f172a', marginTop: '4px' }}>
+                          {formatDateMonth(selectedBatch.expiry_date)}
+                        </div>
+                        <div style={{ fontSize: '11px', color: selectedBatch.months_left <= 3 ? '#dc2626' : '#64748b', marginTop: '2px' }}>{selectedBatch.months_left} months remaining</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Unit Cost / Valuation</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>{formatINR(selectedBatch.cost_price)}</div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Total: {formatINR(selectedBatch.available_quantity * selectedBatch.cost_price)}</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Storage Location</div>
+                        <div style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a', marginTop: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {selectedBatch.storage_location || 'Central Store'}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Rack / Bin Slot</div>
+                      </div>
+                    </div>
+
+                    {/* Batch Logistics & Compliance */}
+                    <div style={{ padding: '16px', borderRadius: '10px', background: '#ffffff', border: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#111827', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Truck size={16} color="#2563eb" /> Logistics & Quality Assurance Trace
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', fontSize: '13px' }}>
+                        <div>
+                          <span style={{ color: '#6b7280' }}>Supplier Name:</span> <strong style={{ color: '#111827' }}>{selectedBatch.supplier_name || 'Cipla Institutional'}</strong>
+                        </div>
+                        <div>
+                          <span style={{ color: '#6b7280' }}>GRN Inward Ref:</span> <strong style={{ fontFamily: MONO_FONT, color: '#111827' }}>{selectedBatch.grn_reference || 'GRN-DIRECT'}</strong>
+                        </div>
+                        <div>
+                          <span style={{ color: '#6b7280' }}>Cold Chain Monitored:</span> <strong style={{ color: '#111827' }}>{selectedBatch.is_cold_chain ? 'Yes (2°C - 8°C)' : 'No (Ambient)'}</strong>
+                        </div>
+                        <div>
+                          <span style={{ color: '#6b7280' }}>Dispensing Status:</span> <strong style={{ color: selectedBatch.is_quarantined ? '#dc2626' : '#15803d' }}>{selectedBatch.is_quarantined ? 'Quarantined · Blocked' : 'Active · FEFO Ready'}</strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Quick Action Footer */}
+                    <div style={{ display: 'flex', gap: '10px', marginTop: 'auto' }}>
+                      <button
+                        onClick={async () => {
+                          await pharmacyInventoryService.quarantineBatch(selectedBatch.id, 'Quarantine shelf relocation');
+                          setStatusNotice({ type: 'amber', title: `Batch ${selectedBatch.batch_number} Quarantined`, sub: 'Batch moved to quarantine shelf.' });
+                          refreshData();
+                        }}
+                        style={{
+                          height: '38px',
+                          padding: '0 16px',
+                          background: '#fffbeb',
+                          color: '#b45309',
+                          border: '1px solid #fde68a',
+                          borderRadius: '8px',
+                          fontSize: '13px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}
+                      >
+                        <AlertTriangle size={15} /> Move to Quarantine
+                      </button>
+                    </div>
+                  </div>
+
+                /* ========================================================================= */
+                /* 3. DRAWER FOR EXPIRY MONITORING (expiry)                                  */
+                /* ========================================================================= */
+                ) : activeTab === 'expiry' && selectedBatch ? (
+                  <div style={{ overflowY: 'auto', flex: 1, padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <h3 style={{ fontSize: '20px', fontWeight: 700, color: '#111827', margin: 0 }}>
+                            Batch #{selectedBatch.batch_number} — Expiry Disposition
+                          </h3>
+                          {renderBadge(getBatchStatusBadge(selectedBatch))}
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>
+                          Medicine: <strong style={{ color: '#111827' }}>{selectedBatch.medicine_name}</strong> · Location: <strong>{selectedBatch.storage_location}</strong>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          setExpiryBatchTarget(selectedBatch);
+                          setIsExpiryActionOpen(true);
+                        }}
+                        style={{
+                          height: '36px',
+                          padding: '0 16px',
+                          background: '#dc2626',
+                          color: '#ffffff',
+                          border: 'none',
+                          borderRadius: '8px',
+                          fontWeight: 700,
+                          fontSize: '13px',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        <PackageX size={16} /> Open Expiry Disposition Protocol
+                      </button>
+                    </div>
+
+                    {/* 4-Card Metric Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '12px' }}>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#fef2f2', border: '1px solid #fecaca' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#dc2626', textTransform: 'uppercase' }}>Units at Risk</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: '#dc2626', marginTop: '4px' }}>{selectedBatch.available_quantity} u</div>
+                        <div style={{ fontSize: '11px', color: '#dc2626', marginTop: '2px' }}>Urgent FEFO Issue</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#fef2f2', border: '1px solid #fecaca' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#dc2626', textTransform: 'uppercase' }}>Expiry Deadline</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: '#dc2626', marginTop: '4px' }}>{formatDateMonth(selectedBatch.expiry_date)}</div>
+                        <div style={{ fontSize: '11px', color: '#dc2626', marginTop: '2px' }}>{selectedBatch.months_left <= 0 ? 'EXPIRED' : `${selectedBatch.months_left} months remaining`}</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Capital Value at Risk</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>{formatINR(selectedBatch.available_quantity * selectedBatch.cost_price)}</div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>At {formatINR(selectedBatch.cost_price)}/unit</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Supplier Source</div>
+                        <div style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a', marginTop: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {selectedBatch.supplier_name || 'Vendor'}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Buyback Eligible</div>
+                      </div>
+                    </div>
+
+                    {/* Expiry Protocol Advisory */}
+                    <div style={{ padding: '16px', borderRadius: '10px', background: selectedBatch.months_left <= 0 ? '#fef2f2' : '#fffbeb', border: `1px solid ${selectedBatch.months_left <= 0 ? '#fecaca' : '#fde68a'}`, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: selectedBatch.months_left <= 0 ? '#dc2626' : '#b45309', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <AlertTriangle size={16} /> Clinical Safety & Regulatory Advisory
+                      </div>
+                      <div style={{ fontSize: '13px', color: '#374151', lineHeight: '1.5' }}>
+                        {selectedBatch.months_left <= 0
+                          ? 'This batch has officially expired. Dispensing from this batch is strictly blocked by pharmacy safety policies. Move units to quarantine immediately and log destruction certificate or vendor return credit note.'
+                          : `This batch is due to expire within ${selectedBatch.months_left * 30} days. Prioritise for immediate inpatient issue under strict FEFO protocols, or arrange vendor return before the final cut-off.`}
+                      </div>
+                    </div>
+                  </div>
+
+                /* ========================================================================= */
+                /* 4. DRAWER FOR DEAD STOCK (>180D) (dead)                                   */
+                /* ========================================================================= */
+                ) : activeTab === 'dead' && selectedDeadStock ? (
+                  <div style={{ overflowY: 'auto', flex: 1, padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <h3 style={{ fontSize: '20px', fontWeight: 700, color: '#111827', margin: 0 }}>
+                            {selectedDeadStock.name}
+                          </h3>
+                          {renderBadge(selectedDeadStock.recommendation === 'BUYBACK_RETURN' ? { ...B.red, text: 'Vendor Buyback Return' } : selectedDeadStock.recommendation === 'NETWORK_TRANSFER' ? { ...B.blue, text: 'Inter-Branch Transfer' } : { ...B.amber, text: 'Clinical Substitution' })}
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>
+                          Item Code: <strong style={{ fontFamily: MONO_FONT, color: '#111827' }}>{selectedDeadStock.item_code}</strong> · Category: <strong>{selectedDeadStock.category}</strong> · Schedule: <strong>{selectedDeadStock.schedule}</strong>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={async () => {
+                          if (selectedDeadStock.recommendation === 'NETWORK_TRANSFER') {
+                            setIsCreateTransferOpen(true);
+                          } else {
+                            setStatusNotice({
+                              type: 'blue',
+                              title: `Action Initiated: ${selectedDeadStock.recommendation}`,
+                              sub: `Liquidation workflow triggered for ${selectedDeadStock.units_in_stock} dormant units (${formatINR(selectedDeadStock.total_valuation)}).`
+                            });
+                          }
+                        }}
+                        style={{
+                          height: '36px',
+                          padding: '0 16px',
+                          background: '#2563eb',
+                          color: '#ffffff',
+                          border: 'none',
+                          borderRadius: '8px',
+                          fontWeight: 700,
+                          fontSize: '13px',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        <Zap size={16} /> Execute Liquidation Recommendation
+                      </button>
+                    </div>
+
+                    {/* 4-Card Metric Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '12px' }}>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#fef2f2', border: '1px solid #fecaca' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#dc2626', textTransform: 'uppercase' }}>Capital Locked</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: '#dc2626', marginTop: '4px' }}>{formatINR(selectedDeadStock.total_valuation)}</div>
+                        <div style={{ fontSize: '11px', color: '#dc2626', marginTop: '2px' }}>Non-performing inventory</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Units Dormant</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>{selectedDeadStock.units_in_stock} u</div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Cost: {formatINR(selectedDeadStock.cost_price)}/u</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#fffbeb', border: '1px solid #fde68a' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#b45309', textTransform: 'uppercase' }}>Days Inactive</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: '#b45309', marginTop: '4px' }}>{selectedDeadStock.days_without_movement} d</div>
+                        <div style={{ fontSize: '11px', color: '#b45309', marginTop: '2px' }}>Since: {selectedDeadStock.last_movement_date}</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Earliest Expiry</div>
+                        <div style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a', marginTop: '4px' }}>{selectedDeadStock.earliest_expiry_date}</div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Liquidation Cut-off</div>
+                      </div>
+                    </div>
+
+                    {/* Capital Liquidation Card */}
+                    <div style={{ padding: '16px', borderRadius: '10px', background: '#ffffff', border: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#111827', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <TrendingUp size={16} color="#2563eb" /> Liquidation Resolution Analysis
+                      </div>
+                      <div style={{ fontSize: '13px', color: '#4b5563', lineHeight: '1.5' }}>
+                        {selectedDeadStock.recommendation === 'BUYBACK_RETURN'
+                          ? `Vendor procurement contract contains active buyback return clause for this SKU. Returning ${selectedDeadStock.units_in_stock} units will recover ${formatINR(selectedDeadStock.total_valuation)} in supplier credit note before expiry depreciation.`
+                          : selectedDeadStock.recommendation === 'NETWORK_TRANSFER'
+                          ? `Inpatient wards or network satellite centers have steady demand for this medicine. Initiating an internal transfer avoids write-off losses.`
+                          : `Encourage prescribing clinicians to consider this medicine as an approved clinical substitute for routine therapy.`}
+                      </div>
+                    </div>
+                  </div>
+
+                /* ========================================================================= */
+                /* 5. DRAWER FOR STOCK ADJUSTMENTS (adj)                                     */
+                /* ========================================================================= */
+                ) : activeTab === 'adj' && selectedAdj ? (
+                  <div style={{ overflowY: 'auto', flex: 1, padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <h3 style={{ fontSize: '20px', fontWeight: 700, color: '#111827', margin: 0 }}>
+                            Adjustment #{selectedAdj.adjustment_number}
+                          </h3>
+                          {renderBadge(selectedAdj.status === 'Approved' ? { ...B.green, text: 'Approved' } : { ...B.amber, text: 'Pending Approval' })}
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>
+                          Medicine: <strong style={{ color: '#111827' }}>{selectedAdj.medicine_name}</strong> ({selectedAdj.medicine_code}) · Batch: <strong>{selectedAdj.batch_number}</strong>
+                        </div>
+                      </div>
+
+                      {selectedAdj.status !== 'Approved' && (
+                        <button
+                          onClick={async () => {
+                            await pharmacyInventoryService.approveStockAdjustment(selectedAdj.id);
+                            setStatusNotice({
+                              type: 'green',
+                              title: `Adjustment #${selectedAdj.adjustment_number} Approved`,
+                              sub: `Central inventory adjusted by ${selectedAdj.quantity_delta} units.`
+                            });
+                            refreshData();
+                          }}
+                          style={{
+                            height: '36px',
+                            padding: '0 16px',
+                            background: '#15803d',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '8px',
+                            fontWeight: 700,
+                            fontSize: '13px',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          <Check size={16} /> Approve Stock Adjustment
+                        </button>
+                      )}
+                    </div>
+
+                    {/* 4-Card Metric Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '12px' }}>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: selectedAdj.quantity_delta < 0 ? '#fef2f2' : '#f0fdf4', border: `1px solid ${selectedAdj.quantity_delta < 0 ? '#fecaca' : '#bbf7d0'}` }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: selectedAdj.quantity_delta < 0 ? '#dc2626' : '#15803d', textTransform: 'uppercase' }}>Quantity Delta</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: selectedAdj.quantity_delta < 0 ? '#dc2626' : '#15803d', marginTop: '4px' }}>
+                          {selectedAdj.quantity_delta > 0 ? `+${selectedAdj.quantity_delta}` : selectedAdj.quantity_delta} u
+                        </div>
+                        <div style={{ fontSize: '11px', color: selectedAdj.quantity_delta < 0 ? '#dc2626' : '#15803d', marginTop: '2px' }}>Book variance</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Value Impact</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>{formatINR(selectedAdj.estimated_value)}</div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Ledger valuation</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Reason Code</div>
+                        <div style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a', marginTop: '4px' }}>{selectedAdj.reason}</div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Operational audit</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Logged By</div>
+                        <div style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a', marginTop: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {selectedAdj.adjusted_by_name}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>{new Date(selectedAdj.created_at).toLocaleDateString()}</div>
+                      </div>
+                    </div>
+
+                    {/* Governance Trace */}
+                    <div style={{ padding: '16px', borderRadius: '10px', background: '#ffffff', border: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#111827', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <ShieldCheck size={16} color="#2563eb" /> Audit Justification & Regulatory Status
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', fontSize: '13px' }}>
+                        <div>
+                          <span style={{ color: '#6b7280' }}>Approver:</span> <strong style={{ color: '#111827' }}>{selectedAdj.approved_by_name || 'Pending Pharmacy Director Approval'}</strong>
+                        </div>
+                        <div>
+                          <span style={{ color: '#6b7280' }}>Schedule:</span> <strong style={{ color: '#111827' }}>Sch. {selectedAdj.medicine_schedule || 'H'}{selectedAdj.is_narcotic ? ' (Narcotic Regulated)' : ''}</strong>
+                        </div>
+                        <div style={{ gridColumn: 'span 2' }}>
+                          <span style={{ color: '#6b7280' }}>Auditor Notes:</span> <span style={{ color: '#111827' }}>{selectedAdj.note || 'Physical count disparity reconciled with central warehouse ledger.'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                /* ========================================================================= */
+                /* 6. DRAWER FOR PHYSICAL RECONCILIATION (recon)                             */
+                /* ========================================================================= */
+                ) : activeTab === 'recon' && selectedRecon ? (
+                  <div style={{ overflowY: 'auto', flex: 1, padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <h3 style={{ fontSize: '20px', fontWeight: 700, color: '#111827', margin: 0 }}>
+                            Reconciliation #{selectedRecon.reconciliation_number}
+                          </h3>
+                          {renderBadge(selectedRecon.status === 'RECONCILED' ? { ...B.green, text: 'Verified' } : { ...B.amber, text: 'Pending Admin Approval' })}
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>
+                          Medicine: <strong style={{ color: '#111827' }}>{selectedRecon.medicine_name}</strong> ({selectedRecon.medicine_code}) · Batch: <strong>{selectedRecon.batch_number}</strong>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          const med = medicines.find(m => m.id === selectedRecon.medicine_id || m.item_code === selectedRecon.medicine_code || m.name === selectedRecon.medicine_name) || medicines[0];
+                          setReconMedTarget(med);
+                          setIsReconOpen(true);
+                        }}
+                        style={{
+                          height: '36px',
+                          padding: '0 16px',
+                          background: '#ffffff',
+                          color: '#2563eb',
+                          border: '1px solid #bfdbfe',
+                          borderRadius: '8px',
+                          fontWeight: 600,
+                          fontSize: '13px',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        <RotateCcw size={15} /> Perform Cycle Re-Count
+                      </button>
+                    </div>
+
+                    {/* 4-Card Metric Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '12px' }}>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>System Balance</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>{selectedRecon.system_balance} u</div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Ledger Recorded</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Physical Count</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>{selectedRecon.physical_count} u</div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Audited On Shelf</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: selectedRecon.variance_units === 0 ? '#f0fdf4' : '#fef2f2', border: `1px solid ${selectedRecon.variance_units === 0 ? '#bbf7d0' : '#fecaca'}` }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: selectedRecon.variance_units === 0 ? '#15803d' : '#dc2626', textTransform: 'uppercase' }}>Variance Units</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: selectedRecon.variance_units === 0 ? '#15803d' : '#dc2626', marginTop: '4px' }}>
+                          {selectedRecon.variance_units > 0 ? `+${selectedRecon.variance_units}` : selectedRecon.variance_units} u ({selectedRecon.variance_percentage}%)
+                        </div>
+                        <div style={{ fontSize: '11px', color: selectedRecon.variance_units === 0 ? '#15803d' : '#dc2626', marginTop: '2px' }}>Discrepancy</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Variance Value</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: selectedRecon.variance_units === 0 ? '#15803d' : '#dc2626', marginTop: '4px' }}>
+                          {formatINR(Math.abs(selectedRecon.variance_value))}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Threshold: ₹1,000</div>
+                      </div>
+                    </div>
+
+                    {/* Variance Breakdown Card */}
+                    <div style={{ padding: '16px', borderRadius: '10px', background: '#ffffff', border: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#111827', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <ClipboardCheck size={16} color="#2563eb" /> Audit Verification Details
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', fontSize: '13px' }}>
+                        <div>
+                          <span style={{ color: '#6b7280' }}>Reason Code:</span> <strong style={{ color: '#111827' }}>{selectedRecon.reason_code}</strong>
+                        </div>
+                        <div>
+                          <span style={{ color: '#6b7280' }}>Audited By:</span> <strong style={{ color: '#111827' }}>{selectedRecon.performed_by_name}</strong>
+                        </div>
+                        <div>
+                          <span style={{ color: '#6b7280' }}>Timestamp:</span> <strong style={{ color: '#111827' }}>{selectedRecon.reconciled_at}</strong>
+                        </div>
+                        <div>
+                          <span style={{ color: '#6b7280' }}>Status:</span> <strong style={{ color: selectedRecon.status === 'RECONCILED' ? '#15803d' : '#b45309' }}>{selectedRecon.status}</strong>
+                        </div>
+                        <div style={{ gridColumn: 'span 2' }}>
+                          <span style={{ color: '#6b7280' }}>Remarks:</span> <span style={{ color: '#111827' }}>{selectedRecon.notes || 'Routine physical shelf audit completed.'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                /* ========================================================================= */
+                /* 7. DRAWER FOR DEMAND FORECASTING (fc)                                     */
+                /* ========================================================================= */
+                ) : activeTab === 'fc' && selectedForecasting ? (
+                  <div style={{ overflowY: 'auto', flex: 1, padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <h3 style={{ fontSize: '20px', fontWeight: 700, color: '#111827', margin: 0 }}>
+                            {selectedForecasting.name}
+                          </h3>
+                          {renderBadge(getForecastRiskBadge(selectedForecasting.risk_level))}
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>
+                          Item Code: <strong style={{ fontFamily: MONO_FONT, color: '#111827' }}>{selectedForecasting.item_code}</strong> · Projected Stockout: <strong style={{ color: selectedForecasting.days_of_stock_remaining < 7 ? '#dc2626' : '#111827' }}>{selectedForecasting.projected_stockout_date}</strong>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={async () => {
+                          const res = await pharmacyInventoryService.createPurchaseRequest({
+                            medicine_id: selectedForecasting.medicine_id || selectedForecasting.id,
+                            quantity: selectedForecasting.suggested_reorder_quantity,
+                            notes: `Forecasting engine automated replenishment for ${selectedForecasting.name}`,
+                          });
+                          setStatusNotice({
+                            type: 'green',
+                            title: `Reorder PR #${res.pr_number} Drafted`,
+                            sub: `Requisition created for ${res.requested_quantity} units.`
+                          });
+                          refreshData();
+                        }}
+                        style={{
+                          height: '36px',
+                          padding: '0 16px',
+                          background: '#2563eb',
+                          color: '#ffffff',
+                          border: 'none',
+                          borderRadius: '8px',
+                          fontWeight: 700,
+                          fontSize: '13px',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        <Plus size={16} /> 1-Click Draft Reorder ({selectedForecasting.suggested_reorder_quantity} u)
+                      </button>
+                    </div>
+
+                    {/* 4-Card Metric Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '12px' }}>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: selectedForecasting.current_stock === 0 ? '#fef2f2' : '#f8fafc', border: `1px solid ${selectedForecasting.current_stock === 0 ? '#fecaca' : '#e2e8f0'}` }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: selectedForecasting.current_stock === 0 ? '#dc2626' : '#64748b', textTransform: 'uppercase' }}>Current Stock</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: selectedForecasting.current_stock === 0 ? '#dc2626' : '#0f172a', marginTop: '4px' }}>{selectedForecasting.current_stock} u</div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Central + Satellite</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Daily Burn Rate</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>{selectedForecasting.daily_burn_rate} u/d</div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Monthly: {selectedForecasting.monthly_consumption_units} u</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: selectedForecasting.days_of_stock_remaining < 7 ? '#fef2f2' : '#f8fafc', border: `1px solid ${selectedForecasting.days_of_stock_remaining < 7 ? '#fecaca' : '#e2e8f0'}` }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: selectedForecasting.days_of_stock_remaining < 7 ? '#dc2626' : '#64748b', textTransform: 'uppercase' }}>Stock Cover</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: selectedForecasting.days_of_stock_remaining < 7 ? '#dc2626' : '#0f172a', marginTop: '4px' }}>
+                          {selectedForecasting.days_of_stock_remaining} days
+                        </div>
+                        <div style={{ fontSize: '11px', color: selectedForecasting.days_of_stock_remaining < 7 ? '#dc2626' : '#64748b', marginTop: '2px' }}>Run-rate buffer</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#166534', textTransform: 'uppercase' }}>Suggested Reorder</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: '#15803d', marginTop: '4px' }}>{selectedForecasting.suggested_reorder_quantity} u</div>
+                        <div style={{ fontSize: '11px', color: '#166534', marginTop: '2px' }}>Optimised PO batch</div>
+                      </div>
+                    </div>
+
+                    {/* Predictive Restocking Card */}
+                    <div style={{ padding: '16px', borderRadius: '10px', background: '#ffffff', border: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#111827', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <BarChart3 size={16} color="#2563eb" /> Consumption Velocity & Forecast Model
+                      </div>
+                      <div style={{ fontSize: '13px', color: '#4b5563', lineHeight: '1.5' }}>
+                        Based on rolling 30-day inpatient and outpatient dispensing records, consumption is tracking at <strong>{selectedForecasting.daily_burn_rate} units/day</strong>.
+                        {selectedForecasting.days_of_stock_remaining < 7
+                          ? ' CRITICAL ACTION: Lead time for supplier reorder typically exceeds current stock buffer. Expedite PR immediately to prevent care disruption.'
+                          : ' Stock levels are within comfortable replenishment parameters.'}
+                      </div>
+                    </div>
+                  </div>
+
+                /* ========================================================================= */
+                /* 8. DRAWER FOR PURCHASE REQUESTS & APPROVALS (pr / appr)                   */
+                /* ========================================================================= */
+                ) : (activeTab === 'pr' || activeTab === 'appr') && selectedPR ? (
+                  <div style={{ overflowY: 'auto', flex: 1, padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <h3 style={{ fontSize: '20px', fontWeight: 700, color: '#111827', margin: 0 }}>
+                            PR #{selectedPR.pr_number}
+                          </h3>
+                          {renderBadge(getPRBadge(selectedPR.status))}
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>
+                          Medicine: <strong style={{ color: '#111827' }}>{selectedPR.medicine_name}</strong> ({selectedPR.medicine_code}) · Created: <strong>{new Date(selectedPR.created_at).toLocaleDateString()}</strong>
+                        </div>
+                      </div>
+
+                      {/* Dynamic Workflow Actions */}
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        {selectedPR.workflow_stage === 1 && (
+                          <button
+                            onClick={async () => {
+                              const res = await pharmacyInventoryService.transitionPR(selectedPR.id, 'submit');
+                              setStatusNotice({ type: 'amber', title: `PR #${res.pr_number} Submitted`, sub: 'Forwarded for approval.' });
+                              refreshData();
+                            }}
+                            style={{ height: '36px', padding: '0 14px', background: '#2563eb', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
+                          >
+                            Submit for Approval
+                          </button>
+                        )}
+                        {selectedPR.workflow_stage === 2 && (
+                          <>
+                            <button
+                              onClick={async () => {
+                                const res = await pharmacyInventoryService.transitionPR(selectedPR.id, 'approve');
+                                setStatusNotice({ type: 'green', title: `PR #${res.pr_number} Approved`, sub: 'Purchase requisition approved.' });
+                                refreshData();
+                              }}
+                              style={{ height: '36px', padding: '0 14px', background: '#15803d', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                            >
+                              <Check size={16} /> Approve PR
+                            </button>
+                            <button
+                              onClick={async () => {
+                                const res = await pharmacyInventoryService.transitionPR(selectedPR.id, 'reject', 'Administrative rejection');
+                                setStatusNotice({ type: 'red', title: `PR #${res.pr_number} Rejected`, sub: 'Requisition returned to requester.' });
+                                refreshData();
+                              }}
+                              style={{ height: '36px', padding: '0 14px', background: '#fee2e2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+                            >
+                              Reject
+                            </button>
+                          </>
+                        )}
+                        {selectedPR.workflow_stage === 3 && (
+                          <button
+                            onClick={async () => {
+                              const res = await pharmacyInventoryService.transitionPR(selectedPR.id, 'issue_po');
+                              setStatusNotice({ type: 'blue', title: `PO #${res.purchase_order_number || 'PO-2026'} Issued`, sub: 'Purchase order transmitted to vendor.' });
+                              refreshData();
+                            }}
+                            style={{ height: '36px', padding: '0 14px', background: '#2563eb', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                          >
+                            <FileText size={16} /> Issue Purchase Order
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 4-Card Metric Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '12px' }}>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Requested Qty</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>{selectedPR.requested_quantity} u</div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Requisition volume</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Est. Total Value</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>{formatINR(selectedPR.total_estimated_value)}</div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Approved budget</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#eff6ff', border: '1px solid #bfdbfe' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#1d4ed8', textTransform: 'uppercase' }}>Workflow Stage</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: '#1d4ed8', marginTop: '4px' }}>Stage {selectedPR.workflow_stage}/8</div>
+                        <div style={{ fontSize: '11px', color: '#1d4ed8', marginTop: '2px' }}>{selectedPR.status}</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Supplier Vendor</div>
+                        <div style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a', marginTop: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {selectedPR.supplier_name || 'Cipla Institutional'}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Lead time: {selectedPR.supplier_lead_days || 3}d</div>
+                      </div>
+                    </div>
+
+                    {/* Stepper Bar */}
+                    <div style={{ padding: '16px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                      <div style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '10px' }}>Procurement Life-Cycle Progress</div>
+                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                        {['Draft', 'Submitted', 'Approved', 'PO Issued', 'Dispatch', 'Receiving', 'QC Passed', 'Closed'].map((stName, idx) => {
+                          const isDone = selectedPR.workflow_stage > idx + 1;
+                          const isCurr = selectedPR.workflow_stage === idx + 1;
+                          return (
+                            <div key={stName} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <div
+                                style={{
+                                  height: '6px',
+                                  borderRadius: '9999px',
+                                  background: isDone ? '#15803d' : isCurr ? '#2563eb' : '#e2e8f0',
+                                }}
+                              />
+                              <span style={{ fontSize: '10px', color: isCurr ? '#2563eb' : isDone ? '#15803d' : '#94a3b8', fontWeight: isCurr ? 700 : 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {stName}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Audit Details */}
+                    <div style={{ padding: '16px', borderRadius: '10px', background: '#ffffff', border: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#111827', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <FileText size={16} color="#2563eb" /> Commercial & Audit Attributes
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', fontSize: '13px' }}>
+                        <div>
+                          <span style={{ color: '#6b7280' }}>Requested By:</span> <strong style={{ color: '#111827' }}>{selectedPR.requested_by_name}</strong>
+                        </div>
+                        <div>
+                          <span style={{ color: '#6b7280' }}>Approved By:</span> <strong style={{ color: '#111827' }}>{selectedPR.approved_by_name || 'Pending Review'}</strong>
+                        </div>
+                        <div>
+                          <span style={{ color: '#6b7280' }}>Purchase Order #:</span> <strong style={{ fontFamily: MONO_FONT, color: '#111827' }}>{selectedPR.purchase_order_number || 'Pending PO Generation'}</strong>
+                        </div>
+                        <div>
+                          <span style={{ color: '#6b7280' }}>Goods Receipt #:</span> <strong style={{ fontFamily: MONO_FONT, color: '#111827' }}>{selectedPR.goods_receipt_number || 'Pending Delivery'}</strong>
+                        </div>
+                        <div style={{ gridColumn: 'span 2' }}>
+                          <span style={{ color: '#6b7280' }}>Requisition Notes:</span> <span style={{ color: '#111827' }}>{selectedPR.notes || 'Routine central pharmacy inventory restocking.'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                /* ========================================================================= */
+                /* 9. DRAWER FOR PURCHASE RECEIPTS (grn)                                     */
+                /* ========================================================================= */
+                ) : activeTab === 'grn' && selectedGRN ? (
+                  <div style={{ overflowY: 'auto', flex: 1, padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <h3 style={{ fontSize: '20px', fontWeight: 700, color: '#111827', margin: 0 }}>
+                            GRN #{selectedGRN.grn_number}
+                          </h3>
+                          {renderBadge(selectedGRN.status === 'Posted' ? { ...B.green, text: 'Posted to Ledger' } : { ...B.blue, text: 'Intake / QC Pending' })}
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>
+                          Supplier: <strong style={{ color: '#111827' }}>{selectedGRN.supplier_name}</strong> · Invoice #: <strong style={{ fontFamily: MONO_FONT, color: '#111827' }}>{selectedGRN.invoice_number}</strong> · Received: <strong>{new Date(selectedGRN.received_at).toLocaleDateString()}</strong>
+                        </div>
+                      </div>
+
+                      {selectedGRN.status !== 'Posted' && (
+                        <button
+                          onClick={async () => {
+                            const res = await pharmacyInventoryService.postGoodsReceipt(selectedGRN.id, { all_passed: true });
+                            setStatusNotice({
+                              type: 'green',
+                              title: `GRN #${res.grn_number} Posted`,
+                              sub: `Stock absorbed into central store ledger (${res.total_units} units).`
+                            });
+                            refreshData();
+                          }}
+                          style={{
+                            height: '36px',
+                            padding: '0 16px',
+                            background: '#15803d',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '8px',
+                            fontWeight: 700,
+                            fontSize: '13px',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          <PackageCheck size={16} /> Complete QC & Post to Stock Ledger
+                        </button>
+                      )}
+                    </div>
+
+                    {/* 4-Card Metric Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '12px' }}>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Units Received</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>{selectedGRN.total_units} u</div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Total shipment volume</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Invoice Total</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>{formatINR(selectedGRN.total_value)}</div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Taxes included</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Line Items</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>{selectedGRN.lines?.length || 0} lines</div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Itemized batches</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>PO Reference</div>
+                        <div style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a', marginTop: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {selectedGRN.po_number || 'Direct GRN'}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Procurement order</div>
+                      </div>
+                    </div>
+
+                    {/* Itemized Received Lines */}
+                    <div style={{ padding: '16px', borderRadius: '10px', background: '#ffffff', border: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#111827', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <ClipboardList size={16} color="#2563eb" /> Itemized Received Shipments
+                      </div>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
+                        <thead>
+                          <tr style={{ borderBottom: '1px solid #e5e7eb', color: '#6b7280' }}>
+                            <th style={{ padding: '8px 4px' }}>Medicine</th>
+                            <th style={{ padding: '8px 4px' }}>Batch</th>
+                            <th style={{ padding: '8px 4px' }}>Expiry</th>
+                            <th style={{ padding: '8px 4px' }}>Qty</th>
+                            <th style={{ padding: '8px 4px' }}>Cost</th>
+                            <th style={{ padding: '8px 4px', textAlign: 'right' }}>Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedGRN.lines?.map((line) => (
+                            <tr key={line.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                              <td style={{ padding: '8px 4px', fontWeight: 600, color: '#111827' }}>{line.medicine_name}</td>
+                              <td style={{ padding: '8px 4px', fontFamily: MONO_FONT, color: '#4b5563' }}>{line.batch_number}</td>
+                              <td style={{ padding: '8px 4px', color: '#4b5563' }}>{formatDateMonth(line.expiry_date)}</td>
+                              <td style={{ padding: '8px 4px', fontWeight: 600, color: '#111827' }}>{line.received_quantity} u</td>
+                              <td style={{ padding: '8px 4px', color: '#4b5563' }}>{formatINR(Number(line.unit_cost))}</td>
+                              <td style={{ padding: '8px 4px', textAlign: 'right', fontWeight: 700, color: '#111827' }}>{formatINR(line.line_total)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                /* ========================================================================= */
+                /* 10. DRAWER FOR SUPPLIERS DIRECTORY (supp)                                 */
+                /* ========================================================================= */
+                ) : activeTab === 'supp' && selectedSupplier ? (
+                  <div style={{ overflowY: 'auto', flex: 1, padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <h3 style={{ fontSize: '20px', fontWeight: 700, color: '#111827', margin: 0 }}>
+                            {selectedSupplier.name}
+                          </h3>
+                          {renderBadge(selectedSupplier.is_preferred ? { ...B.blue, text: 'Preferred Vendor' } : { ...B.gray, text: selectedSupplier.category || 'Vendor' })}
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>
+                          Supplier Code: <strong style={{ fontFamily: MONO_FONT, color: '#111827' }}>{selectedSupplier.supplier_code}</strong> · GSTIN: <strong>{selectedSupplier.tax_number || 'GSTIN-VERIFIED'}</strong>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          setStatusNotice({
+                            type: 'blue',
+                            title: `Reorder Requisition: ${selectedSupplier.name}`,
+                            sub: `Initiating purchase request with preferred supplier.`
+                          });
+                          updateURL('pr', '', 'all');
+                        }}
+                        style={{
+                          height: '36px',
+                          padding: '0 16px',
+                          background: '#2563eb',
+                          color: '#ffffff',
+                          border: 'none',
+                          borderRadius: '8px',
+                          fontWeight: 700,
+                          fontSize: '13px',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        <Plus size={16} /> Draft Reorder PR
+                      </button>
+                    </div>
+
+                    {/* 4-Card Metric Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '12px' }}>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Avg Lead Time</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>{selectedSupplier.lead_time_days} days</div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Order to dispatch</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#166534', textTransform: 'uppercase' }}>On-Time Delivery</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: '#15803d', marginTop: '4px' }}>{selectedSupplier.on_time_delivery_rate}%</div>
+                        <div style={{ fontSize: '11px', color: '#166534', marginTop: '2px' }}>Fulfillment SLA</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Open PR Orders</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>{selectedSupplier.open_prs_count || 0} PRs</div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Pipeline active</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Vendor Score</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: '#2563eb', marginTop: '4px' }}>★ {selectedSupplier.rating || '4.8'}</div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Audited vendor</div>
+                      </div>
+                    </div>
+
+                    {/* Contact & Commercial Profile */}
+                    <div style={{ padding: '16px', borderRadius: '10px', background: '#ffffff', border: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#111827', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Building size={16} color="#2563eb" /> Commercial & Point of Contact
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', fontSize: '13px' }}>
+                        <div>
+                          <span style={{ color: '#6b7280' }}>Phone Hotline:</span> <strong style={{ color: '#111827' }}>{selectedSupplier.phone}</strong>
+                        </div>
+                        <div>
+                          <span style={{ color: '#6b7280' }}>Email Address:</span> <strong style={{ color: '#111827' }}>{selectedSupplier.email || 'orders@pharma-vendor.in'}</strong>
+                        </div>
+                        <div>
+                          <span style={{ color: '#6b7280' }}>Supplier Category:</span> <strong style={{ color: '#111827' }}>{selectedSupplier.category}</strong>
+                        </div>
+                        <div>
+                          <span style={{ color: '#6b7280' }}>Commercial Status:</span> <strong style={{ color: '#15803d' }}>{selectedSupplier.status}</strong>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                /* ========================================================================= */
+                /* 11. DRAWER FOR TRANSFER REQUESTS (tr)                                     */
+                /* ========================================================================= */
+                ) : activeTab === 'tr' && selectedTransfer ? (
+                  <div style={{ overflowY: 'auto', flex: 1, padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <h3 style={{ fontSize: '20px', fontWeight: 700, color: '#111827', margin: 0 }}>
+                            Transfer #{selectedTransfer.transfer_number}
+                          </h3>
+                          {renderBadge(selectedTransfer.status === 'Received' ? { ...B.green, text: 'Received' } : { ...B.amber, text: 'In Transit' })}
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>
+                          Medicine: <strong style={{ color: '#111827' }}>{selectedTransfer.medicine_name}</strong> ({selectedTransfer.medicine_code}) · To: <strong>{selectedTransfer.destination}</strong>
+                        </div>
+                      </div>
+
+                      {selectedTransfer.status !== 'Received' && (
+                        <button
+                          onClick={async () => {
+                            const res = await pharmacyInventoryService.receiveTransfer(selectedTransfer.id);
+                            setStatusNotice({
+                              type: 'green',
+                              title: `Transfer #${res.transfer_number} Received`,
+                              sub: `Satellite dispensary stock updated at ${res.destination}.`
+                            });
+                            refreshData();
+                          }}
+                          style={{
+                            height: '36px',
+                            padding: '0 16px',
+                            background: '#15803d',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '8px',
+                            fontWeight: 700,
+                            fontSize: '13px',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          <Check size={16} /> Acknowledge Satellite Receipt
+                        </button>
+                      )}
+                    </div>
+
+                    {/* 4-Card Metric Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '12px' }}>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Transfer Quantity</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>{selectedTransfer.quantity} u</div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Units in movement</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Destination</div>
+                        <div style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a', marginTop: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {selectedTransfer.destination}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Counter indent</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#166534', textTransform: 'uppercase' }}>Central Store Stock</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: '#15803d', marginTop: '4px' }}>{selectedTransfer.central_stock} u</div>
+                        <div style={{ fontSize: '11px', color: '#166534', marginTop: '2px' }}>Balance remaining</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Transfer Status</div>
+                        <div style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a', marginTop: '4px' }}>{selectedTransfer.status}</div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Custody movement</div>
+                      </div>
+                    </div>
+
+                    {/* Logistics Detail */}
+                    <div style={{ padding: '16px', borderRadius: '10px', background: '#ffffff', border: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#111827', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Truck size={16} color="#2563eb" /> Internal Movement Trace
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', fontSize: '13px' }}>
+                        <div>
+                          <span style={{ color: '#6b7280' }}>Requested By:</span> <strong style={{ color: '#111827' }}>{selectedTransfer.requested_by_name}</strong>
+                        </div>
+                        <div>
+                          <span style={{ color: '#6b7280' }}>Created At:</span> <strong style={{ color: '#111827' }}>{new Date(selectedTransfer.created_at).toLocaleString()}</strong>
+                        </div>
+                        <div>
+                          <span style={{ color: '#6b7280' }}>Cold Chain Status:</span> <strong style={{ color: selectedTransfer.is_cold_chain ? '#0369a1' : '#4b5563' }}>{selectedTransfer.is_cold_chain ? 'Insulated Cold Carrier Required' : 'Standard'}</strong>
+                        </div>
+                        <div>
+                          <span style={{ color: '#6b7280' }}>Schedule:</span> <strong style={{ color: '#111827' }}>Sch. {selectedTransfer.medicine_schedule || 'H'}{selectedTransfer.is_narcotic ? ' (Narcotic Escort)' : ''}</strong>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                /* ========================================================================= */
+                /* 12. DRAWER FOR CONTROLLED DRUG REGISTER (cd)                              */
+                /* ========================================================================= */
+                ) : activeTab === 'cd' && selectedCD ? (
+                  <div style={{ overflowY: 'auto', flex: 1, padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <h3 style={{ fontSize: '20px', fontWeight: 700, color: '#111827', margin: 0 }}>
+                            Controlled Drug Dispense #{selectedCD.entry_number}
+                          </h3>
+                          {renderBadge({ ...B.red, text: 'Schedule X / H1 Narcotic' })}
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>
+                          Medicine: <strong style={{ color: '#111827' }}>{selectedCD.medicine_name}</strong> ({selectedCD.medicine_code}) · Batch: <strong>{selectedCD.batch_number}</strong>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={async () => {
+                          const res = await pharmacyInventoryService.verifyCount(selectedCD.batch, selectedCD.balance_stock_after);
+                          setStatusNotice({
+                            type: res.matches ? 'green' : 'red',
+                            title: res.matches ? 'Safe Balance Verified' : 'Count Discrepancy Flagged',
+                            sub: res.message
+                          });
+                          refreshData();
+                        }}
+                        style={{
+                          height: '36px',
+                          padding: '0 16px',
+                          background: '#ffffff',
+                          color: '#dc2626',
+                          border: '1px solid #fecaca',
+                          borderRadius: '8px',
+                          fontWeight: 700,
+                          fontSize: '13px',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        <ShieldAlert size={16} /> Audit Safe Physical Balance
+                      </button>
+                    </div>
+
+                    {/* 4-Card Metric Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '12px' }}>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#fef2f2', border: '1px solid #fecaca' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#dc2626', textTransform: 'uppercase' }}>Dispensed Qty</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: '#dc2626', marginTop: '4px' }}>{selectedCD.quantity_dispensed} u</div>
+                        <div style={{ fontSize: '11px', color: '#dc2626', marginTop: '2px' }}>Verified dose</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Safe Balance After</div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>{selectedCD.balance_stock_after} u</div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Vault inventory</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Prescribing Doctor</div>
+                        <div style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a', marginTop: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          Dr. {selectedCD.prescribing_doctor_name}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Lic: {selectedCD.doctor_license_number}</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Witness Staff</div>
+                        <div style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a', marginTop: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {selectedCD.witness_staff_name}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>{selectedCD.witness_role}</div>
+                      </div>
+                    </div>
+
+                    {/* Regulatory Chain of Custody Card */}
+                    <div style={{ padding: '16px', borderRadius: '10px', background: '#ffffff', border: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#111827', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Lock size={16} color="#dc2626" /> NDPS Dual-Witness Regulatory Chain of Custody
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', fontSize: '13px' }}>
+                        <div>
+                          <span style={{ color: '#6b7280' }}>Primary Pharmacist:</span> <strong style={{ color: '#111827' }}>{selectedCD.primary_pharmacist_name}</strong>
+                        </div>
+                        <div>
+                          <span style={{ color: '#6b7280' }}>Mandatory Co-Sign Witness:</span> <strong style={{ color: '#111827' }}>{selectedCD.witness_staff_name} ({selectedCD.witness_role})</strong>
+                        </div>
+                        <div>
+                          <span style={{ color: '#6b7280' }}>Entry Timestamp:</span> <strong style={{ color: '#111827' }}>{new Date(selectedCD.created_at).toLocaleString()}</strong>
+                        </div>
+                        <div>
+                          <span style={{ color: '#6b7280' }}>Regulatory Act:</span> <strong style={{ color: '#dc2626' }}>NDPS Schedule X Audit Standard</strong>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                /* ========================================================================= */
+                /* 13. DRAWER FOR FORMULARY MASTER / STOCK LEDGER (selectedMedicine)        */
+                /* ========================================================================= */
+                ) : selectedMedicine ? (
+                  <div style={{ overflowY: 'auto', flex: 1, padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                      {/* 1. Header with Identity & Top Action Buttons */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <h3 style={{ fontSize: '20px', fontWeight: 700, color: '#111827', margin: 0 }}>
+                              {selectedMedicine.name}
+                            </h3>
+                            {selectedMedicine.is_archived && (
+                              <span style={{ fontSize: '10px', fontWeight: 700, color: '#991b1b', background: '#fee2e2', padding: '2px 6px', borderRadius: '4px' }}>
+                                ARCHIVED
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                            <span>Item Code: <strong style={{ fontFamily: MONO_FONT, color: '#111827' }}>{selectedMedicine.item_code}</strong></span>
+                            <span>·</span>
+                            <span>Generic: <strong>{selectedMedicine.generic_name || 'Standard Generic'}</strong></span>
+                            <span>·</span>
+                            <span>Category: <strong>{selectedMedicine.category}</strong></span>
+                          </div>
+                        </div>
+
+                        {/* Header Action Buttons */}
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingMedicine(selectedMedicine);
+                              setIsAddEditMedOpen(true);
+                            }}
+                            style={{
+                              height: '36px',
+                              padding: '0 14px',
+                              background: '#ffffff',
+                              color: '#2563eb',
+                              border: '1px solid #bfdbfe',
+                              borderRadius: '8px',
+                              fontSize: '13px',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            Edit Formulary Entry
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setBatchMedTarget(selectedMedicine);
+                              setIsCreateBatchOpen(true);
+                            }}
+                            style={{
+                              height: '36px',
+                              padding: '0 14px',
+                              background: '#2563eb',
+                              color: '#ffffff',
+                              border: 'none',
+                              borderRadius: '8px',
+                              fontSize: '13px',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            + Receive New Batch (GRN)
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Badges Row */}
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                        {renderBadge(getMedicineStatusBadge(selectedMedicine))}
+                        {renderBadge(getScheduleBadge(selectedMedicine.schedule, selectedMedicine.is_narcotic))}
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            height: '24px',
+                            padding: '0 8px',
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            background: selectedMedicine.is_core_formulary !== false ? '#f0fdf4' : '#f1f5f9',
+                            color: selectedMedicine.is_core_formulary !== false ? '#15803d' : '#64748b',
+                            border: `1px solid ${selectedMedicine.is_core_formulary !== false ? '#bbf7d0' : '#cbd5e1'}`,
+                          }}
+                        >
+                          {selectedMedicine.is_core_formulary !== false ? 'Core Formulary (EML)' : 'Non-Core'}
+                        </span>
+                        {selectedMedicine.is_cold_chain && (
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              height: '24px',
+                              padding: '0 8px',
+                              borderRadius: '6px',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              background: '#f0f9ff',
+                              color: '#0369a1',
+                              border: '1px solid #bae6fd',
+                            }}
+                          >
+                            Cold chain 2–8 °C
+                          </span>
+                        )}
                         <span
                           style={{
                             display: 'inline-flex',
@@ -2932,179 +4281,334 @@ export const InventoryManagerWorkspace: React.FC = () => {
                             borderRadius: '6px',
                             fontSize: '12px',
                             fontWeight: 600,
-                            background: '#f0f9ff',
-                            color: '#0369a1',
-                            border: '1px solid #bae6fd',
+                            background: '#f8fafc',
+                            color: '#475569',
+                            border: '1px solid #cbd5e1',
                           }}
                         >
-                          Cold chain 2–8 °C
+                          Rack: {selectedMedicine.storage_rack || 'A-01 · Ambient'}
                         </span>
-                      )}
-                      <span
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          height: '24px',
-                          padding: '0 8px',
-                          borderRadius: '6px',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          background: '#f8fafc',
-                          color: '#475569',
-                          border: '1px solid #cbd5e1',
-                        }}
-                      >
-                        Rack: {selectedMedicine.storage_rack || 'A-01'}
-                      </span>
-                    </div>
+                      </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', padding: '12px', background: '#f9fafb', borderRadius: '10px' }}>
-                      <div>
-                        <div style={{ fontSize: '11px', color: '#6b7280' }}>In stock</div>
-                        <div style={{ fontSize: '18px', fontWeight: 700, color: selectedMedicine.available_stock < selectedMedicine.reorder_level ? '#b45309' : '#111827' }}>
-                          {selectedMedicine.available_stock}
+                      {/* 2. Key Stock Metrics & Reorder Requirements (4 Stats) */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', padding: '16px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px' }}>
+                        <div>
+                          <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>Available Stock</div>
+                          <div style={{ fontSize: '20px', fontWeight: 700, color: selectedMedicine.available_stock === 0 ? '#dc2626' : selectedMedicine.available_stock < selectedMedicine.reorder_level ? '#b45309' : '#111827', marginTop: '2px' }}>
+                            {selectedMedicine.available_stock} <span style={{ fontSize: '12px', fontWeight: 500, color: '#64748b' }}>{selectedMedicine.unit_of_measure}</span>
+                          </div>
+                          <div style={{ fontSize: '11px', color: selectedMedicine.available_stock === 0 ? '#dc2626' : selectedMedicine.available_stock < selectedMedicine.reorder_level ? '#b45309' : '#15803d', fontWeight: 600, marginTop: '2px' }}>
+                            {selectedMedicine.available_stock === 0 ? 'Out of Stock' : selectedMedicine.available_stock < selectedMedicine.reorder_level ? 'Below Reorder Par' : 'Optimal Reserve'}
+                          </div>
                         </div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '11px', color: '#6b7280' }}>Reorder</div>
-                        <div style={{ fontSize: '18px', fontWeight: 700, color: '#111827' }}>{selectedMedicine.reorder_level}</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '11px', color: '#6b7280' }}>Stock value</div>
-                        <div style={{ fontSize: '16px', fontWeight: 700, color: '#111827' }}>
-                          {formatINR(selectedMedicine.available_stock * Number(selectedMedicine.unit_price))}
-                        </div>
-                      </div>
-                    </div>
 
-                    <div>
-                      <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.05em', color: '#64748b', marginBottom: '8px' }}>
-                        FEFO BATCHES ON HAND ({selectedMedicine.batches.length})
-                      </div>
-                      {selectedMedicine.batches.length === 0 ? (
-                        <div style={{ padding: '10px', background: '#fef2f2', borderRadius: '8px', border: '1px solid #fecaca', color: '#dc2626', fontSize: '12px' }}>
-                          No active batches on hand.
+                        <div>
+                          <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>Reorder Level (Par)</div>
+                          <div style={{ fontSize: '20px', fontWeight: 700, color: '#111827', marginTop: '2px' }}>
+                            {selectedMedicine.reorder_level} <span style={{ fontSize: '12px', fontWeight: 500, color: '#64748b' }}>{selectedMedicine.unit_of_measure}</span>
+                          </div>
+                          <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                            Reorder target: {selectedMedicine.reorder_quantity || selectedMedicine.reorder_level * 2} units
+                          </div>
                         </div>
-                      ) : (
-                        selectedMedicine.batches.map((b, idx) => (
-                          <div
-                            key={b.id}
+
+                        <div>
+                          <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>Stock Valuation</div>
+                          <div style={{ fontSize: '18px', fontWeight: 700, color: '#111827', marginTop: '2px' }}>
+                            {formatINR(selectedMedicine.available_stock * Number(selectedMedicine.unit_price || selectedMedicine.cost_price || 0))}
+                          </div>
+                          <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                            Unit MRP: ₹{Number(selectedMedicine.unit_price || 0).toFixed(2)}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>Procurement Pipeline</div>
+                          <div style={{ fontSize: '14px', fontWeight: 700, color: selectedMedicine.active_pr ? '#2563eb' : selectedMedicine.available_stock < selectedMedicine.reorder_level ? '#b45309' : '#15803d', marginTop: '4px' }}>
+                            {selectedMedicine.active_pr ? selectedMedicine.active_pr.status : selectedMedicine.available_stock < selectedMedicine.reorder_level ? 'Reorder Needed' : 'Covered'}
+                          </div>
+                          <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                            {selectedMedicine.active_pr ? `PR #${selectedMedicine.active_pr.pr_number} (${selectedMedicine.active_pr.qty} units)` : selectedMedicine.available_stock < selectedMedicine.reorder_level ? 'No purchase request active' : 'Reserve healthy'}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 3. FEFO Batches on Hand (Structured Table) */}
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                          <div style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.05em', color: '#475569', textTransform: 'uppercase' }}>
+                            FEFO Batches on Hand ({selectedMedicine.batches.length})
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setBatchMedTarget(selectedMedicine);
+                              setIsCreateBatchOpen(true);
+                            }}
                             style={{
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
-                              padding: '8px 0',
-                              borderBottom: '1px solid #f3f4f6',
+                              background: 'transparent',
+                              border: 'none',
+                              color: '#2563eb',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              padding: 0,
                             }}
                           >
-                            <div>
-                              <div style={{ fontFamily: MONO_FONT, fontSize: '12px', fontWeight: 700 }}>
-                                {b.batch_number} {idx === 0 && <span style={{ color: '#2563eb' }}>· FEFO next</span>}
-                              </div>
-                              <div style={{ fontSize: '11px', color: '#6b7280' }}>
-                                Exp {formatDateMonth(b.expiry_date)} · {b.available_quantity} units
-                              </div>
-                            </div>
-                            {renderBadge(getBatchStatusBadge(b))}
+                            + Receive Batch
+                          </button>
+                        </div>
+
+                        {selectedMedicine.batches.length === 0 ? (
+                          <div style={{ padding: '16px', background: '#fef2f2', borderRadius: '10px', border: '1px solid #fecaca', color: '#b91c1c', fontSize: '13px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>No active batches currently on shelf. Central inventory is depleted.</div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setBatchMedTarget(selectedMedicine);
+                                setIsCreateBatchOpen(true);
+                              }}
+                              style={{
+                                height: '30px',
+                                padding: '0 12px',
+                                background: '#dc2626',
+                                color: '#ffffff',
+                                border: 'none',
+                                borderRadius: '6px',
+                                fontSize: '12px',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Receive GRN
+                            </button>
                           </div>
-                        ))
-                      )}
-                    </div>
+                        ) : (
+                          <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', overflow: 'hidden' }}>
+                            <div
+                              style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'minmax(140px, 1.2fr) minmax(130px, 1fr) 90px minmax(130px, 1fr) 110px 90px',
+                                alignItems: 'center',
+                                height: '38px',
+                                background: '#f9fafb',
+                                borderBottom: '1px solid #e5e7eb',
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                letterSpacing: '0.04em',
+                                color: '#64748b',
+                                padding: '0 14px',
+                              }}
+                            >
+                              <div>BATCH NUMBER</div>
+                              <div>EXPIRY DATE</div>
+                              <div>QUANTITY</div>
+                              <div>STORAGE LOCATION</div>
+                              <div>STATUS</div>
+                              <div style={{ textAlign: 'right' }}>ACTION</div>
+                            </div>
 
-                    {/* Quick Trigger Buttons */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: 'auto' }}>
-                      <button
-                        onClick={() => {
-                          setEditingMedicine(selectedMedicine);
-                          setIsAddEditMedOpen(true);
-                        }}
-                        style={{
-                          height: '36px',
-                          background: '#ffffff',
-                          color: '#2563eb',
-                          border: '1px solid #bfdbfe',
-                          borderRadius: '8px',
-                          fontSize: '13px',
-                          fontWeight: 600,
-                          cursor: 'pointer'
-                        }}
-                      >
-                        Edit Formulary Entry
-                      </button>
+                            {selectedMedicine.batches.map((b, idx) => (
+                              <div
+                                key={b.id}
+                                style={{
+                                  display: 'grid',
+                                  gridTemplateColumns: 'minmax(140px, 1.2fr) minmax(130px, 1fr) 90px minmax(130px, 1fr) 110px 90px',
+                                  alignItems: 'center',
+                                  minHeight: '48px',
+                                  padding: '0 14px',
+                                  borderBottom: idx === selectedMedicine.batches.length - 1 ? 'none' : '1px solid #f3f4f6',
+                                  fontSize: '13px',
+                                }}
+                              >
+                                <div>
+                                  <span style={{ fontFamily: MONO_FONT, fontWeight: 700, color: '#111827' }}>
+                                    {b.batch_number}
+                                  </span>
+                                  {idx === 0 && (
+                                    <span
+                                      style={{
+                                        marginLeft: '6px',
+                                        fontSize: '10px',
+                                        fontWeight: 700,
+                                        background: '#eff6ff',
+                                        color: '#1d4ed8',
+                                        border: '1px solid #bfdbfe',
+                                        padding: '1px 5px',
+                                        borderRadius: '4px',
+                                      }}
+                                    >
+                                      FEFO NEXT
+                                    </span>
+                                  )}
+                                </div>
 
-                      <button
-                        onClick={() => {
-                          setBatchMedTarget(selectedMedicine);
-                          setIsCreateBatchOpen(true);
-                        }}
-                        style={{
-                          height: '36px',
-                          background: '#2563eb',
-                          color: '#ffffff',
-                          border: 'none',
-                          borderRadius: '8px',
-                          fontSize: '13px',
-                          fontWeight: 600,
-                          cursor: 'pointer'
-                        }}
-                      >
-                        Receive New Batch (GRN)
-                      </button>
-                    </div>
-                  </div>
-                )}
+                                <div>
+                                  <div style={{ fontSize: '13px', color: b.months_left <= 3 ? '#b45309' : '#111827' }}>
+                                    {formatDateMonth(b.expiry_date)}
+                                  </div>
+                                  <div style={{ fontSize: '11px', color: '#6b7280' }}>
+                                    {b.months_left <= 0 ? 'Expired' : `${b.months_left} mo remaining`}
+                                  </div>
+                                </div>
 
-                {/* DRAWER FOR DEMAND (demand) */}
-                {activeTab === 'demand' && selectedDemand && (
-                  <div style={{ overflowY: 'auto', flex: 1, padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                        <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#111827' }}>Demand #{selectedDemand.token_number}</h3>
-                        {renderBadge(getDemandPriorityBadge(selectedDemand.priority))}
+                                <div style={{ fontWeight: 700, color: '#111827' }}>
+                                  {b.available_quantity}
+                                </div>
+
+                                <div style={{ fontSize: '12px', color: '#475569' }}>
+                                  {b.storage_location || selectedMedicine.storage_rack || 'Main Shelf'}
+                                </div>
+
+                                <div>
+                                  {renderBadge(getBatchStatusBadge(b))}
+                                </div>
+
+                                <div style={{ textAlign: 'right' }}>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setExpiryBatchTarget(b);
+                                      setIsExpiryActionOpen(true);
+                                    }}
+                                    style={{
+                                      height: '28px',
+                                      padding: '0 10px',
+                                      borderRadius: '6px',
+                                      fontSize: '11px',
+                                      fontWeight: 600,
+                                      cursor: 'pointer',
+                                      background: '#fff7ed',
+                                      color: '#c2410c',
+                                      border: '1px solid #fdba74',
+                                    }}
+                                  >
+                                    Dispose
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                      <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>
-                        Origin: <strong>{selectedDemand.source}</strong> ({selectedDemand.encounter_type})
+
+                      {/* 4. Formulary & Storage Specifications Cards */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
+                        {/* Card 1: Clinical & Regulatory Specifications */}
+                        <div style={{ padding: '14px 16px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <div style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.04em', color: '#475569', textTransform: 'uppercase' }}>
+                            Clinical & Regulatory Rules
+                          </div>
+                          <div style={{ fontSize: '12px', display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ color: '#64748b' }}>Therapeutic Class:</span>
+                            <span style={{ fontWeight: 600, color: '#0f172a' }}>{selectedMedicine.therapeutic_class || 'General Hospital Formulary'}</span>
+                          </div>
+                          <div style={{ fontSize: '12px', display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ color: '#64748b' }}>Schedule Classification:</span>
+                            <span style={{ fontWeight: 600, color: '#0f172a' }}>Schedule {selectedMedicine.schedule} {selectedMedicine.is_narcotic ? '(Narcotic CD)' : ''}</span>
+                          </div>
+                          <div style={{ fontSize: '12px', display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ color: '#64748b' }}>Formulary Tier:</span>
+                            <span style={{ fontWeight: 600, color: selectedMedicine.is_core_formulary !== false ? '#15803d' : '#64748b' }}>
+                              {selectedMedicine.is_core_formulary !== false ? 'Core Hospital Formulary (EML)' : 'Non-Core / Specialized'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Card 2: Storage & Procurement Details */}
+                        <div style={{ padding: '14px 16px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <div style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.04em', color: '#475569', textTransform: 'uppercase' }}>
+                            Storage & Procurement Trace
+                          </div>
+                          <div style={{ fontSize: '12px', display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ color: '#64748b' }}>Storage Condition:</span>
+                            <span style={{ fontWeight: 600, color: '#0f172a' }}>
+                              {selectedMedicine.is_cold_chain ? 'Cold Chain (2°C to 8°C Refrigerator)' : 'Ambient Shelf (15°C to 25°C)'}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '12px', display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ color: '#64748b' }}>Preferred Supplier:</span>
+                            <span style={{ fontWeight: 600, color: '#0f172a' }}>{selectedMedicine.supplier_name || 'Standard Contracted Vendor'}</span>
+                          </div>
+                          <div style={{ fontSize: '12px', display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ color: '#64748b' }}>Physical Shelf Location:</span>
+                            <span style={{ fontWeight: 600, color: '#0f172a' }}>{selectedMedicine.storage_rack || 'Rack A-01 · Ambient'}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 5. Bottom Contextual Shortcuts Toolbar */}
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', paddingTop: '16px', borderTop: '1px solid #f1f5f9', marginTop: 'auto', flexWrap: 'wrap' }}>
+                        {selectedMedicine.available_stock < selectedMedicine.reorder_level && !selectedMedicine.active_pr && (
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                const res = await pharmacyInventoryService.createPurchaseRequest({
+                                  medicine_id: selectedMedicine.id,
+                                  quantity: selectedMedicine.reorder_quantity || selectedMedicine.reorder_level * 2,
+                                  notes: '1-click reorder requisition from medicine inspection panel',
+                                });
+                                setStatusNotice({
+                                  type: 'green',
+                                  title: `Reorder PR #${res.pr_number} Drafted`,
+                                  sub: `Purchase requisition created for ${res.requested_quantity} units.`,
+                                });
+                                refreshData();
+                              } catch (err) {
+                                console.error(err);
+                              }
+                            }}
+                            style={{
+                              height: '38px',
+                              padding: '0 16px',
+                              background: '#fffbeb',
+                              color: '#b45309',
+                              border: '1px solid #fde68a',
+                              borderRadius: '8px',
+                              fontSize: '13px',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Draft Reorder (PR)
+                          </button>
+                        )}
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setReconMedTarget(selectedMedicine);
+                            setIsReconOpen(true);
+                          }}
+                          style={{
+                            height: '38px',
+                            padding: '0 16px',
+                            background: '#f8fafc',
+                            color: '#475569',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: '8px',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Audit Shelf Count
+                        </button>
                       </div>
                     </div>
-
-                    <div style={{ padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <div style={{ fontSize: '12px', color: '#64748b' }}>Medicine Requested</div>
-                      <div style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>{selectedDemand.medicine_name}</div>
-                      <div style={{ fontSize: '12px', color: '#64748b' }}>Requested Quantity: <strong style={{ color: '#0f172a' }}>{selectedDemand.requested_quantity} units</strong></div>
-                      <div style={{ fontSize: '12px', color: '#64748b' }}>Prescribing Clinician: <strong>Dr. {selectedDemand.doctor_name}</strong></div>
-                      <div style={{ fontSize: '12px', color: '#64748b' }}>Patient: <strong>{selectedDemand.patient_name}</strong></div>
+                  ) : (
+                    <div style={{ padding: '60px 24px', textAlign: 'center', color: '#6b7280', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563eb' }}>
+                        <Pill size={24} />
+                      </div>
+                      <div style={{ fontSize: '16px', fontWeight: 600, color: '#111827' }}>Select an item from the list</div>
+                      <div style={{ fontSize: '13px', color: '#6b7280', maxWidth: '360px' }}>
+                        Click any item in the left panel to inspect formulary details, live stock levels, FEFO batch queue, and procurement actions.
+                      </div>
                     </div>
-
-                    <div style={{ padding: '12px', borderRadius: '8px', background: '#f0fdf4', border: '1px solid #bbf7d0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ fontSize: '12px', color: '#166534' }}>Central Store Stock:</div>
-                      <div style={{ fontSize: '16px', fontWeight: 800, color: '#15803d' }}>{selectedDemand.central_stock} units</div>
-                    </div>
-
-                    <button
-                      onClick={() => {
-                        setDemandTransferTarget(selectedDemand);
-                        setIsCreateTransferOpen(true);
-                      }}
-                      style={{
-                        height: '40px',
-                        background: selectedDemand.priority === 'STAT' ? '#dc2626' : '#2563eb',
-                        color: '#ffffff',
-                        border: 'none',
-                        borderRadius: '8px',
-                        fontWeight: 700,
-                        fontSize: '13px',
-                        cursor: 'pointer',
-                        marginTop: 'auto',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '6px'
-                      }}
-                    >
-                      <ArrowLeftRight size={16} /> Fulfill Demand Transfer
-                    </button>
-                  </div>
-                )}
+                  )
+                }
               </div>
             </div>
           </div>
@@ -3208,6 +4712,31 @@ export const InventoryManagerWorkspace: React.FC = () => {
           }}
           batch={expiryBatchTarget}
           medicineName={expiryBatchTarget?.medicine_name}
+        />
+
+        {/* Modal 6: Staff Profile Details */}
+        <MyProfileModal
+          isOpen={isMyProfileOpen}
+          onClose={() => setIsMyProfileOpen(false)}
+          user={user}
+          role={role}
+          displayName={displayName}
+          designation={designation}
+          initials={initials}
+          onChangePasswordClick={() => setIsChangePasswordOpen(true)}
+        />
+
+        {/* Modal 7: Change Password */}
+        <ChangePasswordModal
+          isOpen={isChangePasswordOpen}
+          onClose={() => setIsChangePasswordOpen(false)}
+          onSuccess={() => {
+            setStatusNotice({
+              type: 'green',
+              title: 'Password Updated',
+              sub: 'Account authentication password updated successfully.'
+            });
+          }}
         />
       </main>
     </div>

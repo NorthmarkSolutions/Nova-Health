@@ -15,6 +15,7 @@ import {
   CreditCard,
   Banknote,
   UserCheck,
+  UserPlus,
   ShieldCheck,
   Clock,
   Package,
@@ -28,8 +29,9 @@ import {
   X,
 } from 'lucide-react';
 import api from '../../../services/api';
-import { patientJourneyService } from '../../../services/patientJourneyService';
+import { patientJourneyService, SharedPatient } from '../../../services/patientJourneyService';
 import { pharmacyOpdService, OTCSale } from '../../../services/pharmacyOpdService';
+import { PatientRegistrationWizardModal } from '../../reception/components/PatientRegistrationWizardModal';
 
 const MONO_FONT = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
 
@@ -110,6 +112,10 @@ export const NewOTCSalePage: React.FC<NewOTCSalePageProps> = ({
   const [patientSearchResults, setPatientSearchResults] = useState<RegisteredPatient[]>([]);
   const [patientSearchLoading, setPatientSearchLoading] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<RegisteredPatient | null>(null);
+
+  // Frontdesk Patient Registration Wizard Modal State
+  const [showCreatePatientModal, setShowCreatePatientModal] = useState(false);
+  const [prefillPatientName, setPrefillPatientName] = useState('');
 
   // STEP 2: Medicine Selection & Cart
   const [medSearchQuery, setMedSearchQuery] = useState('');
@@ -201,6 +207,7 @@ export const NewOTCSalePage: React.FC<NewOTCSalePageProps> = ({
 
   const handleSelectPatient = (p: RegisteredPatient) => {
     setSelectedPatient(p);
+    setCustomerType('patient');
     const fullName = `${p.first_name} ${p.last_name}`.trim() || 'Patient';
     setCustomerName(fullName);
     setCustomerPhone(p.phone || '');
@@ -216,13 +223,56 @@ export const NewOTCSalePage: React.FC<NewOTCSalePageProps> = ({
       }
     }
     setPatientSearchResults([]);
-    setPatientSearchQuery(`${fullName} (${p.uhid})`);
+    setPatientSearchQuery('');
     showNotice(`Linked patient record: ${fullName} (${p.uhid})`, 'success');
+  };
+
+  const handleUnlinkPatient = () => {
+    setSelectedPatient(null);
+    setCustomerType('walkin');
+    setPatientSearchQuery('');
+    setPatientSearchResults([]);
+    showNotice('Unlinked patient. You may search again or proceed as walk-in.', 'success');
+  };
+
+  const handleOpenCreatePatient = (initialQuery?: string) => {
+    const raw = (initialQuery !== undefined ? initialQuery : patientSearchQuery).trim();
+    setPrefillPatientName(raw || customerName || '');
+    setShowCreatePatientModal(true);
+  };
+
+  const handleFrontdeskPatientRegistered = (newP: SharedPatient) => {
+    const registeredObj: RegisteredPatient = {
+      id: newP.uhid,
+      uhid: newP.uhid,
+      first_name: newP.firstName,
+      last_name: newP.lastName,
+      phone: newP.phone,
+      date_of_birth: newP.dob,
+      gender: String(newP.gender || 'Male'),
+      blood_group: newP.bloodGroup,
+      allergies: newP.allergies || [],
+    };
+    handleSelectPatient(registeredObj);
+    setShowCreatePatientModal(false);
+    showNotice(`✓ Patient ${newP.firstName} ${newP.lastName} (${newP.uhid}) registered & linked!`, 'success');
+  };
+
+  const handleUseAsWalkIn = (name?: string) => {
+    const finalName = (name || patientSearchQuery).trim();
+    if (finalName) {
+      setCustomerName(finalName);
+    }
+    setCustomerType('walkin');
+    setSelectedPatient(null);
+    setPatientSearchResults([]);
+    setPatientSearchQuery('');
+    showNotice(`Proceeding as Walk-in Customer: ${finalName || 'General Walk-in'}`, 'success');
   };
 
   // Debounced real-time live search as user types
   useEffect(() => {
-    if (customerType !== 'patient' || selectedPatient) return;
+    if (selectedPatient) return;
     const q = patientSearchQuery.trim();
     if (!q) {
       setPatientSearchResults([]);
@@ -233,7 +283,7 @@ export const NewOTCSalePage: React.FC<NewOTCSalePageProps> = ({
       handleSearchPatients(q);
     }, 150);
     return () => clearTimeout(timer);
-  }, [customerType, patientSearchQuery, selectedPatient, handleSearchPatients]);
+  }, [patientSearchQuery, selectedPatient, handleSearchPatients]);
 
   // Search Medicines
   const handleSearchMedicines = useCallback(async (query: string) => {
@@ -675,319 +725,433 @@ export const NewOTCSalePage: React.FC<NewOTCSalePageProps> = ({
               </p>
             </div>
 
-            {/* Type selector */}
-            <div style={{ display: 'flex', gap: '16px', marginBottom: '24px' }}>
-              <label
-                style={{
-                  flex: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  padding: '16px',
-                  border: `2px solid ${customerType === 'walkin' ? '#2563eb' : '#e2e8f0'}`,
-                  borderRadius: '10px',
-                  cursor: 'pointer',
-                  background: customerType === 'walkin' ? '#eff6ff' : '#fff',
-                }}
-              >
-                <input
-                  type="radio"
-                  name="custType"
-                  checked={customerType === 'walkin'}
-                  onChange={() => {
-                    setCustomerType('walkin');
-                    setSelectedPatient(null);
+            {/* Unified Patient Search & Verification Section */}
+            <div style={{ marginBottom: '24px' }}>
+              {!selectedPatient ? (
+                <div
+                  style={{
+                    padding: '20px 22px',
+                    background: '#f8fafc',
+                    borderRadius: '12px',
+                    border: '1.5px solid #e2e8f0',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
                   }}
-                  style={{ width: '18px', height: '18px', accentColor: '#2563eb' }}
-                />
-                <div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>General Walk-in Customer</div>
-                  <div style={{ fontSize: '12px', color: '#64748b' }}>External customer purchasing OTC medicines over the counter</div>
-                </div>
-              </label>
-
-              <label
-                style={{
-                  flex: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  padding: '16px',
-                  border: `2px solid ${customerType === 'patient' ? '#2563eb' : '#e2e8f0'}`,
-                  borderRadius: '10px',
-                  cursor: 'pointer',
-                  background: customerType === 'patient' ? '#eff6ff' : '#fff',
-                }}
-              >
-                <input
-                  type="radio"
-                  name="custType"
-                  checked={customerType === 'patient'}
-                  onChange={() => setCustomerType('patient')}
-                  style={{ width: '18px', height: '18px', accentColor: '#2563eb' }}
-                />
-                <div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>Registered Hospital Patient</div>
-                  <div style={{ fontSize: '12px', color: '#64748b' }}>Link purchase to patient EHR folio, UHID &amp; allergy profile</div>
-                </div>
-              </label>
-            </div>
-
-            {/* Registered Patient Lookup */}
-            {customerType === 'patient' && (
-              <div style={{ padding: '18px 20px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '24px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 700, color: '#1e293b' }}>
-                    Search Hospital Patient Directory <span style={{ color: '#dc2626' }}>*</span>
-                  </label>
-                  <span style={{ fontSize: '11px', color: '#64748b' }}>
-                    Live query across Django Database &amp; Reception registrations
-                  </span>
-                </div>
-
-                <div style={{ position: 'relative' }}>
+                >
                   <div
                     style={{
-                      position: 'absolute',
-                      left: '14px',
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      color: '#94a3b8',
                       display: 'flex',
+                      justifyContent: 'space-between',
                       alignItems: 'center',
-                      pointerEvents: 'none',
+                      marginBottom: '12px',
+                      flexWrap: 'wrap',
+                      gap: '10px',
                     }}
                   >
-                    <Search size={17} />
-                  </div>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>
+                          Search Registered Patient Database
+                        </span>
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            color: '#0369a1',
+                            background: '#e0f2fe',
+                            borderRadius: '4px',
+                            padding: '1px 8px',
+                          }}
+                        >
+                          Live Query
+                        </span>
+                      </div>
+                      <p style={{ fontSize: '12px', color: '#64748b', margin: '2px 0 0' }}>
+                        Type patient name, mobile number, or UHID. Matches will auto-populate EHR records.
+                      </p>
+                    </div>
 
-                  <input
-                    value={patientSearchQuery}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setPatientSearchQuery(val);
-                      if (selectedPatient) {
-                        setSelectedPatient(null);
-                      }
-                    }}
-                    placeholder="Type patient name, UHID, or phone number to search..."
-                    style={{
-                      width: '100%',
-                      height: '44px',
-                      padding: '0 40px 0 40px',
-                      border: '1.5px solid #cbd5e1',
-                      borderRadius: '8px',
-                      fontSize: '14px',
-                      outline: 'none',
-                      background: '#fff',
-                      boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
-                    }}
-                  />
-
-                  {patientSearchLoading ? (
-                    <div
+                    <button
+                      type="button"
+                      onClick={() => handleOpenCreatePatient()}
                       style={{
-                        position: 'absolute',
-                        right: '14px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
                         display: 'flex',
                         alignItems: 'center',
                         gap: '6px',
-                        fontSize: '12px',
-                        color: '#0284c7',
-                        fontWeight: 600,
+                        height: '36px',
+                        padding: '0 14px',
+                        borderRadius: '8px',
+                        border: '1px solid #bfdbfe',
+                        background: '#eff6ff',
+                        color: '#2563eb',
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#2563eb';
+                        e.currentTarget.style.color = '#fff';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = '#eff6ff';
+                        e.currentTarget.style.color = '#2563eb';
                       }}
                     >
-                      <RefreshCw size={14} className="animate-spin" /> Searching...
-                    </div>
-                  ) : patientSearchQuery ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPatientSearchQuery('');
-                        setSelectedPatient(null);
-                        setPatientSearchResults([]);
+                      <UserPlus size={16} />
+                      + Create New Patient
+                    </button>
+                  </div>
+
+                  <div style={{ position: 'relative' }}>
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: '14px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        color: '#64748b',
+                        display: 'flex',
+                        alignItems: 'center',
+                        pointerEvents: 'none',
                       }}
+                    >
+                      <Search size={18} />
+                    </div>
+
+                    <input
+                      id="otc-patient-search-input"
+                      value={patientSearchQuery}
+                      onChange={(e) => setPatientSearchQuery(e.target.value)}
+                      placeholder="Type patient name, UHID, or mobile number to search database..."
+                      style={{
+                        width: '100%',
+                        height: '46px',
+                        padding: '0 110px 0 44px',
+                        border: '1.5px solid #cbd5e1',
+                        borderRadius: '8px',
+                        fontSize: '14px',
+                        outline: 'none',
+                        background: '#fff',
+                        boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
+                        transition: 'border-color 0.15s ease',
+                      }}
+                      onFocus={(e) => (e.currentTarget.style.borderColor = '#2563eb')}
+                      onBlur={(e) => (e.currentTarget.style.borderColor = '#cbd5e1')}
+                    />
+
+                    <div
                       style={{
                         position: 'absolute',
                         right: '12px',
                         top: '50%',
                         transform: 'translateY(-50%)',
-                        background: '#f1f5f9',
-                        border: 'none',
-                        borderRadius: '50%',
-                        width: '22px',
-                        height: '22px',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center',
-                        color: '#64748b',
-                        cursor: 'pointer',
+                        gap: '6px',
                       }}
-                      title="Clear search"
                     >
-                      <X size={13} />
-                    </button>
-                  ) : null}
+                      {patientSearchLoading && (
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            fontSize: '12px',
+                            color: '#0284c7',
+                            fontWeight: 600,
+                          }}
+                        >
+                          <RefreshCw size={13} className="animate-spin" /> Searching...
+                        </div>
+                      )}
+                      {patientSearchQuery && !patientSearchLoading && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPatientSearchQuery('');
+                            setPatientSearchResults([]);
+                          }}
+                          style={{
+                            background: '#f1f5f9',
+                            border: 'none',
+                            borderRadius: '50%',
+                            width: '22px',
+                            height: '22px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#64748b',
+                            cursor: 'pointer',
+                          }}
+                          title="Clear search"
+                        >
+                          <X size={13} />
+                        </button>
+                      )}
+                    </div>
 
-                  {/* Floating Absolute Dropdown: only appears when searching and floats without changing container box height */}
-                  {patientSearchQuery.trim().length > 0 && !selectedPatient && (
-                    <div
-                      style={{
-                        position: 'absolute',
-                        top: 'calc(100% + 6px)',
-                        left: 0,
-                        right: 0,
-                        zIndex: 100,
-                        background: '#fff',
-                        border: '1.5px solid #bfdbfe',
-                        borderRadius: '10px',
-                        maxHeight: '280px',
-                        overflowY: 'auto',
-                        boxShadow: '0 12px 28px -4px rgba(15, 23, 42, 0.18), 0 4px 10px rgba(0, 0, 0, 0.06)',
-                      }}
-                    >
-                      {patientSearchResults.length > 0 ? (
-                        <>
-                          <div
-                            style={{
-                              padding: '8px 14px',
-                              background: '#f8fafc',
-                              borderBottom: '1px solid #e2e8f0',
-                              fontSize: '11px',
-                              fontWeight: 700,
-                              color: '#64748b',
-                              letterSpacing: '0.04em',
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
-                              position: 'sticky',
-                              top: 0,
-                              zIndex: 2,
-                            }}
-                          >
-                            <span>MATCHING REGISTERED PATIENTS ({patientSearchResults.length})</span>
-                            <span style={{ color: '#2563eb', fontWeight: 600 }}>Click any patient to select &amp; link</span>
-                          </div>
-                          {patientSearchResults.map((p) => {
-                            const fullName = `${p.first_name} ${p.last_name}`.trim() || 'Patient';
-                            const hasAllergy = p.allergies && p.allergies.length > 0 && p.allergies[0] !== 'None';
-                            return (
-                              <div
-                                key={p.uhid || p.id}
-                                onClick={() => handleSelectPatient(p)}
-                                style={{
-                                  padding: '12px 14px',
-                                  borderBottom: '1px solid #f1f5f9',
-                                  cursor: 'pointer',
-                                  display: 'flex',
-                                  justifyContent: 'space-between',
-                                  alignItems: 'center',
-                                  transition: 'background 0.12s ease',
-                                }}
-                                onMouseEnter={(e) => (e.currentTarget.style.background = '#f0f9ff')}
-                                onMouseLeave={(e) => (e.currentTarget.style.background = '#fff')}
-                              >
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <span style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>
-                                      {fullName}
+                    {/* Live Results Dropdown */}
+                    {patientSearchQuery.trim().length > 0 && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: 'calc(100% + 6px)',
+                          left: 0,
+                          right: 0,
+                          zIndex: 100,
+                          background: '#fff',
+                          border: '1.5px solid #bfdbfe',
+                          borderRadius: '10px',
+                          maxHeight: '320px',
+                          overflowY: 'auto',
+                          boxShadow: '0 12px 28px -4px rgba(15, 23, 42, 0.18), 0 4px 10px rgba(0, 0, 0, 0.06)',
+                        }}
+                      >
+                        {patientSearchResults.length > 0 ? (
+                          <>
+                            <div
+                              style={{
+                                padding: '9px 14px',
+                                background: '#f8fafc',
+                                borderBottom: '1px solid #e2e8f0',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                color: '#64748b',
+                                letterSpacing: '0.04em',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                position: 'sticky',
+                                top: 0,
+                                zIndex: 2,
+                              }}
+                            >
+                              <span>MATCHING REGISTERED PATIENTS ({patientSearchResults.length})</span>
+                              <span style={{ color: '#2563eb', fontWeight: 600 }}>Click patient to select &amp; link</span>
+                            </div>
+                            {patientSearchResults.map((p) => {
+                              const fullName = `${p.first_name} ${p.last_name}`.trim() || 'Patient';
+                              const hasAllergy = p.allergies && p.allergies.length > 0 && p.allergies[0] !== 'None';
+                              return (
+                                <div
+                                  key={p.uhid || p.id}
+                                  onClick={() => handleSelectPatient(p)}
+                                  style={{
+                                    padding: '12px 14px',
+                                    borderBottom: '1px solid #f1f5f9',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    transition: 'background 0.12s ease',
+                                  }}
+                                  onMouseEnter={(e) => (e.currentTarget.style.background = '#f0f9ff')}
+                                  onMouseLeave={(e) => (e.currentTarget.style.background = '#fff')}
+                                >
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                      <span style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>
+                                        {fullName}
+                                      </span>
+                                      <span
+                                        style={{
+                                          fontSize: '11px',
+                                          fontWeight: 600,
+                                          color: '#0369a1',
+                                          background: '#e0f2fe',
+                                          borderRadius: '4px',
+                                          padding: '1px 6px',
+                                          fontFamily: MONO_FONT,
+                                        }}
+                                      >
+                                        {p.uhid}
+                                      </span>
+                                      <span style={{ fontSize: '11px', color: '#64748b' }}>
+                                        {p.gender} {p.blood_group ? `· ${p.blood_group}` : ''}
+                                      </span>
+                                    </div>
+                                    {hasAllergy && (
+                                      <div
+                                        style={{
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '4px',
+                                          fontSize: '11px',
+                                          fontWeight: 600,
+                                          color: '#dc2626',
+                                        }}
+                                      >
+                                        <TriangleAlert size={12} /> Allergy alert: {p.allergies?.join(', ')}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#334155' }}>
+                                      📞 {p.phone || 'No phone'}
                                     </span>
                                     <span
                                       style={{
-                                        fontSize: '11px',
-                                        fontWeight: 600,
-                                        color: '#0369a1',
-                                        background: '#e0f2fe',
-                                        borderRadius: '4px',
-                                        padding: '1px 6px',
-                                        fontFamily: MONO_FONT,
+                                        fontSize: '12px',
+                                        fontWeight: 700,
+                                        color: '#2563eb',
+                                        background: '#eff6ff',
+                                        borderRadius: '6px',
+                                        padding: '5px 12px',
+                                        border: '1px solid #bfdbfe',
                                       }}
                                     >
-                                      {p.uhid}
-                                    </span>
-                                    <span style={{ fontSize: '11px', color: '#64748b' }}>
-                                      {p.gender} {p.blood_group ? `· ${p.blood_group}` : ''}
+                                      Select &amp; Link →
                                     </span>
                                   </div>
-                                  {hasAllergy && (
-                                    <div
-                                      style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '4px',
-                                        fontSize: '11px',
-                                        fontWeight: 600,
-                                        color: '#dc2626',
-                                      }}
-                                    >
-                                      <TriangleAlert size={12} /> Allergy alert: {p.allergies?.join(', ')}
-                                    </div>
-                                  )}
                                 </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#334155' }}>
-                                    📞 {p.phone || 'No phone'}
-                                  </span>
-                                  <span
-                                    style={{
-                                      fontSize: '12px',
-                                      fontWeight: 700,
-                                      color: '#2563eb',
-                                      background: '#eff6ff',
-                                      borderRadius: '6px',
-                                      padding: '5px 12px',
-                                      border: '1px solid #bfdbfe',
-                                    }}
-                                  >
-                                    Select →
-                                  </span>
-                                </div>
+                              );
+                            })}
+                            <div
+                              style={{
+                                padding: '10px 14px',
+                                background: '#f8fafc',
+                                borderTop: '1px solid #e2e8f0',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                              }}
+                            >
+                              <span style={{ fontSize: '12px', color: '#64748b' }}>
+                                Looking for someone else?
+                              </span>
+                              <div style={{ display: 'flex', gap: '8px' }}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleUseAsWalkIn(patientSearchQuery)}
+                                  style={{
+                                    fontSize: '12px',
+                                    fontWeight: 600,
+                                    color: '#475569',
+                                    background: '#fff',
+                                    border: '1px solid #cbd5e1',
+                                    borderRadius: '6px',
+                                    padding: '4px 10px',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  Use as Walk-in
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenCreatePatient(patientSearchQuery)}
+                                  style={{
+                                    fontSize: '12px',
+                                    fontWeight: 700,
+                                    color: '#2563eb',
+                                    background: '#eff6ff',
+                                    border: '1px solid #bfdbfe',
+                                    borderRadius: '6px',
+                                    padding: '4px 10px',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  + Create New Patient
+                                </button>
                               </div>
-                            );
-                          })}
-                        </>
-                      ) : !patientSearchLoading ? (
-                        <div style={{ padding: '16px', textAlign: 'center', color: '#64748b' }}>
-                          <div style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>
-                            No registered patients found matching "{patientSearchQuery}"
+                            </div>
+                          </>
+                        ) : !patientSearchLoading ? (
+                          <div style={{ padding: '20px', textAlign: 'center' }}>
+                            <div style={{ fontSize: '14px', fontWeight: 700, color: '#1e293b', marginBottom: '4px' }}>
+                              No registered patient found matching "{patientSearchQuery}"
+                            </div>
+                            <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '16px' }}>
+                              You can register them in North Hospital directory right now, or proceed as an OTC walk-in sale.
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenCreatePatient(patientSearchQuery)}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '6px',
+                                  height: '36px',
+                                  padding: '0 16px',
+                                  borderRadius: '8px',
+                                  background: '#2563eb',
+                                  color: '#fff',
+                                  border: 'none',
+                                  fontSize: '13px',
+                                  fontWeight: 700,
+                                  cursor: 'pointer',
+                                  boxShadow: '0 2px 4px rgba(37,99,235,0.2)',
+                                }}
+                              >
+                                <UserPlus size={15} />
+                                + Register New Patient "{patientSearchQuery}"
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleUseAsWalkIn(patientSearchQuery)}
+                                style={{
+                                  height: '36px',
+                                  padding: '0 16px',
+                                  borderRadius: '8px',
+                                  background: '#fff',
+                                  color: '#334155',
+                                  border: '1px solid #cbd5e1',
+                                  fontSize: '13px',
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                Continue as Walk-in Customer
+                              </button>
+                            </div>
                           </div>
-                          <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>
-                            Check spelling or search by phone/UHID, or select General Walk-in Customer.
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
-                  )}
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
                 </div>
-
-                {/* Selected Linked Patient Card */}
-                {selectedPatient && (
-                  <div
-                    style={{
-                      marginTop: '14px',
-                      padding: '16px 18px',
-                      background: '#eff6ff',
-                      borderRadius: '10px',
-                      border: '1.5px solid #93c5fd',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '8px',
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              ) : (
+                /* Selected Linked Patient Card */
+                <div
+                  style={{
+                    padding: '18px 20px',
+                    background: '#f0fdf4',
+                    borderRadius: '12px',
+                    border: '1.5px solid #86efac',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '10px',
+                    boxShadow: '0 2px 6px rgba(22,163,74,0.06)',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                      <div
+                        style={{
+                          width: '38px',
+                          height: '38px',
+                          borderRadius: '50%',
+                          background: '#dcfce7',
+                          color: '#16a34a',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginTop: '2px',
+                        }}
+                      >
+                        <CheckCircle2 size={22} />
+                      </div>
                       <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{ fontSize: '15px', fontWeight: 800, color: '#1e40af' }}>
-                            ✓ Linked Patient: {selectedPatient.first_name} {selectedPatient.last_name}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: '16px', fontWeight: 800, color: '#14532d' }}>
+                            {selectedPatient.first_name} {selectedPatient.last_name}
                           </span>
                           <span
                             style={{
                               fontSize: '12px',
                               fontWeight: 700,
-                              color: '#1d4ed8',
-                              background: '#dbeafe',
+                              color: '#15803d',
+                              background: '#dcfce7',
                               borderRadius: '4px',
                               padding: '2px 8px',
                               fontFamily: MONO_FONT,
@@ -995,55 +1159,71 @@ export const NewOTCSalePage: React.FC<NewOTCSalePageProps> = ({
                           >
                             {selectedPatient.uhid}
                           </span>
+                          <span
+                            style={{
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              color: '#047857',
+                              background: '#ecfdf5',
+                              border: '1px solid #a7f3d0',
+                              borderRadius: '4px',
+                              padding: '1px 6px',
+                            }}
+                          >
+                            ✓ Registered Hospital Patient
+                          </span>
                         </div>
-                        <div style={{ fontSize: '12px', color: '#475569', marginTop: '3px' }}>
-                          Phone: {selectedPatient.phone || 'N/A'} · Gender: {selectedPatient.gender} {selectedPatient.blood_group ? `· Blood: ${selectedPatient.blood_group}` : ''}
+                        <div style={{ fontSize: '12px', color: '#374151', marginTop: '4px' }}>
+                          Phone: <strong>+91 {selectedPatient.phone || 'N/A'}</strong> · Gender: <strong>{selectedPatient.gender}</strong>
+                          {selectedPatient.blood_group ? ` · Blood Group: ${selectedPatient.blood_group}` : ''}
+                          {customerAge ? ` · Age: ${customerAge} yrs` : ''}
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedPatient(null);
-                          setPatientSearchQuery('');
-                          setPatientSearchResults([]);
-                        }}
-                        style={{
-                          height: '30px',
-                          padding: '0 12px',
-                          background: '#fff',
-                          border: '1px solid #cbd5e1',
-                          borderRadius: '6px',
-                          color: '#dc2626',
-                          cursor: 'pointer',
-                          fontSize: '12px',
-                          fontWeight: 700,
-                        }}
-                      >
-                        Change / Unlink
-                      </button>
                     </div>
-                    {selectedPatient.allergies && selectedPatient.allergies.length > 0 && selectedPatient.allergies[0] !== 'None' && (
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          padding: '8px 12px',
-                          background: '#fef2f2',
-                          border: '1px solid #fecaca',
-                          borderRadius: '6px',
-                          color: '#dc2626',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                        }}
-                      >
-                        <TriangleAlert size={15} /> Documented Patient Allergies: {selectedPatient.allergies.join(', ')} (Pharmacist warning)
-                      </div>
-                    )}
+
+                    <button
+                      type="button"
+                      onClick={handleUnlinkPatient}
+                      style={{
+                        height: '32px',
+                        padding: '0 12px',
+                        background: '#fff',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '6px',
+                        color: '#dc2626',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <X size={13} /> Change / Search Another
+                    </button>
                   </div>
-                )}
-              </div>
-            )}
+
+                  {selectedPatient.allergies && selectedPatient.allergies.length > 0 && selectedPatient.allergies[0] !== 'None' && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '8px 12px',
+                        background: '#fef2f2',
+                        border: '1px solid #fecaca',
+                        borderRadius: '6px',
+                        color: '#dc2626',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                      }}
+                    >
+                      <TriangleAlert size={15} /> Documented Patient Allergies: {selectedPatient.allergies.join(', ')} (Pharmacist warning)
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
             {/* Form Fields */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' }}>
@@ -1995,6 +2175,20 @@ export const NewOTCSalePage: React.FC<NewOTCSalePageProps> = ({
           </div>
         )}
       </main>
+
+      {/* Frontdesk 5-Step OPD Patient Registration Wizard Modal */}
+      <PatientRegistrationWizardModal
+        isOpen={showCreatePatientModal}
+        onClose={() => setShowCreatePatientModal(false)}
+        initialName={prefillPatientName}
+        initialPhone={customerPhone}
+        onPatientRegistered={(newP) => {
+          handleFrontdeskPatientRegistered(newP);
+        }}
+        onProceedToPharmacySale={(newP) => {
+          handleFrontdeskPatientRegistered(newP);
+        }}
+      />
     </div>
   );
 };

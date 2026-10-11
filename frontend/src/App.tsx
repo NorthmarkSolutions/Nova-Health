@@ -15,11 +15,11 @@ import { DoctorAssistantDashboard } from './pages/doctor/DoctorAssistantDashboar
 import { NurseDashboard } from './pages/nurse/NurseDashboard';
 import { PharmacyDashboard } from './pages/pharmacy/PharmacyDashboard';
 import { InventoryManagerWorkspace } from './pages/pharmacy/inventory/InventoryManagerWorkspace';
-import { OPDPharmacistWorkspace } from './pages/pharmacy/opd/OPDPharmacistWorkspace';
-import { IPDPharmacistWorkspace } from './pages/pharmacy/ipd/IPDPharmacistWorkspace';
+import { OPDPharmacistWorkspace } from './pages/pharmacy/pharmacist/OPDPharmacistWorkspace';
+import { IPDPharmacistWorkspace } from './pages/pharmacy/pharmacist/IPDPharmacistWorkspace';
 import { ControlledDrugRegisterWorkspace } from './pages/pharmacy/controlled/ControlledDrugRegisterWorkspace';
 import { PharmacyAdminWorkspace } from './pages/pharmacy/admin/PharmacyAdminWorkspace';
-import { NewOTCSalePage } from './pages/pharmacy/opd/NewOTCSalePage';
+import { NewOTCSalePage } from './pages/pharmacy/pharmacist/NewOTCSalePage';
 import { LabDashboard } from './pages/lab/LabDashboard';
 import { OtDashboard } from './pages/ot/OtDashboard';
 import { IpdDashboard } from './pages/ipd/IpdDashboard';
@@ -27,6 +27,8 @@ import { BillingDepartmentContainer } from './pages/billing/BillingDepartmentCon
 import { AccountsDepartmentContainer } from './pages/accounts/AccountsDepartmentContainer';
 import { PatientDashboard } from './pages/patient/PatientDashboard';
 import { DepartmentWorkspaceContainer } from './pages/department/DepartmentWorkspaceContainer';
+import { UnifiedPharmacistWorkspace } from './pages/pharmacy/pharmacist/UnifiedPharmacistWorkspace';
+import { MyProfilePage } from './pages/profile/MyProfilePage';
 import { RoleType, BILLING_WORKSPACE_ROLES, ACCOUNTS_WORKSPACE_ROLES } from './types';
 
 const queryClient = new QueryClient();
@@ -49,14 +51,12 @@ const RoleHomeRedirect: React.FC = () => {
     return <Navigate to="/department/pharmacy" replace />;
   }
 
-  // Sneha Nair or IPD Pharmacist credentials redirect directly to IPD workspace
+  // Sneha Nair or IPD Primary credentials direct to unified workspace IPD queue
   if (
     user?.username === 'sneha_nair' ||
-    user?.email === 'sneha.nair@northhospital.com' ||
-    (user as any)?.designation?.includes('IPD') ||
-    (user as any)?.badge === 'IPD Pharmacist'
+    user?.email === 'sneha.nair@northhospital.com'
   ) {
-    return <Navigate to="/pharmacy/ipd" replace />;
+    return <Navigate to="/pharmacy?tab=ipd-requests" replace />;
   }
 
   // For DEPARTMENT_ADMIN, route to their actual assigned department workspace
@@ -147,18 +147,10 @@ const PharmacyWorkspaceRouter: React.FC = () => {
   if (view === 'cd' || view === 'controlled' || view === 'controlled-drugs') {
     return <ControlledDrugRegisterWorkspace />;
   }
-  if (
-    view === 'ipd' ||
-    user?.username === 'sneha_nair' ||
-    user?.email === 'sneha.nair@northhospital.com' ||
-    (user as any)?.badge === 'IPD Pharmacist'
-  ) {
-    return <IPDPharmacistWorkspace />;
-  }
   if (role === RoleType.INVENTORY_MANAGER || view === 'inventory') {
     return <InventoryManagerWorkspace />;
   }
-  return <OPDPharmacistWorkspace />;
+  return <UnifiedPharmacistWorkspace />;
 };
 
 export function App() {
@@ -187,7 +179,7 @@ export function App() {
               <Route path="/department/*" element={<DepartmentWorkspaceContainer />} />
             </Route>
 
-            {/* Pharmacy Workspaces: Independent Dedicated Engine (OPD Counter & Central Store) */}
+            {/* Pharmacy Workspaces: Unified Single Dashboard with Nested Navigation */}
             <Route
               element={
                 <ProtectedRoute
@@ -203,9 +195,9 @@ export function App() {
             >
               <Route path="/pharmacy" element={<PharmacyWorkspaceRouter />} />
               <Route path="/pharmacy/admin" element={<PharmacyAdminWorkspace />} />
-              <Route path="/pharmacy/opd" element={<OPDPharmacistWorkspace />} />
+              <Route path="/pharmacy/opd" element={<UnifiedPharmacistWorkspace defaultModule="opd-queue" />} />
               <Route path="/pharmacy/otc-sale/new" element={<NewOTCSalePage />} />
-              <Route path="/pharmacy/ipd" element={<IPDPharmacistWorkspace />} />
+              <Route path="/pharmacy/ipd" element={<UnifiedPharmacistWorkspace defaultModule="ipd-requests" />} />
               <Route path="/pharmacy/inventory" element={<InventoryManagerWorkspace />} />
               <Route path="/pharmacy/controlled-drugs" element={<ControlledDrugRegisterWorkspace />} />
               <Route path="/pharmacy/controlled" element={<ControlledDrugRegisterWorkspace />} />
@@ -238,6 +230,11 @@ export function App() {
               }
             >
               <Route path="/accounts/*" element={<AccountsDepartmentContainer />} />
+            </Route>
+
+            {/* Dedicated Staff Profile Page: Accessible to all authenticated HMS staff */}
+            <Route element={<ProtectedRoute />}>
+              <Route path="/profile" element={<MyProfilePage />} />
             </Route>
 
             {/* Authenticated Role Workspaces Wrapped in Unified AppLayout */}

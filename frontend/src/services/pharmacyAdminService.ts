@@ -411,12 +411,31 @@ export const pharmacyAdminService = {
 
   getAuditLogs: async (params?: { filter?: string; search?: string }): Promise<PharmacyGovernanceAuditEntry[]> => {
     const res = await api.get('/pharmacy/admin/audit-logs/', { params });
-    return res.data;
+    // The API returns model fields (user_name, action, entity_reference, severity…); map them to the UI shape
+    return (res.data || []).map((a: any) => ({
+      ...a,
+      id: String(a.id),
+      time: a.time ?? a.time_display ?? (a.timestamp ? new Date(a.timestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ''),
+      user: a.user_name ?? (typeof a.user === 'string' ? a.user : '') ?? '',
+      ip: a.ip ?? a.terminal ?? '',
+      act: a.act ?? a.action ?? '',
+      ent: a.ent ?? a.entity_reference ?? '',
+      sev: a.sev ?? a.severity ?? 'Info',
+      det: a.det ?? a.details ?? '',
+    }));
   },
 
   getSettings: async (): Promise<PharmacyGovernancePolicy[]> => {
     const res = await api.get('/pharmacy/admin/settings/');
-    return res.data;
+    // The API returns model fields (setting_key, effective_value, last_changed_by); map them to the UI shape
+    return (res.data || []).map((s: any) => ({
+      key: s.key ?? s.setting_key ?? s.id,
+      name: s.name ?? '',
+      scope: s.scope ?? '',
+      value: s.value ?? s.effective_value ?? (s.value_type === 'BOOLEAN' ? !!s.boolean_val : s.string_val ?? ''),
+      by: s.by ?? [s.last_changed_by, s.last_changed_at ? new Date(s.last_changed_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : ''].filter(Boolean).join(' · '),
+      description: s.description ?? '',
+    }));
   },
 
   updateSettings: async (settings: Record<string, any>): Promise<{ message: string; settings: PharmacyGovernancePolicy[] }> => {
