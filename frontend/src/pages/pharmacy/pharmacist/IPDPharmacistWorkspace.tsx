@@ -35,6 +35,7 @@ import {
   BedDouble,
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
+import '../shared/pharmacyMotion.css';
 import pharmacyIpdService, {
   IPDKPIMetrics,
   IPDWardRequest,
@@ -110,7 +111,7 @@ export const RETURN_CLASS_STYLES: Record<string, { bg: string; fg: string; bd: s
 };
 
 const getPillStyle = (active: boolean) => ({
-  height: '30px',
+  height: '32px',
   padding: '0 12px',
   borderRadius: '9999px',
   fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
@@ -218,7 +219,15 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
 
   // Selected Items & Completed Order Retention
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+
   const [selectedReturnId, setSelectedReturnId] = useState<string | null>(null);
+  // Motion: fade the right box when the selection changes (HMS bible 19.10)
+  useEffect(() => {
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    document.querySelectorAll<HTMLElement>('[data-hms-detail]').forEach((el) => {
+      if (typeof el.animate === 'function') el.animate([{ opacity: 0.55, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], { duration: 160, easing: 'ease-out' });
+    });
+  }, [selectedOrderId, selectedReturnId]);
   const [completedOrder, setCompletedOrder] = useState<IPDWardRequest | null>(null);
 
   // Notifications
@@ -655,7 +664,7 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
   };
 
   return (
-    <div style={{ display: 'flex', height: isEmbedded ? 'auto' : '100vh', width: isEmbedded ? '100%' : '100vw', overflow: isEmbedded ? 'visible' : 'hidden', background: '#f9fafb', fontFamily: 'Inter, sans-serif' }}>
+    <div className="hms-motion" style={{ display: 'flex', height: isEmbedded ? 'auto' : '100vh', width: isEmbedded ? '100%' : '100vw', overflow: isEmbedded ? 'visible' : 'hidden', background: '#f9fafb', fontFamily: 'Inter, sans-serif' }}>
       {/* ------------------------------------------ */}
       {/* LEFT NAVIGATION SIDEBAR (260px)            */}
       {/* ------------------------------------------ */}
@@ -684,7 +693,7 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
             <button
               onClick={() => navigate('/pharmacy/opd')}
               style={{
-                fontSize: '11px',
+                fontSize: '12px',
                 fontWeight: 600,
                 color: '#2563eb',
                 background: 'transparent',
@@ -702,7 +711,7 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
             <button
               onClick={() => navigate('/pharmacy/inventory')}
               style={{
-                fontSize: '11px',
+                fontSize: '12px',
                 fontWeight: 600,
                 color: '#4b5563',
                 background: 'transparent',
@@ -720,7 +729,7 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
             <button
               onClick={() => navigate('/pharmacy/controlled-drugs')}
               style={{
-                fontSize: '11px',
+                fontSize: '12px',
                 fontWeight: 600,
                 color: '#b45309',
                 background: 'transparent',
@@ -878,13 +887,13 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
                   display: 'flex',
                   alignItems: 'center',
                   gap: '5px',
-                  height: '28px',
+                  height: '32px',
                   padding: '0 10px',
-                  borderRadius: '6px',
+                  borderRadius: '8px',
                   border: 'none',
                   background: 'transparent',
                   color: '#64748b',
-                  fontSize: '12px',
+                  fontSize: '13px',
                   fontWeight: 500,
                   cursor: 'pointer',
                   transition: 'all 0.15s ease',
@@ -900,13 +909,13 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
                   display: 'flex',
                   alignItems: 'center',
                   gap: '5px',
-                  height: '28px',
+                  height: '32px',
                   padding: '0 10px',
-                  borderRadius: '6px',
+                  borderRadius: '8px',
                   border: 'none',
                   background: '#ffffff',
                   color: '#1d4ed8',
-                  fontSize: '12px',
+                  fontSize: '13px',
                   fontWeight: 600,
                   cursor: 'pointer',
                   boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
@@ -920,7 +929,7 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
                 </span>
               </button>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '32px', padding: '0 12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '12px', color: '#374151', whiteSpace: 'nowrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', height: '40px', padding: '0 14px', border: '1px solid #e5e7eb', borderRadius: '10px', fontSize: '13px', color: '#374151', whiteSpace: 'nowrap' }}>
               <Clock size={14} color="#6b7280" />
               Morning shift · 07:00–15:00
             </div>
@@ -1114,7 +1123,7 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+              gridTemplateColumns: 'minmax(340px, 1fr) minmax(0, 2.3fr)',
               gap: '16px',
               alignItems: 'start',
               width: '100%',
@@ -1125,7 +1134,6 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
             {/* Left Panel: 1 Column */}
             <div
               style={{
-                gridColumn: 'span 1',
                 width: '100%',
                 minWidth: 0,
                 maxWidth: '100%',
@@ -1194,10 +1202,10 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
                         key={wardName}
                         onClick={() => setSelectedWard(wardName)}
                         style={{
-                          height: '26px',
+                          height: '32px',
                           padding: '0 9px',
-                          borderRadius: '6px',
-                          fontSize: '11px',
+                          borderRadius: '8px',
+                          fontSize: '13px',
                           fontWeight: 600,
                           cursor: 'pointer',
                           whiteSpace: 'nowrap',
@@ -1224,10 +1232,10 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
                           key={st}
                           onClick={() => setPendingStatusFilter(st)}
                           style={{
-                            height: '24px',
+                            height: '32px',
                             padding: '0 8px',
                             borderRadius: '5px',
-                            fontSize: '11px',
+                            fontSize: '13px',
                             fontWeight: 600,
                             cursor: 'pointer',
                             whiteSpace: 'nowrap',
@@ -1255,10 +1263,10 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
                           key={cls}
                           onClick={() => setReturnClassificationFilter(cls)}
                           style={{
-                            height: '24px',
+                            height: '32px',
                             padding: '0 8px',
                             borderRadius: '5px',
-                            fontSize: '11px',
+                            fontSize: '13px',
                             fontWeight: 600,
                             cursor: 'pointer',
                             whiteSpace: 'nowrap',
@@ -1441,8 +1449,8 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
 
             {/* Right Panel: 3 Columns */}
             <div
+              data-hms-detail
               style={{
-                gridColumn: 'span 3',
                 width: '100%',
                 minWidth: 0,
                 maxWidth: '100%',
@@ -1509,13 +1517,13 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
                     <button
                       onClick={() => setEmergencyModalOpen(true)}
                       style={{
-                        height: '36px',
+                        height: '40px',
                         padding: '0 14px',
-                        borderRadius: '8px',
+                        borderRadius: '10px',
                         border: 'none',
                         background: '#dc2626',
                         color: '#ffffff',
-                        fontSize: '13px',
+                        fontSize: '14px',
                         fontWeight: 600,
                         cursor: 'pointer',
                         display: 'flex',
@@ -1530,13 +1538,13 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
                   <button
                     onClick={handleCallNext}
                     style={{
-                      height: '36px',
+                      height: '40px',
                       padding: '0 16px',
-                      borderRadius: '8px',
+                      borderRadius: '10px',
                       border: 'none',
                       background: '#2563eb',
                       color: '#ffffff',
-                      fontSize: '13px',
+                      fontSize: '14px',
                       fontWeight: 600,
                       cursor: 'pointer',
                       display: 'flex',
@@ -1961,13 +1969,13 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
                                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                                     <button
                                       onClick={handleQueryPrescriber}
-                                      style={{ height: '36px', padding: '0 12px', borderRadius: '10px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', background: '#fff', color: '#374151', border: '1px solid #d1d5db' }}
+                                      style={{ height: '40px', padding: '0 12px', borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', background: '#fff', color: '#374151', border: '1px solid #d1d5db' }}
                                     >
                                       Query prescriber
                                     </button>
                                     <button
                                       onClick={() => setAllergyOverrideOpen(!allergyOverrideOpen)}
-                                      style={{ height: '36px', padding: '0 12px', borderRadius: '10px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', background: allergyOverrideOpen ? '#eff6ff' : '#fff', color: allergyOverrideOpen ? '#1d4ed8' : '#374151', border: '1px solid #d1d5db' }}
+                                      style={{ height: '40px', padding: '0 12px', borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', background: allergyOverrideOpen ? '#eff6ff' : '#fff', color: allergyOverrideOpen ? '#1d4ed8' : '#374151', border: '1px solid #d1d5db' }}
                                     >
                                       Override with reason
                                     </button>
@@ -2008,7 +2016,7 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
                                 style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '10px', cursor: 'pointer', background: orderReviewMar ? '#eff6ff' : '#fff' }}
                               >
                                 <span style={{ width: '18px', height: '18px', flexShrink: 0, marginTop: '1px', borderRadius: '5px', border: `1.5px solid ${orderReviewMar ? '#2563eb' : '#d1d5db'}`, background: orderReviewMar ? '#2563eb' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                  {orderReviewMar && <Check size={12} color="#fff" strokeWidth={3} />}
+                                  {orderReviewMar && <Check size={12} color="#fff" strokeWidth={3} className="hms-tick" />}
                                 </span>
                                 <div>
                                   <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827' }}>Dose, route and frequency appropriate</div>
@@ -2021,7 +2029,7 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
                                 style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '10px', cursor: 'pointer', background: orderReviewDup ? '#eff6ff' : '#fff' }}
                               >
                                 <span style={{ width: '18px', height: '18px', flexShrink: 0, marginTop: '1px', borderRadius: '5px', border: `1.5px solid ${orderReviewDup ? '#2563eb' : '#d1d5db'}`, background: orderReviewDup ? '#2563eb' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                  {orderReviewDup && <Check size={12} color="#fff" strokeWidth={3} />}
+                                  {orderReviewDup && <Check size={12} color="#fff" strokeWidth={3} className="hms-tick" />}
                                 </span>
                                 <div>
                                   <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827' }}>No duplicate issue in last 24 h</div>
@@ -2036,7 +2044,7 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
                                 <div style={{ fontSize: '12px', fontWeight: 600, letterSpacing: '0.06em', color: '#dc2626' }}>EMERGENCY RELEASE SHORTCUT</div>
                                 <button
                                   onClick={() => setEmergencyModalOpen(true)}
-                                  style={{ height: '36px', padding: '0 12px', borderRadius: '10px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', background: '#fff', color: '#dc2626', border: '1px solid #fecaca', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                                  style={{ height: '40px', padding: '0 12px', borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', background: '#fff', color: '#dc2626', border: '1px solid #fecaca', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
                                 >
                                   <Siren size={14} color="#dc2626" />
                                   Emergency issue · immediate release
@@ -2138,14 +2146,14 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
                                       {l.available_stock > 0 && (
                                         <button
                                           onClick={() => setItemDecisions({ ...itemDecisions, [l.id]: 'partial' })}
-                                          style={{ height: '32px', padding: '0 10px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', background: d === 'partial' ? '#eff6ff' : '#fff', color: d === 'partial' ? '#1d4ed8' : '#374151', border: `1px solid ${d === 'partial' ? '#2563eb' : '#d1d5db'}` }}
+                                          style={{ height: '32px', padding: '0 10px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', background: d === 'partial' ? '#eff6ff' : '#fff', color: d === 'partial' ? '#1d4ed8' : '#374151', border: `1px solid ${d === 'partial' ? '#2563eb' : '#d1d5db'}` }}
                                         >
                                           Allocate {l.available_stock}, backorder {l.prescribed_quantity - l.available_stock}
                                         </button>
                                       )}
                                       <button
                                         onClick={() => setItemDecisions({ ...itemDecisions, [l.id]: 'hold' })}
-                                        style={{ height: '32px', padding: '0 10px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', background: d === 'hold' ? '#eff6ff' : '#fff', color: d === 'hold' ? '#1d4ed8' : '#374151', border: `1px solid ${d === 'hold' ? '#2563eb' : '#d1d5db'}` }}
+                                        style={{ height: '32px', padding: '0 10px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', background: d === 'hold' ? '#eff6ff' : '#fff', color: d === 'hold' ? '#1d4ed8' : '#374151', border: `1px solid ${d === 'hold' ? '#2563eb' : '#d1d5db'}` }}
                                       >
                                         Hold line
                                       </button>
@@ -2167,7 +2175,7 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
                                             </div>
                                             <button
                                               onClick={() => handleOpenSubstitutionModal(l, alt)}
-                                              style={{ height: '30px', padding: '0 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                                              style={{ height: '32px', padding: '0 10px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', cursor: 'pointer', whiteSpace: 'nowrap' }}
                                             >
                                               Request prescriber approval
                                             </button>
@@ -2238,7 +2246,7 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
                                     style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '10px', cursor: 'pointer', background: isPicked ? '#eff6ff' : '#fff' }}
                                   >
                                     <span style={{ width: '18px', height: '18px', flexShrink: 0, marginTop: '1px', borderRadius: '5px', border: `1.5px solid ${isPicked ? '#2563eb' : '#d1d5db'}`, background: isPicked ? '#2563eb' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                      {isPicked && <Check size={12} color="#fff" strokeWidth={3} />}
+                                      {isPicked && <Check size={12} color="#fff" strokeWidth={3} className="hms-tick" />}
                                     </span>
                                     <div>
                                       <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827' }}>
@@ -2258,7 +2266,7 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
                                 style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '10px', cursor: 'pointer', background: labelsAffixed ? '#eff6ff' : '#fff' }}
                               >
                                 <span style={{ width: '18px', height: '18px', flexShrink: 0, marginTop: '1px', borderRadius: '5px', border: `1.5px solid ${labelsAffixed ? '#2563eb' : '#d1d5db'}`, background: labelsAffixed ? '#2563eb' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                  {labelsAffixed && <Check size={12} color="#fff" strokeWidth={3} />}
+                                  {labelsAffixed && <Check size={12} color="#fff" strokeWidth={3} className="hms-tick" />}
                                 </span>
                                 <div>
                                   <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827' }}>Labelled with patient, bed and admission ID</div>
@@ -2275,7 +2283,7 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
                                   style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '10px', cursor: 'pointer', background: coldPackBox ? '#eff6ff' : '#fff' }}
                                 >
                                   <span style={{ width: '18px', height: '18px', flexShrink: 0, marginTop: '1px', borderRadius: '5px', border: `1.5px solid ${coldPackBox ? '#2563eb' : '#d1d5db'}`, background: coldPackBox ? '#2563eb' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    {coldPackBox && <Check size={12} color="#fff" strokeWidth={3} />}
+                                    {coldPackBox && <Check size={12} color="#fff" strokeWidth={3} className="hms-tick" />}
                                   </span>
                                   <div>
                                     <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827' }}>Cold-chain box packed</div>
@@ -2291,7 +2299,7 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
                                   style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '10px', cursor: 'pointer', background: cdRegisterBag ? '#eff6ff' : '#fff' }}
                                 >
                                   <span style={{ width: '18px', height: '18px', flexShrink: 0, marginTop: '1px', borderRadius: '5px', border: `1.5px solid ${cdRegisterBag ? '#2563eb' : '#d1d5db'}`, background: cdRegisterBag ? '#2563eb' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    {cdRegisterBag && <Check size={12} color="#fff" strokeWidth={3} />}
+                                    {cdRegisterBag && <Check size={12} color="#fff" strokeWidth={3} className="hms-tick" />}
                                   </span>
                                   <div>
                                     <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827' }}>CD issued against ward CD register</div>
@@ -2341,10 +2349,10 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
                                       key={n}
                                       onClick={() => setReceivingNurse(n)}
                                       style={{
-                                        height: '24px',
+                                        height: '32px',
                                         padding: '0 8px',
-                                        borderRadius: '4px',
-                                        fontSize: '11px',
+                                        borderRadius: '8px',
+                                        fontSize: '13px',
                                         fontWeight: 600,
                                         cursor: 'pointer',
                                         background: receivingNurse === n ? '#eff6ff' : '#f3f4f6',
@@ -2366,7 +2374,7 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
                                   </label>
                                   <button
                                     onClick={() => setCollectionTimeInput(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }))}
-                                    style={{ fontSize: '11px', color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, padding: 0 }}
+                                    style={{ fontSize: '12px', color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, padding: 0 }}
                                   >
                                     Set to Now
                                   </button>
@@ -2390,7 +2398,7 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
                                 style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '10px', cursor: 'pointer', background: handoverCounted ? '#eff6ff' : '#fff' }}
                               >
                                 <span style={{ width: '18px', height: '18px', flexShrink: 0, marginTop: '1px', borderRadius: '5px', border: `1.5px solid ${handoverCounted ? '#2563eb' : '#d1d5db'}`, background: handoverCounted ? '#2563eb' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                  {handoverCounted && <Check size={12} color="#fff" strokeWidth={3} />}
+                                  {handoverCounted && <Check size={12} color="#fff" strokeWidth={3} className="hms-tick" />}
                                 </span>
                                 <div>
                                   <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827' }}>Items and quantities counted with receiving nurse</div>
@@ -2403,7 +2411,7 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
                                 style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '10px', cursor: 'pointer', background: handoverSigned ? '#eff6ff' : '#fff' }}
                               >
                                 <span style={{ width: '18px', height: '18px', flexShrink: 0, marginTop: '1px', borderRadius: '5px', border: `1.5px solid ${handoverSigned ? '#2563eb' : '#d1d5db'}`, background: handoverSigned ? '#2563eb' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                  {handoverSigned && <Check size={12} color="#fff" strokeWidth={3} />}
+                                  {handoverSigned && <Check size={12} color="#fff" strokeWidth={3} className="hms-tick" />}
                                 </span>
                                 <div>
                                   <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827' }}>Ward copy signed</div>
@@ -2417,7 +2425,7 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
                                   style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '10px', cursor: 'pointer', background: handoverFridge ? '#eff6ff' : '#fff' }}
                                 >
                                   <span style={{ width: '18px', height: '18px', flexShrink: 0, marginTop: '1px', borderRadius: '5px', border: `1.5px solid ${handoverFridge ? '#2563eb' : '#d1d5db'}`, background: handoverFridge ? '#2563eb' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    {handoverFridge && <Check size={12} color="#fff" strokeWidth={3} />}
+                                    {handoverFridge && <Check size={12} color="#fff" strokeWidth={3} className="hms-tick" />}
                                   </span>
                                   <div>
                                     <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827' }}>Cold items placed in ward fridge</div>
@@ -2436,7 +2444,7 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
                                   style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '10px', cursor: 'pointer', background: cdReceiverSig ? '#eff6ff' : '#fff' }}
                                 >
                                   <span style={{ width: '18px', height: '18px', flexShrink: 0, marginTop: '1px', borderRadius: '5px', border: `1.5px solid ${cdReceiverSig ? '#2563eb' : '#d1d5db'}`, background: cdReceiverSig ? '#2563eb' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    {cdReceiverSig && <Check size={12} color="#fff" strokeWidth={3} />}
+                                    {cdReceiverSig && <Check size={12} color="#fff" strokeWidth={3} className="hms-tick" />}
                                   </span>
                                   <div>
                                     <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827' }}>Receiver signature captured</div>
@@ -2662,7 +2670,7 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
                                   background: 'transparent',
                                   color: '#374151',
                                   border: '1px solid #d1d5db',
-                                  fontSize: '13px',
+                                  fontSize: '14px',
                                   fontWeight: 600,
                                   cursor: 'pointer',
                                   display: 'flex',
@@ -2714,7 +2722,7 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
       {/* REQUIREMENT 3: ALTERNATIVE PRESCRIBER APPROVAL MODAL          */}
       {/* ------------------------------------------------------------- */}
       {substitutionModalOpen && substitutingItem && selectedSubstitute && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(17, 24, 39, 0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+        <div className="hms-backdrop" style={{ position: 'fixed', inset: 0, background: 'rgba(17, 24, 39, 0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
           <div style={{ background: '#fff', width: '500px', maxWidth: '92vw', borderRadius: '14px', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -2770,7 +2778,7 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
               style={{ display: 'flex', gap: '10px', alignItems: 'center', padding: '12px', borderRadius: '10px', border: '1px solid #e5e7eb', background: prescriberApprovedCheck ? '#eff6ff' : '#fff', cursor: 'pointer' }}
             >
               <span style={{ width: '18px', height: '18px', borderRadius: '4px', border: `1.5px solid ${prescriberApprovedCheck ? '#2563eb' : '#d1d5db'}`, background: prescriberApprovedCheck ? '#2563eb' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {prescriberApprovedCheck && <Check size={12} color="#fff" strokeWidth={3} />}
+                {prescriberApprovedCheck && <Check size={12} color="#fff" strokeWidth={3} className="hms-tick" />}
               </span>
               <span style={{ fontSize: '13px', fontWeight: 500, color: '#111827' }}>
                 Prescriber verbal / electronic approval verified
@@ -2780,14 +2788,14 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
               <button
                 onClick={() => setSubstitutionModalOpen(false)}
-                style={{ height: '38px', padding: '0 16px', borderRadius: '10px', background: '#fff', border: '1px solid #d1d5db', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+                style={{ height: '40px', padding: '0 16px', borderRadius: '10px', background: '#fff', border: '1px solid #d1d5db', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
               >
                 Cancel
               </button>
               <button
                 onClick={handleAuthorizeSubstitution}
                 disabled={!prescriberApprovedCheck}
-                style={{ height: '38px', padding: '0 16px', borderRadius: '10px', background: '#2563eb', color: '#fff', border: 'none', fontSize: '13px', fontWeight: 600, cursor: prescriberApprovedCheck ? 'pointer' : 'not-allowed', opacity: prescriberApprovedCheck ? 1 : 0.5 }}
+                style={{ height: '40px', padding: '0 16px', borderRadius: '10px', background: '#2563eb', color: '#fff', border: 'none', fontSize: '14px', fontWeight: 600, cursor: prescriberApprovedCheck ? 'pointer' : 'not-allowed', opacity: prescriberApprovedCheck ? 1 : 0.5 }}
               >
                 Authorize & Record Audit
               </button>
@@ -2800,7 +2808,7 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
       {/* EMERGENCY STAT RELEASE MODAL               */}
       {/* ------------------------------------------ */}
       {emergencyModalOpen && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(17, 24, 39, 0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+        <div className="hms-backdrop" style={{ position: 'fixed', inset: 0, background: 'rgba(17, 24, 39, 0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
           <div style={{ background: '#fff', width: '480px', maxWidth: '90vw', borderRadius: '14px', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -2856,13 +2864,13 @@ export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
               <button
                 onClick={() => setEmergencyModalOpen(false)}
-                style={{ height: '38px', padding: '0 16px', borderRadius: '10px', background: '#fff', border: '1px solid #d1d5db', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+                style={{ height: '40px', padding: '0 16px', borderRadius: '10px', background: '#fff', border: '1px solid #d1d5db', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
               >
                 Cancel
               </button>
               <button
                 onClick={handleExecuteEmergency}
-                style={{ height: '38px', padding: '0 16px', borderRadius: '10px', background: '#dc2626', color: '#fff', border: 'none', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+                style={{ height: '40px', padding: '0 16px', borderRadius: '10px', background: '#dc2626', color: '#fff', border: 'none', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
               >
                 Release Immediately
               </button>

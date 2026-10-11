@@ -952,6 +952,28 @@ Implementation rules:
 - Do not create duplicate components or new colors. If a shared component would make the screen look different from Section 19, follow Section 19.
 - Verify with `npx tsc -p tsconfig.app.json --noEmit`, `npx oxlint <files>` (no new warnings) and `npx vite build`, then click through every section in the browser.
 
+## 19.10 Motion
+
+Motion only confirms what changed. It never delays work. Reference: `FOCUS_CSS` in `PharmacyAdminWorkspace.tsx`.
+
+- Durations 120–200ms, `ease-out`. Animate only `opacity` and `transform` (bars may also transition `width`). No bounce, spin or looping motion except loading skeletons.
+- Always include a `@media (prefers-reduced-motion: reduce)` block that removes animations and transitions.
+
+| Where | Motion |
+|---|---|
+| Right box on selection change | Fade from 0.55 + 4px slide, 160ms, via `element.animate()` on the panel (do not remount it with `key`, which loses focus and scroll) |
+| List rows | Background and left-border color transition 120ms |
+| Completion bar | Grows from the left (`scaleX` 0→1, 500ms) on first show; width changes transition 300ms; the "✓ Done" label fades in |
+| Buttons | Hover: lift 1px, soft shadow, brightness 0.97 (120–150ms). Press: scale 0.97, 60ms. Icons: Plus rotates 90°, Refresh 180°, Download nudges down, Arrow/Send nudge right. Not on sidebar items or disabled buttons. Apply once with a root-scoped CSS rule, not per button |
+| KPI cards | Hover/focus: lift 1px, soft shadow, border #BFDBFE, 150ms |
+| Sidebar groups | Chevron rotates (-90° when collapsed); items fade in when expanded |
+| Menus and dialogs | Backdrop fades in; panel pops from scale 0.98, 150ms |
+| Loading values | Shimmer skeleton blocks instead of "—" while loading; "—" only when data is unavailable |
+| Value changes (stock, totals) | Brief green (up) / amber (down) background flash, ≤600ms |
+| Validation errors | One short shake (≈200ms) and red border; never repeat |
+
+Never animate while the user is typing or scanning, never animate every row on page load, and never count KPI numbers up on refresh.
+
 ---
 
 # 20. Apply Checklist (use for every department)
@@ -968,7 +990,8 @@ Work through these in order. Report what changed and anything you could not appl
 8. **Buttons & typography** (19.1, 19.7): one font, the type scale only, 40px buttons, 10px radius.
 9. **Keyboard** (19.8): Alt+number navigation, `/`, arrows, Enter, Esc, Alt+N, Alt+P, `?` dialog, modal Esc/focus, visible focus.
 10. **Data** (19.9): map API fields in the service, remove hard-coded fallbacks, flag missing endpoints.
-11. **Verify**: type-check, lint, build, and click through every section (selection sync, filters, search, shortcuts, modals, profile menu).
+11. **Motion** (19.10): add the motion CSS block and reduced-motion rule.
+12. **Verify**: type-check, lint, build, and click through every section (selection sync, filters, search, shortcuts, modals, profile menu).
 
 ---
 
