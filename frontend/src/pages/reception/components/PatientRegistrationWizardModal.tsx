@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   UserPlus,
@@ -22,11 +22,12 @@ import {
 } from 'lucide-react';
 import { Gender } from '../../../types';
 import { SharedPatient, SharedQueueToken, patientJourneyService } from '../../../services/patientJourneyService';
+import api from '../../../services/api';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  doctorsRoster: Array<{
+  doctorsRoster?: Array<{
     name: string;
     dept: string;
     room: string;
@@ -35,15 +36,21 @@ interface Props {
   onPatientRegistered: (patient: SharedPatient) => void;
   onProceedToBookAppointment?: (patient: SharedPatient) => void;
   onProceedToIssueWalkIn?: (patient: SharedPatient) => void;
+  initialName?: string;
+  initialPhone?: string;
+  onProceedToPharmacySale?: (patient: SharedPatient) => void;
 }
 
 export const PatientRegistrationWizardModal: React.FC<Props> = ({
   isOpen,
   onClose,
-  doctorsRoster,
+  doctorsRoster = [],
   onPatientRegistered,
   onProceedToBookAppointment,
   onProceedToIssueWalkIn,
+  initialName = '',
+  initialPhone = '',
+  onProceedToPharmacySale,
 }) => {
   if (!isOpen) return null;
 
@@ -84,6 +91,25 @@ export const PatientRegistrationWizardModal: React.FC<Props> = ({
   const [treatmentConsentSigned, setTreatmentConsentSigned] = useState(true);
   const [hipaaConsentSigned, setHipaaConsentSigned] = useState(true);
 
+  // Synchronize initialName & initialPhone when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setStep(1);
+      if (initialName && initialName.trim()) {
+        const parts = initialName.trim().split(/\s+/);
+        setFirstName(parts[0] || '');
+        setLastName(parts.slice(1).join(' ') || '');
+      } else {
+        setFirstName('');
+        setLastName('');
+      }
+      if (initialPhone && initialPhone.trim()) {
+        const p = initialPhone.trim();
+        setPhone(p.startsWith('+') ? p : `+91 ${p}`);
+      }
+    }
+  }, [isOpen, initialName, initialPhone]);
+
   // Generated Patient Preview Card
   const [registeredPatient, setRegisteredPatient] = useState<SharedPatient | null>(null);
   const [registeredToken, setRegisteredToken] = useState<SharedQueueToken | null>(null);
@@ -122,6 +148,8 @@ export const PatientRegistrationWizardModal: React.FC<Props> = ({
     const uhidNumber = `UHID-202609-${String(currentPatients.length + 1).padStart(5, '0')}`;
     const age = calculateAge(dob);
 
+    const activeAllergies = allergies.filter((a) => a !== 'None');
+
     const newPatient: SharedPatient = {
       uhid: uhidNumber,
       firstName: firstName.trim() || 'New',
@@ -137,8 +165,26 @@ export const PatientRegistrationWizardModal: React.FC<Props> = ({
       insurance: insuranceType === 'Self Pay (Cash)' ? 'Self Pay (Cash)' : `${insuranceType} • Pol# ${policyNumber || 'POL-PENDING'}`,
       visitsCount: 0,
       outstandingDue: 0.0,
+      allergies: activeAllergies,
+      chronicConditions,
       recentVisits: [],
     };
+
+    try {
+      api.post('/patients/', {
+        uhid: uhidNumber,
+        firstName: newPatient.firstName,
+        lastName: newPatient.lastName,
+        phoneNumber: newPatient.phone,
+        gender: String(gender).toUpperCase(),
+        dateOfBirth: dob,
+        bloodGroup,
+        allergies: activeAllergies,
+        chronicConditions,
+      }).catch((e) => console.warn('Django patient sync warning:', e));
+    } catch (e) {
+      // safe fallback
+    }
 
     patientJourneyService.registerPatient(newPatient);
     setRegisteredPatient(newPatient);
@@ -692,33 +738,58 @@ export const PatientRegistrationWizardModal: React.FC<Props> = ({
             {/* Next Action Selection */}
             <div style={{ width: '100%', maxWidth: '460px', display: 'flex', flexDirection: 'column', gap: '0.625rem', marginTop: '0.25rem' }}>
               <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textAlign: 'left' }}>
-                Select Next Receptionist Action for this Patient:
+                {onProceedToPharmacySale ? 'Complete & Link to Pharmacy Dispense:' : 'Select Next Receptionist Action for this Patient:'}
               </span>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => {
-                    onProceedToBookAppointment?.(registeredPatient);
-                    onClose();
-                  }}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', fontWeight: 800, fontSize: '0.8125rem' }}
-                >
-                  <Calendar size={15} /> Book Appointment
-                </button>
+              <div style={{ display: 'grid', gridTemplateColumns: onProceedToPharmacySale ? '1fr' : '1fr 1fr', gap: '0.5rem' }}>
+                {onProceedToPharmacySale && registeredPatient ? (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => {
+                      onProceedToPharmacySale(registeredPatient);
+                      onClose();
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.4rem',
+                      fontWeight: 800,
+                      fontSize: '0.85rem',
+                      backgroundColor: '#16a34a',
+                      padding: '0.65rem 1rem',
+                    }}
+                  >
+                    <CheckCircle2 size={16} /> Link Patient &amp; Continue OTC Pharmacy Sale →
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => {
+                        if (registeredPatient) onProceedToBookAppointment?.(registeredPatient);
+                        onClose();
+                      }}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', fontWeight: 800, fontSize: '0.8125rem' }}
+                    >
+                      <Calendar size={15} /> Book Appointment
+                    </button>
 
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => {
-                    onProceedToIssueWalkIn?.(registeredPatient);
-                    onClose();
-                  }}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', fontWeight: 800, fontSize: '0.8125rem', backgroundColor: '#0284c7' }}
-                >
-                  <Zap size={15} /> Issue Walk-In Token
-                </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => {
+                        if (registeredPatient) onProceedToIssueWalkIn?.(registeredPatient);
+                        onClose();
+                      }}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', fontWeight: 800, fontSize: '0.8125rem', backgroundColor: '#0284c7' }}
+                    >
+                      <Zap size={15} /> Issue Walk-In Token
+                    </button>
+                  </>
+                )}
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', marginTop: '0.25rem' }}>

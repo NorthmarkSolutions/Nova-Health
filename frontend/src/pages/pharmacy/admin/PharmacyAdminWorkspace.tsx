@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   LayoutDashboard,
   Users,
@@ -31,11 +31,19 @@ import {
   AlertCircle,
   Plus,
   Edit2,
-  Sparkles
+  Sparkles,
+  ChevronDown,
+  LogOut,
+  User as UserIcon,
+  KeyRound,
+  Building2
 } from 'lucide-react';
 import { PharmacyStaffModal } from './PharmacyStaffModal';
 import { useAuth } from '../../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { RoleType } from '../../../types';
+import { MyProfileModal } from '../inventory/modals/MyProfileModal';
+import { ChangePasswordModal } from '../inventory/modals/ChangePasswordModal';
 import {
   pharmacyAdminService,
   PharmacyAdminMetrics,
@@ -122,9 +130,127 @@ const DEFAULT_REPORTS: PharmacyAdminReport[] = [
   { id: 'RPT-STF', name: 'Pharmacy Staff Productivity & Overrides', period: 'This week', owner: 'Dr. Pooja Shah', gen: 'Yesterday', fmt: 'PDF', status: 'Ready', kv: [['Active pharmacists', 5], ['Total items filled', 1042], ['Allergy overrides', 4], ['Shift coverage', '95.8%']] }
 ];
 
+// Sidebar active state shared with the Clinical Pharmacist and Inventory Manager workspaces
+const SIDEBAR_TOKENS = {
+  activeBg: '#eff6ff',
+  activeBorder: '#bfdbfe',
+  activeColor: '#1d4ed8',
+  activeIconColor: '#2563eb',
+  activeShadow: '0 1px 3px rgba(37, 99, 235, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04)',
+};
+
+const PANEL: React.CSSProperties = {
+  background: '#ffffff',
+  border: '1px solid #e5e7eb',
+  borderRadius: '12px',
+  boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+  minWidth: 0,
+};
+
+const KPI_CARD: React.CSSProperties = {
+  background: '#ffffff',
+  border: '1px solid #e5e7eb',
+  borderRadius: '12px',
+  padding: '18px 20px',
+  cursor: 'pointer',
+  minHeight: '120px',
+  display: 'flex',
+  flexDirection: 'column',
+  justifyContent: 'space-between',
+  transition: 'all 0.15s ease',
+  minWidth: 0,
+};
+
+const kpiBadge = (tone: 'gray' | 'green' | 'amber' | 'red' | 'blue'): React.CSSProperties => {
+  const c = {
+    gray: ['#f3f4f6', '#374151', '#e5e7eb'],
+    green: ['#f0fdf4', '#16a34a', '#bbf7d0'],
+    amber: ['#fffbeb', '#b45309', '#fde68a'],
+    red: ['#fef2f2', '#dc2626', '#fecaca'],
+    blue: ['#eff6ff', '#1d4ed8', '#bfdbfe'],
+  }[tone];
+  return { fontSize: '12px', fontWeight: 600, borderRadius: '6px', padding: '2px 8px', background: c[0], color: c[1], border: `1px solid ${c[2]}`, whiteSpace: 'nowrap' };
+};
+
+// Design bible: Inter everywhere (buttons and inputs do not inherit it by default), visible keyboard focus
+const FOCUS_CSS = `
+.pa-root, .pa-root button, .pa-root input, .pa-root select, .pa-root textarea { font-family: 'Inter', sans-serif; }
+.pa-focus:focus-visible, .pa-root button:focus-visible, .pa-root [role="button"]:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+.pa-row:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }
+.pa-kbd { font-size: 11px; font-weight: 600; line-height: 1; padding: 3px 5px; border-radius: 4px; border: 1px solid #e2e8f0; background: #f8fafc; color: #64748b; white-space: nowrap; }
+`;
+
+// Alt+1 … Alt+0 open the sidebar sections in this order
+const NAV_ORDER = ['overview', 'staff', 'schedule', 'ops', 'inv', 'cd', 'supp', 'audit', 'settings', 'reports'];
+const navShortcut = (key: string) => {
+  const i = NAV_ORDER.indexOf(key);
+  return i < 0 ? '' : `Alt+${i === 9 ? 0 : i + 1}`;
+};
+const domId = (key: string) => `pa-row-${key.replace(/[^A-Za-z0-9_-]/g, '_')}`;
+const invKey = (item: { id?: string }, idx: number) => item.id || `inv-${idx}`;
+
+type MDRow = {
+  key: string;
+  title: string;
+  badge: React.ReactNode;
+  sub: React.ReactNode;
+  metaLeft?: React.ReactNode;
+  metaRight?: React.ReactNode;
+  // Completion bar; hidden once the target is reached
+  progress?: { pct: number; doneLabel: string };
+};
+
 export const PharmacyAdminWorkspace: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user, role, logout } = useAuth();
   const navigate = useNavigate();
+
+  // Signed-in identity (top-right profile control and sidebar footer)
+  const displayName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username : 'Pharmacy Admin';
+  const initials = displayName.split(/\s+/).filter(Boolean).map(p => p[0]).join('').slice(0, 2).toUpperCase() || 'PA';
+  const designation = user?.designation || 'Pharmacy Admin';
+
+  // Sidebar groups, profile menu and live clock
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isMyProfileOpen, setIsMyProfileOpen] = useState(false);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+  const profileButtonRef = useRef<HTMLButtonElement>(null);
+  const listSearchRef = useRef<HTMLInputElement>(null);
+  const detailRef = useRef<HTMLDivElement>(null);
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const tick = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(tick);
+  }, []);
+
+  useEffect(() => {
+    if (!isProfileOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target as Node)) setIsProfileOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsProfileOpen(false);
+        profileButtonRef.current?.focus();
+      }
+    };
+    requestAnimationFrame(() => profileMenuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus());
+    document.addEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [isProfileOpen]);
+
+  const handleSignOut = () => {
+    setIsProfileOpen(false);
+    if (logout) logout();
+    navigate('/login');
+  };
 
   // Navigation State
   const [activeTab, setActiveTab] = useState<string>('overview');
@@ -139,7 +265,7 @@ export const PharmacyAdminWorkspace: React.FC = () => {
   const [selectedPointId, setSelectedPointId] = useState<string>('OPD-C2');
   const [selectedInvId, setSelectedInvId] = useState<string>('INV-01');
   const [selectedCdCode, setSelectedCdCode] = useState<string>('MOR10');
-  const [selectedSupIndex, setSelectedSupIndex] = useState<number>(1);
+  const [selectedSupKey, setSelectedSupKey] = useState<string>('');
   const [selectedAuditId, setSelectedAuditId] = useState<string>('1');
   const [selectedSettingKey, setSelectedSettingKey] = useState<string>('ovReason');
   const [selectedReportId, setSelectedReportId] = useState<string>('RPT-DS');
@@ -442,6 +568,230 @@ export const PharmacyAdminWorkspace: React.FC = () => {
     }
   };
 
+  // ---------------- Master-detail model shared by every list tab ----------------
+  const badgeFor = (tone: 'red' | 'amber' | 'green' | 'blue' | 'gray' | 'dark', text: string) => {
+    const c = { red: ['#fef2f2', '#dc2626', '#fecaca'], amber: ['#fffbeb', '#b45309', '#fde68a'], green: ['#f0fdf4', '#15803d', '#bbf7d0'], blue: ['#eff6ff', '#1d4ed8', '#bfdbfe'], gray: ['#f3f4f6', '#4b5563', '#e5e7eb'], dark: ['#111827', '#ffffff', '#111827'] }[tone];
+    return renderBadge(c[0], c[1], c[2], text);
+  };
+
+  const md = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const has = (text: string) => !q || text.toLowerCase().includes(q);
+    type Cfg = {
+      title: string; desc: string; detail: string; searchPh: string; primary: string;
+      pills: Array<[string, string, (x: any) => boolean]>;
+      items: Array<{ item: any; idx: number }>; key: (x: any, idx: number) => string; search: (x: any) => string; row: (x: any, key: string) => MDRow;
+    };
+    const all = (): boolean => true;
+    const cfgs: Record<string, Cfg> = {
+      staff: {
+        title: 'Staff & roster', desc: 'Pharmacy roster and productivity this shift', detail: 'Staff member', searchPh: 'Search name, ID, role or area', primary: 'edit profile',
+        pills: [['all', 'All', all], ...(['On duty', 'On break', 'Off shift'] as const).map(k => [k, k, (s: any) => s.status === k] as [string, string, (x: any) => boolean])],
+        items: staffList.map((item, idx) => ({ item, idx })), key: s => s.id, search: s => `${s.name} ${s.role} ${s.id} ${s.area}`,
+        row: s => ({
+          key: s.id, title: s.name, badge: getStatusBadge(s.status),
+          sub: <><span style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: '12px' }}>{s.id}</span> · {s.role} · {s.area}</>,
+          metaLeft: <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Clock size={13} color="#94a3b8" />{s.shift}</span>,
+          metaRight: <><strong style={{ color: '#111827' }}>{s.done}/{s.target}</strong> · TAT {s.tat}</>,
+          progress: { pct: s.target ? Math.round((s.done / s.target) * 100) : 0, doneLabel: 'Target met' },
+        }),
+      },
+      schedule: {
+        title: 'Duty scheduling', desc: 'Shift coverage by service point · minimum staffing per policy', detail: 'Shift', searchPh: 'Search service point or staff', primary: 'assign staff',
+        pills: [['all', 'All', all], ...['Today', 'Tomorrow', 'Understaffed', 'Open'].map(k => [k, k, (sh: any) => sh.day === k || sh.status === k] as [string, string, (x: any) => boolean])],
+        items: shiftsList.map((item, idx) => ({ item, idx })), key: sh => sh.id, search: sh => `${sh.area} ${sh.staff.join(' ')}`,
+        row: sh => ({
+          key: sh.id, title: `${sh.slot} · ${sh.area}`, badge: getStatusBadge(sh.status), sub: sh.day,
+          metaLeft: <span style={{ color: sh.staff.length ? '#475569' : '#dc2626' }}>{sh.staff.join(', ') || 'Unassigned'}</span>,
+          metaRight: <><strong style={{ color: '#111827' }}>{sh.staff.length}/{sh.need}</strong> cover</>,
+          progress: { pct: sh.need ? Math.round((sh.staff.length / sh.need) * 100) : 100, doneLabel: 'Fully covered' },
+        }),
+      },
+      ops: {
+        title: 'Pharmacy operations', desc: 'Live load and turnaround by service point', detail: 'Service point', searchPh: 'Search service point or lead', primary: 'open details',
+        pills: [['all', 'All', all], ...['Normal', 'Busy', 'Night gap'].map(k => [k, k, (p: any) => p.status === k] as [string, string, (x: any) => boolean])],
+        items: pointsList.map((item, idx) => ({ item, idx })), key: p => p.id, search: p => `${p.name} ${p.lead}`,
+        row: p => ({
+          key: p.id, title: p.name, badge: getStatusBadge(p.status), sub: `${p.type} · Lead ${p.lead}`,
+          metaLeft: <span style={{ color: p.queue > 6 ? '#b45309' : '#475569', fontWeight: p.queue > 6 ? 600 : 400 }}>Queue {p.queue}</span>,
+          metaRight: <>TAT {p.tat} · SLA {p.sla} · {p.today} today</>,
+        }),
+      },
+      inv: {
+        title: 'Inventory health', desc: 'Exceptions that affect patient care · managed by the Inventory Manager', detail: 'Item', searchPh: 'Search item or impact', primary: 'open details',
+        pills: [['all', 'All', all], ['out', 'Out of stock', (i: any) => i.c === 'red'], ['risk', 'Low / expiring', (i: any) => i.c === 'amber']],
+        items: invhList.map((item, idx) => ({ item, idx })), key: (i, idx) => invKey(i, idx), search: i => `${i.name} ${i.impact}`,
+        row: (i, key) => ({
+          key, title: i.name, badge: badgeFor(i.c === 'red' ? 'red' : 'amber', i.issue), sub: `${i.cat} · ${i.impact}`,
+          metaLeft: <span style={{ color: i.stock === 0 ? '#dc2626' : '#475569', fontWeight: i.stock === 0 ? 600 : 400 }}>Stock {i.stock}</span>,
+          metaRight: <>Reorder at {i.par}</>,
+        }),
+      },
+      cd: {
+        title: 'Controlled drug monitoring', desc: 'Daily movement and physical count vs register balance', detail: 'Controlled drug', searchPh: 'Search drug or code', primary: 'open details',
+        pills: [['all', 'All', all], ['disc', 'Discrepancies', (c: any) => c.bal !== c.shelf], ['X', 'Schedule X', (c: any) => c.sched === 'X'], ['H1', 'Schedule H1', (c: any) => c.sched === 'H1']],
+        items: cdmList.map((item, idx) => ({ item, idx })), key: c => c.code, search: c => `${c.name} ${c.code}`,
+        row: c => ({
+          key: c.code, title: c.name,
+          badge: c.shelf === c.bal ? badgeFor('green', 'Reconciled') : badgeFor('red', `Variance ${c.shelf - c.bal}`),
+          sub: <><span style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: '12px' }}>{c.code}</span> · Schedule {c.sched}</>,
+          metaLeft: <>Open {c.open} · +{c.rec + c.ret} · −{c.iss}</>,
+          metaRight: <>Register <strong style={{ color: '#111827' }}>{c.bal}</strong> · Shelf <strong style={{ color: c.shelf !== c.bal ? '#dc2626' : '#111827' }}>{c.shelf}</strong></>,
+        }),
+      },
+      supp: {
+        title: 'Suppliers & procurement', desc: 'Vendor performance and purchase orders awaiting admin approval', detail: 'Supplier', searchPh: 'Search supplier', primary: 'open details',
+        pills: [['all', 'All', all], ...['Awaiting approval', 'Approved'].map(k => [k, k, (s: any) => s.status === k] as [string, string, (x: any) => boolean])],
+        items: supsList.map((item, idx) => ({ item, idx })), key: s => s.name, search: s => s.name,
+        row: s => ({
+          key: s.name, title: s.name, badge: getStatusBadge(s.status), sub: `${s.cat} · PO ${s.po}`,
+          metaLeft: <>Lead {s.lead}</>,
+          metaRight: <span style={{ color: s.ontime < 80 ? '#dc2626' : '#475569', fontWeight: s.ontime < 80 ? 600 : 400 }}>On-time {s.ontime}%</span>,
+        }),
+      },
+      audit: {
+        title: 'Audit logs', desc: 'Immutable trail of every pharmacy action · user, time and terminal', detail: 'Log entry', searchPh: 'Search user, action or entity', primary: 'open details',
+        pills: [['all', 'All', all], ...['Override', 'Controlled', 'Discrepancy', 'Adjustment', 'Refund', 'Info'].map(k => [k, k, (a: any) => a.sev === k] as [string, string, (x: any) => boolean])],
+        items: auditList.map((item, idx) => ({ item, idx })), key: a => a.id, search: a => `${a.user} ${a.act} ${a.ent}`,
+        row: a => ({
+          key: a.id, title: a.act, badge: getSeverityBadge(a.sev), sub: `${a.time} · ${a.user}`,
+          metaLeft: <span style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: '12px' }}>{a.ent}</span>,
+          metaRight: <>Terminal {a.ip}</>,
+        }),
+      },
+      settings: {
+        title: 'Department settings', desc: 'Pharmacy policies applied across OPD, IPD, OTC and the store', detail: 'Policy', searchPh: 'Search policy', primary: 'open details',
+        pills: [['all', 'All', all], ...['OPD', 'IPD', 'OTC', 'Store', 'Billing'].map(k => [k, k, (s: any) => s.scope.includes(k)] as [string, string, (x: any) => boolean])],
+        items: settingsList.map((item, idx) => ({ item, idx })), key: s => s.key, search: s => s.name,
+        row: s => ({
+          key: s.key, title: s.name,
+          badge: typeof s.value === 'boolean' ? badgeFor(s.value ? 'green' : 'gray', s.value ? 'On' : 'Off') : badgeFor('blue', String(s.value)),
+          sub: s.description, metaLeft: <>{s.scope}</>, metaRight: <>Changed {s.by}</>,
+        }),
+      },
+      reports: {
+        title: 'Reports', desc: 'Generated automatically from dispensing, billing and inventory data', detail: 'Report preview', searchPh: 'Search report', primary: 'open details',
+        pills: [['all', 'All', all], ...['Today', 'This week', 'Next 90 days'].map(k => [k, k, (r: any) => r.period === k] as [string, string, (x: any) => boolean])],
+        items: reportsList.map((item, idx) => ({ item, idx })), key: r => r.id, search: r => r.name,
+        row: r => ({
+          key: r.id, title: r.name, badge: getStatusBadge(r.status), sub: `${r.id} · ${r.period}`,
+          metaLeft: <>Owner {r.owner}</>, metaRight: <>{r.gen} · {r.fmt}</>,
+        }),
+      },
+    };
+    const cfg = cfgs[activeTab];
+    if (!cfg) return null;
+    const pill = cfg.pills.find(pl => pl[0] === filterPill) || cfg.pills[0];
+    const rows = cfg.items
+      .filter(({ item }) => pill[2](item) && has(cfg.search(item)))
+      .map(({ item, idx }) => cfg.row(item, cfg.key(item, idx)));
+    return {
+      ...cfg,
+      rows,
+      total: cfg.items.length,
+      pillCounts: cfg.pills.map(pl => [pl[0], pl[1], cfg.items.filter(({ item }) => pl[2](item)).length] as [string, string, number]),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, filterPill, searchQuery, staffList, shiftsList, pointsList, invhList, cdmList, supsList, auditList, settingsList, reportsList]);
+
+  const mdSelectedKey: string = ({
+    staff: selectedStaffId, schedule: selectedShiftId, ops: selectedPointId, inv: selectedInvId, cd: selectedCdCode,
+    supp: selectedSupKey, audit: selectedAuditId, settings: selectedSettingKey, reports: selectedReportId,
+  } as Record<string, string>)[activeTab] || '';
+
+  const mdSelect = (key: string) => {
+    const setters: Record<string, (k: string) => void> = {
+      staff: setSelectedStaffId, schedule: setSelectedShiftId, ops: setSelectedPointId, inv: setSelectedInvId, cd: setSelectedCdCode,
+      supp: setSelectedSupKey, audit: setSelectedAuditId, settings: setSelectedSettingKey, reports: setSelectedReportId,
+    };
+    setters[activeTab]?.(key);
+  };
+
+  // The highlighted row and the detail panel always resolve to the same visible row
+  const mdActiveKey: string | null = md ? (md.rows.find(r => r.key === mdSelectedKey)?.key ?? md.rows[0]?.key ?? null) : null;
+  const activeStaff = activeTab === 'staff' ? staffList.find(s => s.id === mdActiveKey) || null : null;
+
+  const runPrimaryAction = (key: string) => {
+    if (activeTab === 'staff') {
+      const s = staffList.find(x => x.id === key);
+      if (s) handleOpenEditStaff(s);
+    } else if (activeTab === 'schedule') {
+      const sh = shiftsList.find(x => x.id === key);
+      if (sh) handleOpenAssignShift(sh);
+    } else {
+      detailRef.current?.focus();
+    }
+  };
+
+  const handleListKeyDown = (e: React.KeyboardEvent, fromSearch = false) => {
+    if (!md) return;
+    if (fromSearch && e.key === 'Escape') {
+      if (searchQuery) setSearchQuery('');
+      else (e.currentTarget as HTMLElement).blur();
+      return;
+    }
+    if (e.key === 'Enter' && mdActiveKey) {
+      e.preventDefault();
+      runPrimaryAction(mdActiveKey);
+      return;
+    }
+    const step: Record<string, number | 'first' | 'last'> = { ArrowDown: 1, ArrowUp: -1, PageDown: 5, PageUp: -5 };
+    if (!fromSearch) Object.assign(step, { Home: 'first', End: 'last' });
+    if (!(e.key in step) || !md.rows.length) return;
+    e.preventDefault();
+    const idx = Math.max(0, md.rows.findIndex(r => r.key === mdActiveKey));
+    const d = step[e.key];
+    const next = d === 'first' ? 0 : d === 'last' ? md.rows.length - 1 : Math.min(md.rows.length - 1, Math.max(0, idx + (d as number)));
+    const key = md.rows[next].key;
+    mdSelect(key);
+    requestAnimationFrame(() => {
+      const el = document.getElementById(domId(key));
+      el?.scrollIntoView({ block: 'nearest' });
+      if (!fromSearch) el?.focus();
+    });
+  };
+
+  // Global keyboard shortcuts (see the "?" dialog)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (isAssignModalOpen || isStaffModalOpen || isMyProfileOpen || isChangePasswordOpen) return;
+      const el = e.target as HTMLElement;
+      const typing = !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
+      if (e.altKey && !e.ctrlKey && !e.metaKey) {
+        const digit = /^Digit(\d)$/.exec(e.code);
+        if (digit) {
+          const n = Number(digit[1]);
+          const tab = NAV_ORDER[n === 0 ? 9 : n - 1];
+          e.preventDefault();
+          handleNav(tab);
+          if (tab !== 'overview') requestAnimationFrame(() => listSearchRef.current?.focus());
+          return;
+        }
+        const actions: Record<string, () => void> = {
+          KeyL: () => handleNav('audit'),
+          KeyR: () => handleNav('reports'),
+          KeyP: () => setIsProfileOpen(v => !v),
+          KeyN: () => { if (activeTab === 'staff') handleOpenAddStaff(); },
+        };
+        if (actions[e.code]) {
+          e.preventDefault();
+          actions[e.code]();
+        }
+        return;
+      }
+      if (typing || e.ctrlKey || e.metaKey) return;
+      if (e.key === '/' && activeTab !== 'overview') {
+        e.preventDefault();
+        listSearchRef.current?.focus();
+      } else if (e.key === '?') {
+        e.preventDefault();
+        setIsShortcutsOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
   // Current Breadcrumb Title
   const crumbTitle = useMemo(() => {
     const item = navGroups.flatMap(g => g.items).find(i => i.key === activeTab);
@@ -449,120 +799,288 @@ export const PharmacyAdminWorkspace: React.FC = () => {
   }, [activeTab]);
 
   return (
-    <div style={{ display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', background: '#f9fafb', fontFamily: 'Inter, sans-serif' }}>
-      {/* 1. Left Navigation Sidebar */}
-      <aside style={{ width: '260px', flexShrink: 0, background: '#fff', borderRight: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column' }}>
+    <div className="pa-root" style={{ display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', background: '#f9fafb', fontFamily: "'Inter', sans-serif", fontSize: '14px', color: '#111827' }}>
+      {/* 1. Left Navigation Sidebar (260px, matching Clinical Pharmacist & Inventory Manager) */}
+      <style>{FOCUS_CSS}</style>
+      <aside style={{ width: '260px', flexShrink: 0, background: '#ffffff', borderRight: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', height: '100%' }}>
         {/* Brand */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '18px 20px' }}>
-          <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#2563eb', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '15px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '16px 18px', borderBottom: '1px solid #f1f5f9' }}>
+          <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#2563eb', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '15px' }}>
             N
           </div>
           <div>
-            <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>North Hospital</div>
-            <div style={{ fontSize: '12px', color: '#6b7280' }}>Clinical Enterprise HMS</div>
+            <div style={{ fontSize: '14px', fontWeight: 700, color: '#111827', letterSpacing: '-0.01em' }}>North Hospital</div>
+            <div style={{ fontSize: '11px', color: '#64748b' }}>Clinical Enterprise HMS</div>
           </div>
         </div>
 
-        {/* Current Department Badge */}
-        <div style={{ margin: '0 16px', padding: '12px 14px', border: '1px solid #e5e7eb', borderRadius: '10px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '12px', color: '#6b7280' }}>Current department</span>
-            <span style={{ fontSize: '11px', fontWeight: 700, color: '#2563eb', background: '#eff6ff', borderRadius: '4px', padding: '1px 6px' }}>
-              ADMIN
-            </span>
-          </div>
-          <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827', marginTop: '4px' }}>Pharmacy</div>
-          <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>OPD · IPD · Central store</div>
-        </div>
-
-        {/* Navigation Items */}
-        <nav style={{ flex: 1, padding: '8px 12px 12px', display: 'flex', flexDirection: 'column', gap: '2px', overflowY: 'auto' }}>
-          {navGroups.map((group, gIdx) => (
-            <div key={gIdx}>
-              <div style={{ padding: '16px 8px 8px', fontSize: '12px', fontWeight: 600, letterSpacing: '0.06em', color: '#6b7280' }}>
-                {group.label}
-              </div>
-              {group.items.map(item => {
-                const isActive = activeTab === item.key;
-                const IconComponent = item.icon;
-                return (
-                  <div
-                    key={item.key}
-                    onClick={() => handleNav(item.key)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '10px',
-                      height: '40px',
-                      padding: '0 12px',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      fontSize: '14px',
-                      fontWeight: isActive ? 600 : 500,
-                      color: isActive ? '#2563eb' : '#374151',
-                      background: isActive ? '#eff6ff' : 'transparent',
-                      transition: 'all 0.15s ease'
-                    }}
-                    onMouseEnter={e => {
-                      if (!isActive) e.currentTarget.style.background = '#f3f4f6';
-                    }}
-                    onMouseLeave={e => {
-                      if (!isActive) e.currentTarget.style.background = 'transparent';
-                    }}
-                  >
-                    <IconComponent size={18} color={isActive ? '#2563eb' : '#6b7280'} />
-                    <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {item.label}
-                    </span>
-                    {item.count && (
-                      <span style={{ fontSize: '12px', fontWeight: 600, color: item.isRed ? '#dc2626' : '#6b7280' }}>
-                        {item.count}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
+        {/* Department & Role Card */}
+        <div style={{ margin: '12px 14px 8px', padding: '10px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: '10px', fontWeight: 700, color: '#64748b', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Current Department</span>
+              <span style={{ fontSize: '9px', fontWeight: 700, color: '#2563eb', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '4px', padding: '1px 5px' }}>ADMIN</span>
             </div>
-          ))}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
+              <Building2 size={13} style={{ color: '#2563eb', flexShrink: 0 }} />
+              <span style={{ fontSize: '12px', fontWeight: 600, color: '#0f172a' }}>Pharmacy</span>
+            </div>
+            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '1px' }}>OPD · IPD · Central store</div>
+          </div>
+          <div style={{ paddingTop: '8px', borderTop: '1px dashed #e2e8f0' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
+              <span style={{ fontSize: '10px', fontWeight: 700, color: '#64748b', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Operating Role</span>
+              <span style={{ fontSize: '9px', fontWeight: 700, color: '#16a34a', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '4px', padding: '1px 5px' }}>ACTIVE</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <ShieldCheck size={13} style={{ color: '#16a34a', flexShrink: 0 }} />
+              <span style={{ fontSize: '12px', fontWeight: 600, color: '#0f172a' }}>Pharmacy Admin</span>
+            </div>
+            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '1px' }}>
+              {user?.employeeId ? `ID: ${user.employeeId} · ` : ''}Oversight & governance
+            </div>
+          </div>
+        </div>
+
+        {/* Grouped Navigation (collapsible groups) */}
+        <nav aria-label="Pharmacy admin navigation" style={{ flex: 1, padding: '4px 10px 12px', display: 'flex', flexDirection: 'column', gap: '3px', overflowY: 'auto', scrollbarWidth: 'thin' }}>
+          {navGroups.map((group, gIdx) => {
+            const isCollapsed = !!collapsedGroups[group.label];
+            const hasActiveItem = group.items.some(i => i.key === activeTab);
+            return (
+              <div key={group.label} style={{ marginTop: gIdx > 0 ? '6px' : '2px' }}>
+                <button
+                  type="button"
+                  className="pa-focus"
+                  onClick={() => setCollapsedGroups(prev => ({ ...prev, [group.label]: !prev[group.label] }))}
+                  aria-expanded={!isCollapsed}
+                  title={`${isCollapsed ? 'Expand' : 'Collapse'} ${group.label.toLowerCase()}`}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: gIdx > 0 ? '10px 8px 4px' : '6px 8px 4px', cursor: 'pointer', userSelect: 'none', borderRadius: '6px', border: 'none', borderTop: gIdx > 0 ? '1px solid #f1f5f9' : 'none', background: 'transparent', fontFamily: 'inherit' }}
+                >
+                  <span style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: hasActiveItem ? '#1d4ed8' : '#64748b' }}>
+                    {group.label}
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <span style={{ fontSize: '10px', fontWeight: 600, color: hasActiveItem ? '#2563eb' : '#94a3b8', background: hasActiveItem ? '#eff6ff' : '#f8fafc', padding: '1px 5px', borderRadius: '4px', border: hasActiveItem ? '1px solid #bfdbfe' : '1px solid #f1f5f9' }}>
+                      {group.items.length}
+                    </span>
+                    {isCollapsed ? <ChevronRight size={13} color="#94a3b8" /> : <ChevronDown size={13} color="#94a3b8" />}
+                  </span>
+                </button>
+
+                {!isCollapsed && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '2px' }}>
+                    {group.items.map(item => {
+                      const isActive = activeTab === item.key;
+                      const IconComponent = item.icon;
+                      return (
+                        <button
+                          key={item.key}
+                          type="button"
+                          className="pa-focus"
+                          onClick={() => handleNav(item.key)}
+                          aria-current={isActive ? 'page' : undefined}
+                          aria-keyshortcuts={navShortcut(item.key).replace('+', '+') || undefined}
+                          title={`${item.label} (${navShortcut(item.key)})`}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            width: '100%',
+                            height: '40px',
+                            padding: '0 10px',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            fontFamily: 'inherit',
+                            fontSize: '14px',
+                            fontWeight: isActive ? 600 : 500,
+                            textAlign: 'left',
+                            color: isActive ? SIDEBAR_TOKENS.activeColor : '#334155',
+                            background: isActive ? SIDEBAR_TOKENS.activeBg : 'transparent',
+                            border: `1px solid ${isActive ? SIDEBAR_TOKENS.activeBorder : 'transparent'}`,
+                            boxShadow: isActive ? SIDEBAR_TOKENS.activeShadow : 'none',
+                            transition: 'all 0.12s ease',
+                          }}
+                          onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#f8fafc'; }}
+                          onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
+                        >
+                          <IconComponent size={18} style={{ color: isActive ? SIDEBAR_TOKENS.activeIconColor : '#64748b', flexShrink: 0 }} />
+                          <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.label}</span>
+                          {item.count && (
+                            <span style={{ fontSize: '12px', fontWeight: 600, padding: '1px 7px', borderRadius: '10px', whiteSpace: 'nowrap', flexShrink: 0, background: item.isRed ? '#fef2f2' : isActive ? '#dbeafe' : '#f1f5f9', color: item.isRed ? '#dc2626' : isActive ? '#1e40af' : '#64748b', border: item.isRed ? '1px solid #fecaca' : 'none' }}>
+                              {item.count}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </nav>
 
-        {/* User Profile */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '16px 20px', borderTop: '1px solid #e5e7eb' }}>
-          <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#f3f4f6', color: '#374151', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 600, flexShrink: 0 }}>
-            PS
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827' }}>Dr. Pooja Shah</div>
-            <div style={{ fontSize: '12px', color: '#6b7280', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              Pharmacy Admin · Chief Pharmacist
-            </div>
-          </div>
+        {/* User Card / Footer */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '14px 16px', borderTop: '1px solid #e5e7eb', background: '#ffffff', flexShrink: 0 }}>
           <button
-            onClick={() => logout ? logout() : navigate('/login')}
-            style={{ fontSize: '12px', color: '#374151', background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}
+            type="button"
+            className="pa-focus"
+            onClick={() => setIsMyProfileOpen(true)}
+            title="View my profile"
+            style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0, cursor: 'pointer', borderRadius: '8px', padding: '2px 4px', margin: '-2px -4px', border: 'none', background: 'transparent', textAlign: 'left', fontFamily: 'inherit' }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
           >
-            Log out
+            <span style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#eff6ff', color: '#1d4ed8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, flexShrink: 0, border: '1.5px solid #bfdbfe' }}>
+              {initials}
+            </span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{displayName}</span>
+              <span style={{ display: 'block', fontSize: '12px', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{designation}</span>
+            </span>
+          </button>
+          <button
+            type="button"
+            className="pa-focus"
+            onClick={handleSignOut}
+            title="Log out"
+            aria-label="Log out"
+            style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: '6px', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s ease' }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.color = '#dc2626'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#94a3b8'; }}
+          >
+            <LogOut size={16} />
           </button>
         </div>
       </aside>
 
       {/* 2. Main Workspace Body */}
       <main style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
-        {/* Sticky Top Breadcrumbs */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', height: '52px', padding: '0 24px', borderBottom: '1px solid #e5e7eb', background: '#fff', flexShrink: 0, position: 'sticky', top: 0, zIndex: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#6b7280' }}>
+        {/* Sticky Top Bar (52px) */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', height: '52px', padding: '0 24px', borderBottom: '1px solid #e5e7eb', background: '#ffffff', flexShrink: 0, position: 'sticky', top: 0, zIndex: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#64748b', minWidth: 0 }}>
             <span>North Hospital</span>
             <span style={{ color: '#d1d5db' }}>/</span>
             <span>Pharmacy · Admin</span>
             <span style={{ color: '#d1d5db' }}>/</span>
             <span style={{ color: '#111827', fontWeight: 600 }}>{crumbTitle}</span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', marginLeft: '8px', fontSize: '12px', fontWeight: 600, color: '#374151', background: '#f3f4f6', borderRadius: '4px', padding: '2px 6px' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', marginLeft: '8px', fontSize: '11px', fontWeight: 600, color: '#374151', background: '#f3f4f6', borderRadius: '4px', padding: '2px 6px' }}>
               Read-only
             </span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '32px', padding: '0 12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '12px', color: '#374151', whiteSpace: 'nowrap' }}>
-            <Calendar size={14} color="#6b7280" />
-            Today · 01 Oct 2026 · 10:44
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', height: '40px', padding: '0 12px', border: '1px solid #e5e7eb', borderRadius: '10px', fontSize: '13px', color: '#374151', whiteSpace: 'nowrap' }}>
+              <Calendar size={16} color="#6b7280" />
+              Today · {now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} · {now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsShortcutsOpen(true)}
+              aria-keyshortcuts="?"
+              title="Keyboard shortcuts (?)"
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', height: '40px', padding: '0 12px', border: '1px solid #e5e7eb', borderRadius: '10px', background: '#ffffff', fontSize: '13px', fontWeight: 500, color: '#374151', cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >
+              <span className="pa-kbd">?</span>
+              Shortcuts
+            </button>
+
+            <div style={{ width: '1px', height: '20px', background: '#e5e7eb', margin: '0 2px' }} />
+
+            {/* Profile Dropdown */}
+            <div style={{ position: 'relative' }} ref={profileMenuRef}>
+              <button
+                ref={profileButtonRef}
+                type="button"
+                className="pa-focus"
+                onClick={() => setIsProfileOpen(prev => !prev)}
+                aria-haspopup="menu"
+                aria-expanded={isProfileOpen}
+                aria-keyshortcuts="Alt+P"
+                title="Account (Alt+P)"
+                style={{ display: 'flex', alignItems: 'center', gap: '10px', height: '44px', padding: '0 12px 0 6px', background: isProfileOpen ? '#f1f5f9' : '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', cursor: 'pointer' }}
+              >
+                <span style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#eff6ff', color: '#2563eb', border: '1.5px solid #bfdbfe', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 700, flexShrink: 0 }}>
+                  {initials}
+                </span>
+                <span style={{ display: 'flex', flexDirection: 'column', textAlign: 'left', lineHeight: 1.25 }}>
+                  <span style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName}</span>
+                  <span style={{ fontSize: '12px', color: '#64748b', whiteSpace: 'nowrap' }}>Pharmacy Admin</span>
+                </span>
+                <ChevronDown size={16} style={{ color: '#64748b', transform: isProfileOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }} />
+              </button>
+
+              {isProfileOpen && (
+                <div
+                  role="menu"
+                  aria-label="Account"
+                  onKeyDown={e => {
+                    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') return;
+                    e.preventDefault();
+                    const items = Array.from(e.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]'));
+                    const i = items.indexOf(document.activeElement as HTMLElement);
+                    const next = e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 : (i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+                    items[next]?.focus();
+                  }}
+                  style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, width: '285px', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)', zIndex: 100, overflow: 'hidden' }}>
+                  <div style={{ padding: '16px 18px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#eff6ff', color: '#2563eb', border: '2px solid #bfdbfe', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, flexShrink: 0 }}>
+                      {initials}
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{displayName}</div>
+                      {user?.email && <div style={{ fontSize: '12px', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: '1px' }}>{user.email}</div>}
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '6px', fontSize: '10px', fontWeight: 600, color: '#16a34a', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '4px', padding: '1px 7px' }}>
+                        <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#16a34a' }} />
+                        {designation}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ padding: '8px 6px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="pa-focus"
+                      onClick={() => { setIsProfileOpen(false); setIsMyProfileOpen(true); }}
+                      style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', fontSize: '14px', fontWeight: 500, color: '#334155', background: 'transparent', border: 'none', borderRadius: '6px', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = '#f1f5f9')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <UserIcon size={16} style={{ color: '#64748b' }} />
+                      <span>My Profile</span>
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="pa-focus"
+                      onClick={() => { setIsProfileOpen(false); setIsChangePasswordOpen(true); }}
+                      style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', fontSize: '14px', fontWeight: 500, color: '#334155', background: 'transparent', border: 'none', borderRadius: '6px', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = '#f1f5f9')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <KeyRound size={16} style={{ color: '#64748b' }} />
+                      <span>Change Password</span>
+                    </button>
+                  </div>
+                  <div style={{ borderTop: '1px solid #e2e8f0', padding: '6px' }}>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="pa-focus"
+                      onClick={handleSignOut}
+                      style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', fontSize: '14px', fontWeight: 500, color: '#dc2626', background: 'transparent', border: 'none', borderRadius: '6px', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = '#fef2f2')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <LogOut size={16} style={{ color: '#dc2626' }} />
+                      <span>Sign Out</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -602,125 +1120,104 @@ export const PharmacyAdminWorkspace: React.FC = () => {
           )}
 
           {/* Header Banner */}
-          <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '24px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+          <div style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '22px 26px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
             <div>
-              <h1 style={{ fontSize: '30px', fontWeight: 700, color: '#111827', letterSpacing: '-0.01em', margin: 0 }}>Pharmacy Admin Workspace</h1>
+              <h1 style={{ fontSize: '32px', fontWeight: 700, color: '#111827', letterSpacing: '-0.01em', margin: 0 }}>Pharmacy Admin Workspace</h1>
               <p style={{ fontSize: '14px', color: '#4b5563', marginTop: '6px', marginBottom: 0 }}>
                 Department oversight across OPD, IPD and the central store · staff, reports, audit trail and controlled drugs.
               </p>
             </div>
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
               <button
+                type="button"
+                className="pa-focus"
                 onClick={() => handleNav('audit')}
-                style={{ height: '40px', padding: '0 16px', borderRadius: '10px', whiteSpace: 'nowrap', background: '#fff', color: '#111827', border: '1px solid #d1d5db', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
+                aria-keyshortcuts="Alt+L"
+                style={{ height: '40px', padding: '0 16px', borderRadius: '10px', whiteSpace: 'nowrap', background: activeTab === 'audit' ? '#eff6ff' : '#ffffff', color: activeTab === 'audit' ? '#1d4ed8' : '#111827', border: `1px solid ${activeTab === 'audit' ? '#2563eb' : '#d1d5db'}`, fontSize: '14px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
               >
-                Audit logs
+                <FileText size={18} />
+                <span>Audit logs</span>
+                <span className="pa-kbd">Alt+L</span>
               </button>
               <button
+                type="button"
+                className="pa-focus"
                 onClick={() => handleNav('reports')}
-                style={{ height: '40px', padding: '0 16px', borderRadius: '10px', whiteSpace: 'nowrap', background: '#2563eb', color: '#fff', border: '1px solid #2563eb', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
+                aria-keyshortcuts="Alt+R"
+                style={{ height: '40px', padding: '0 16px', borderRadius: '10px', whiteSpace: 'nowrap', background: '#2563eb', color: '#ffffff', border: '1px solid #2563eb', fontSize: '14px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
               >
-                Daily report
+                <BarChart2 size={18} />
+                <span>Daily report</span>
+                <span className="pa-kbd" style={{ background: 'rgba(255,255,255,0.18)', borderColor: 'rgba(255,255,255,0.35)', color: '#ffffff' }}>Alt+R</span>
               </button>
             </div>
           </div>
 
-          {/* 5 Top KPI Cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '16px' }}>
-            {/* KPI 1 */}
-            <div
-              onClick={() => handleNav('overview')}
-              style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '20px', cursor: 'pointer', minHeight: '120px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}
-            >
+          {/* Exactly 4 KPI cards — Revenue lives in Reports */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '16px' }}>
+            {/* KPI 1: Prescription volume */}
+            <div role="button" tabIndex={0} className="pa-focus" onClick={() => handleNav('overview')} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleNav('overview'); } }} style={KPI_CARD} title="Open overview">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                <span style={{ fontSize: '13px', color: '#4b5563' }}>Prescription volume</span>
-                <span style={{ fontSize: '12px', fontWeight: 600, borderRadius: '4px', padding: '2px 6px', background: '#f3f4f6', color: '#374151' }}>
-                  today
-                </span>
+                <span style={{ fontSize: '14px', fontWeight: 600, color: '#4b5563' }}>Prescription volume</span>
+                <span style={kpiBadge('gray')}>TODAY</span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                <span style={{ fontSize: '28px', fontWeight: 700, color: '#111827' }}>
-                  {metrics?.kpis?.rx_volume ?? 214}
-                </span>
-                <span style={{ fontSize: '12px', color: '#6b7280' }}>
-                  OPD {metrics?.kpis?.rx_breakdown?.opd ?? 142} · IPD {metrics?.kpis?.rx_breakdown?.ipd ?? 58} · OTC {metrics?.kpis?.rx_breakdown?.otc ?? 14}
-                </span>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                  <span style={{ fontSize: '28px', fontWeight: 700, color: '#111827' }}>{metrics ? metrics.kpis.rx_volume : '—'}</span>
+                  <span style={{ fontSize: '12px', color: '#6b7280' }}>received</span>
+                </div>
+                <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
+                  {metrics ? `OPD ${metrics.kpis.rx_breakdown.opd} · IPD ${metrics.kpis.rx_breakdown.ipd} · OTC ${metrics.kpis.rx_breakdown.otc}` : isLoading ? 'Loading…' : 'Metrics unavailable'}
+                </div>
               </div>
             </div>
 
-            {/* KPI 2 */}
-            <div
-              onClick={() => handleNav('reports')}
-              style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '20px', cursor: 'pointer', minHeight: '120px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}
-            >
+            {/* KPI 2: Dispensed today */}
+            <div role="button" tabIndex={0} className="pa-focus" onClick={() => handleNav('reports')} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleNav('reports'); } }} style={KPI_CARD} title="Open reports">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                <span style={{ fontSize: '13px', color: '#4b5563' }}>Dispensed today</span>
-                <span style={{ fontSize: '12px', fontWeight: 600, borderRadius: '4px', padding: '2px 6px', background: '#f0fdf4', color: '#16a34a' }}>
-                  {metrics?.kpis?.dispensed_pct_received ?? 79}% of received
-                </span>
+                <span style={{ fontSize: '14px', fontWeight: 600, color: '#4b5563' }}>Dispensed today</span>
+                {metrics && (
+                  <span style={kpiBadge(metrics.kpis.dispensed_pct_received < 70 ? 'amber' : 'green')}>{metrics.kpis.dispensed_pct_received}% OF RECEIVED</span>
+                )}
               </div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                <span style={{ fontSize: '28px', fontWeight: 700, color: '#111827' }}>
-                  {metrics?.kpis?.dispensed_today ?? 168}
-                </span>
-                <span style={{ fontSize: '12px', color: '#6b7280' }}>fulfilled</span>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                  <span style={{ fontSize: '28px', fontWeight: 700, color: '#111827' }}>{metrics ? metrics.kpis.dispensed_today : '—'}</span>
+                  <span style={{ fontSize: '12px', color: '#6b7280' }}>fulfilled</span>
+                </div>
+                <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>Across OPD, IPD and OTC counters</div>
               </div>
             </div>
 
-            {/* KPI 3 */}
-            <div
-              onClick={() => handleNav('inv', 'out')}
-              style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '20px', cursor: 'pointer', minHeight: '120px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}
-            >
+            {/* KPI 3: Inventory health */}
+            <div role="button" tabIndex={0} className="pa-focus" onClick={() => handleNav('inv', 'out')} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleNav('inv', 'out'); } }} style={{ ...KPI_CARD, border: stockoutCount > 0 ? '1.5px solid #fecaca' : KPI_CARD.border, boxShadow: stockoutCount > 0 ? '0 2px 4px rgba(220, 38, 38, 0.05)' : 'none' }} title="Open inventory health">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                <span style={{ fontSize: '13px', color: '#4b5563' }}>Inventory health</span>
-                <span style={{ fontSize: '12px', fontWeight: 600, borderRadius: '4px', padding: '2px 6px', background: '#fef2f2', color: '#dc2626' }}>
-                  {stockoutCount} out of stock
-                </span>
+                <span style={{ fontSize: '14px', fontWeight: 600, color: stockoutCount > 0 ? '#b91c1c' : '#4b5563' }}>Inventory health</span>
+                <span style={kpiBadge(stockoutCount > 0 ? 'red' : 'green')}>{stockoutCount > 0 ? `${stockoutCount} OUT OF STOCK` : 'CLEAR'}</span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                <span style={{ fontSize: '28px', fontWeight: 700, color: '#111827' }}>
-                  {metrics?.kpis?.inventory_health_pct ?? 86}%
-                </span>
-                <span style={{ fontSize: '12px', color: '#6b7280' }}>SKUs healthy</span>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                  <span style={{ fontSize: '28px', fontWeight: 700, color: '#111827' }}>{metrics ? `${metrics.kpis.inventory_health_pct}%` : '—'}</span>
+                  <span style={{ fontSize: '12px', color: '#6b7280' }}>SKUs healthy</span>
+                </div>
+                <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>{invhList.length} exceptions tracked by the Inventory Manager</div>
               </div>
             </div>
 
-            {/* KPI 4 */}
-            <div
-              onClick={() => handleNav('staff')}
-              style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '20px', cursor: 'pointer', minHeight: '120px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}
-            >
+            {/* KPI 4: Staff productivity */}
+            <div role="button" tabIndex={0} className="pa-focus" onClick={() => handleNav('staff')} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleNav('staff'); } }} style={KPI_CARD} title="Open staff & roster">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                <span style={{ fontSize: '13px', color: '#4b5563' }}>Staff productivity</span>
-                <span style={{ fontSize: '12px', fontWeight: 600, borderRadius: '4px', padding: '2px 6px', background: '#eff6ff', color: '#1d4ed8' }}>
-                  {onDutyCount} on duty
-                </span>
+                <span style={{ fontSize: '14px', fontWeight: 600, color: '#4b5563' }}>Staff productivity</span>
+                <span style={kpiBadge('blue')}>{onDutyCount} ON DUTY</span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                <span style={{ fontSize: '28px', fontWeight: 700, color: '#111827' }}>
-                  {metrics?.kpis?.avg_turnaround_mins ?? '6.8'}
-                </span>
-                <span style={{ fontSize: '12px', color: '#6b7280' }}>min avg OPD turnaround</span>
-              </div>
-            </div>
-
-            {/* KPI 5 */}
-            <div
-              onClick={() => handleNav('reports')}
-              style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '20px', cursor: 'pointer', minHeight: '120px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                <span style={{ fontSize: '13px', color: '#4b5563' }}>Revenue</span>
-                <span style={{ fontSize: '12px', fontWeight: 600, borderRadius: '4px', padding: '2px 6px', background: '#f0fdf4', color: '#16a34a' }}>
-                  {metrics?.kpis?.revenue_otc_inr ?? 'OTC ₹13.6K'}
-                </span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                <span style={{ fontSize: '28px', fontWeight: 700, color: '#111827' }}>
-                  {metrics?.kpis?.revenue_today_inr ?? '₹1.84L'}
-                </span>
-                <span style={{ fontSize: '12px', color: '#6b7280' }}>today</span>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                  <span style={{ fontSize: '28px', fontWeight: 700, color: '#111827' }}>{metrics ? metrics.kpis.avg_turnaround_mins : '—'}</span>
+                  <span style={{ fontSize: '12px', color: '#6b7280' }}>min avg OPD turnaround</span>
+                </div>
+                <div style={{ fontSize: '12px', marginTop: '2px', color: shiftGaps > 0 ? '#b45309' : '#94a3b8' }}>
+                  {shiftGaps > 0 ? `${shiftGaps} shift ${shiftGaps === 1 ? 'gap' : 'gaps'} to cover` : 'All shifts covered'}
+                </div>
               </div>
             </div>
           </div>
@@ -999,723 +1496,319 @@ export const PharmacyAdminWorkspace: React.FC = () => {
             </>
           )}
 
-          {/* SECTION B: TABULAR + RIGHT INSPECTION DRAWER (For tabs !== 'overview') */}
-          {activeTab !== 'overview' && (
-            <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-              {/* Left Main Table Card */}
-              <div style={{ flex: '1 1 620px', minWidth: 0, background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', overflow: 'hidden' }}>
-                <div style={{ padding: '20px 20px 16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
-                    <div>
-                      <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#111827', margin: 0 }}>
-                        {activeTab === 'staff' && 'Staff & roster'}
-                        {activeTab === 'schedule' && 'Duty scheduling'}
-                        {activeTab === 'ops' && 'Pharmacy operations'}
-                        {activeTab === 'inv' && 'Inventory health'}
-                        {activeTab === 'cd' && 'Controlled drug monitoring'}
-                        {activeTab === 'supp' && 'Suppliers & procurement'}
-                        {activeTab === 'audit' && 'Audit logs'}
-                        {activeTab === 'settings' && 'Department settings'}
-                        {activeTab === 'reports' && 'Reports'}
-                      </h2>
-                      <p style={{ fontSize: '13px', color: '#4b5563', margin: '2px 0 0' }}>
-                        {activeTab === 'staff' && 'Pharmacy roster and productivity this shift'}
-                        {activeTab === 'schedule' && 'Shift coverage by service point · minimum staffing per policy'}
-                        {activeTab === 'ops' && 'Live load and turnaround by service point'}
-                        {activeTab === 'inv' && 'Exceptions that affect patient care · managed by the Inventory Manager'}
-                        {activeTab === 'cd' && 'Daily movement and physical count vs register balance'}
-                        {activeTab === 'supp' && 'Vendor performance and purchase orders awaiting admin approval'}
-                        {activeTab === 'audit' && 'Immutable trail of every pharmacy action · user, time and terminal'}
-                        {activeTab === 'settings' && 'Pharmacy policies applied across OPD, IPD, OTC and the store'}
-                        {activeTab === 'reports' && 'Generated automatically from dispensing, billing and inventory data'}
-                      </p>
+          {/* SECTION M: MASTER-DETAIL — compact list (left) drives a wide detail panel (right) on every list tab */}
+          {md && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(340px, 1fr) minmax(0, 2.3fr)', gap: '16px', alignItems: 'start' }}>
+              {/* Left: list */}
+              <div style={{ ...PANEL, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ padding: '20px 20px 16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                      <h2 style={{ fontSize: '16px', fontWeight: 600, color: '#111827', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{md.title}</h2>
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: '#2563eb', background: '#eff6ff', border: '1px solid #bfdbfe', padding: '1px 8px', borderRadius: '9999px', whiteSpace: 'nowrap' }}>
+                        {md.rows.length === md.total ? md.total : `${md.rows.length} of ${md.total}`}
+                      </span>
                     </div>
-                    {/* Search & Actions Container */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      {/* Search Box */}
-                      <div style={{ position: 'relative' }}>
-                        <input
-                          value={searchQuery}
-                          onChange={e => setSearchQuery(e.target.value)}
-                          placeholder="Search"
-                          style={{ height: '40px', width: '220px', maxWidth: '100%', padding: '0 12px 0 34px', border: '1px solid #e5e7eb', borderRadius: '10px', fontSize: '13px', outline: 'none' }}
-                        />
-                        <Search size={16} color="#9ca3af" style={{ position: 'absolute', left: '10px', top: '12px' }} />
-                      </div>
-
-                      {/* Add Staff Button (OPD & Pharmacy departmental pattern) */}
-                      {activeTab === 'staff' && (
-                        <button
-                          onClick={handleOpenAddStaff}
-                          style={{
-                            whiteSpace: 'nowrap',
-                            height: '40px',
-                            padding: '0 16px',
-                            borderRadius: '10px',
-                            border: '1px solid #2563eb',
-                            backgroundColor: '#2563eb',
-                            fontSize: '14px',
-                            fontWeight: 600,
-                            color: '#ffffff',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            boxShadow: '0 1px 2px rgba(37, 99, 235, 0.2)',
-                            transition: 'all 0.15s ease'
-                          }}
-                        >
-                          <Plus size={16} />
-                          Add Staff
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Filter Pills */}
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    {activeTab === 'staff' && ['all', 'On duty', 'On break', 'Off shift'].map(k => (
-                      <button
-                        key={k}
-                        onClick={() => setFilterPill(k)}
-                        style={{ height: '32px', padding: '0 12px', borderRadius: '9999px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', background: filterPill === k ? '#eff6ff' : '#fff', color: filterPill === k ? '#2563eb' : '#374151', border: `1px solid ${filterPill === k ? '#bfdbfe' : '#e5e7eb'}` }}
-                      >
-                        {k === 'all' ? `All · ${staffList.length}` : `${k} · ${staffList.filter(s => s.status === k).length}`}
-                      </button>
-                    ))}
-                    {activeTab === 'schedule' && ['all', 'Today', 'Tomorrow', 'Understaffed', 'Open'].map(k => (
-                      <button
-                        key={k}
-                        onClick={() => setFilterPill(k)}
-                        style={{ height: '32px', padding: '0 12px', borderRadius: '9999px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', background: filterPill === k ? '#eff6ff' : '#fff', color: filterPill === k ? '#2563eb' : '#374151', border: `1px solid ${filterPill === k ? '#bfdbfe' : '#e5e7eb'}` }}
-                      >
-                        {k === 'all' ? 'All' : k}
-                      </button>
-                    ))}
-                    {activeTab === 'ops' && ['all', 'Normal', 'Busy', 'Night gap'].map(k => (
-                      <button
-                        key={k}
-                        onClick={() => setFilterPill(k)}
-                        style={{ height: '32px', padding: '0 12px', borderRadius: '9999px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', background: filterPill === k ? '#eff6ff' : '#fff', color: filterPill === k ? '#2563eb' : '#374151', border: `1px solid ${filterPill === k ? '#bfdbfe' : '#e5e7eb'}` }}
-                      >
-                        {k === 'all' ? 'All' : k}
-                      </button>
-                    ))}
-                    {activeTab === 'inv' && [['all', 'All'], ['out', 'Out of stock'], ['risk', 'Low / expiring']].map(([k, label]) => (
-                      <button
-                        key={k}
-                        onClick={() => setFilterPill(k)}
-                        style={{ height: '32px', padding: '0 12px', borderRadius: '9999px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', background: filterPill === k ? '#eff6ff' : '#fff', color: filterPill === k ? '#2563eb' : '#374151', border: `1px solid ${filterPill === k ? '#bfdbfe' : '#e5e7eb'}` }}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                    {activeTab === 'cd' && [['all', 'All'], ['disc', 'Discrepancies'], ['X', 'Schedule X'], ['H1', 'Schedule H1']].map(([k, label]) => (
-                      <button
-                        key={k}
-                        onClick={() => setFilterPill(k)}
-                        style={{ height: '32px', padding: '0 12px', borderRadius: '9999px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', background: filterPill === k ? '#eff6ff' : '#fff', color: filterPill === k ? '#2563eb' : '#374151', border: `1px solid ${filterPill === k ? '#bfdbfe' : '#e5e7eb'}` }}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                    {activeTab === 'supp' && ['all', 'Awaiting approval', 'Approved'].map(k => (
-                      <button
-                        key={k}
-                        onClick={() => setFilterPill(k)}
-                        style={{ height: '32px', padding: '0 12px', borderRadius: '9999px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', background: filterPill === k ? '#eff6ff' : '#fff', color: filterPill === k ? '#2563eb' : '#374151', border: `1px solid ${filterPill === k ? '#bfdbfe' : '#e5e7eb'}` }}
-                      >
-                        {k === 'all' ? 'All' : k}
-                      </button>
-                    ))}
-                    {activeTab === 'audit' && ['all', 'Override', 'Controlled', 'Discrepancy', 'Adjustment', 'Refund', 'Info'].map(k => (
-                      <button
-                        key={k}
-                        onClick={() => setFilterPill(k)}
-                        style={{ height: '32px', padding: '0 12px', borderRadius: '9999px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', background: filterPill === k ? '#eff6ff' : '#fff', color: filterPill === k ? '#2563eb' : '#374151', border: `1px solid ${filterPill === k ? '#bfdbfe' : '#e5e7eb'}` }}
-                      >
-                        {k === 'all' ? `All · ${auditList.length}` : `${k} · ${auditList.filter(a => a.sev === k).length}`}
-                      </button>
-                    ))}
-                    {activeTab === 'settings' && ['all', 'OPD', 'IPD', 'OTC', 'Store', 'Billing'].map(k => (
-                      <button
-                        key={k}
-                        onClick={() => setFilterPill(k)}
-                        style={{ height: '32px', padding: '0 12px', borderRadius: '9999px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', background: filterPill === k ? '#eff6ff' : '#fff', color: filterPill === k ? '#2563eb' : '#374151', border: `1px solid ${filterPill === k ? '#bfdbfe' : '#e5e7eb'}` }}
-                      >
-                        {k === 'all' ? 'All' : k}
-                      </button>
-                    ))}
-                    {activeTab === 'reports' && ['all', 'Today', 'This week', 'Next 90 days'].map(k => (
-                      <button
-                        key={k}
-                        onClick={() => setFilterPill(k)}
-                        style={{ height: '32px', padding: '0 12px', borderRadius: '9999px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', background: filterPill === k ? '#eff6ff' : '#fff', color: filterPill === k ? '#2563eb' : '#374151', border: `1px solid ${filterPill === k ? '#bfdbfe' : '#e5e7eb'}` }}
-                      >
-                        {k === 'all' ? 'All' : k}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Table Component */}
-                <div style={{ overflowX: 'auto' }}>
-                  <div style={{ minWidth: '820px' }}>
-                    {/* STAFF TABLE */}
                     {activeTab === 'staff' && (
-                      <>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(190px, 1.4fr) minmax(150px, 1.1fr) 120px 110px 100px 110px 90px', alignItems: 'center', height: '44px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600, letterSpacing: '0.04em', color: '#4b5563' }}>
-                          <div style={{ padding: '0 16px' }}>NAME · ID</div>
-                          <div style={{ padding: '0 16px' }}>ROLE · AREA</div>
-                          <div style={{ padding: '0 16px' }}>SHIFT</div>
-                          <div style={{ padding: '0 16px' }}>PROCESSED</div>
-                          <div style={{ padding: '0 16px' }}>TURNAROUND</div>
-                          <div style={{ padding: '0 16px' }}>STATUS</div>
-                          <div style={{ padding: '0 16px', textAlign: 'right' }}>ACTION</div>
-                        </div>
-                        {staffList
-                          .filter(s => (filterPill === 'all' || s.status === filterPill) && (!searchQuery || (s.name + s.role + s.id).toLowerCase().includes(searchQuery.toLowerCase())))
-                          .map(s => {
-                            const isSelected = selectedStaffId === s.id;
-                            return (
-                              <div
-                                key={s.id}
-                                onClick={() => setSelectedStaffId(s.id)}
-                                style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 1.4fr) minmax(140px, 1.1fr) 110px 100px 90px 100px 130px', alignItems: 'center', minHeight: '56px', borderBottom: '1px solid #f3f4f6', cursor: 'pointer', background: isSelected ? '#eff6ff' : '#fff' }}
-                              >
-                                <div style={{ padding: '10px 16px' }}>
-                                  <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>{s.name}</div>
-                                  <div style={{ fontSize: '12px', color: '#6b7280' }}>{s.id}</div>
-                                </div>
-                                <div style={{ padding: '10px 16px' }}>
-                                  <div style={{ fontSize: '14px', color: '#111827' }}>{s.role}</div>
-                                  <div style={{ fontSize: '12px', color: '#6b7280' }}>{s.area}</div>
-                                </div>
-                                <div style={{ padding: '10px 16px', fontSize: '13px', color: '#4b5563' }}>{s.shift}</div>
-                                <div style={{ padding: '10px 16px' }}>
-                                  <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>{s.done} / {s.target}</div>
-                                  <div style={{ fontSize: '12px', color: '#6b7280' }}>{Math.round(s.done / s.target * 100)}% of target</div>
-                                </div>
-                                <div style={{ padding: '10px 16px', fontSize: '14px', color: '#111827' }}>{s.tat}</div>
-                                <div style={{ padding: '10px 16px' }}>{getStatusBadge(s.status)}</div>
-                                <div style={{ padding: '10px 16px', textAlign: 'right', display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
-                                  <button
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      setSelectedStaffId(s.id);
-                                    }}
-                                    style={{ height: '32px', padding: '0 10px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', background: isSelected ? '#2563eb' : '#fff', color: isSelected ? '#fff' : '#111827', border: `1px solid ${isSelected ? '#2563eb' : '#d1d5db'}` }}
-                                  >
-                                    View
-                                  </button>
-                                  <button
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      handleOpenEditStaff(s);
-                                    }}
-                                    title="Edit & complete profile"
-                                    style={{ height: '32px', padding: '0 8px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', gap: '4px' }}
-                                  >
-                                    <Edit2 size={13} />
-                                    Edit
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                      </>
-                    )}
-
-                    {/* DUTY SCHEDULING TABLE */}
-                    {activeTab === 'schedule' && (
-                      <>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(170px, 1.2fr) minmax(160px, 1.2fr) minmax(170px, 1.3fr) 90px 120px 90px', alignItems: 'center', height: '44px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600, letterSpacing: '0.04em', color: '#4b5563' }}>
-                          <div style={{ padding: '0 16px' }}>SHIFT</div>
-                          <div style={{ padding: '0 16px' }}>SERVICE POINT</div>
-                          <div style={{ padding: '0 16px' }}>ASSIGNED</div>
-                          <div style={{ padding: '0 16px' }}>COVER</div>
-                          <div style={{ padding: '0 16px' }}>STATUS</div>
-                          <div style={{ padding: '0 16px', textAlign: 'right' }}>ACTION</div>
-                        </div>
-                        {shiftsList
-                          .filter(sh => (filterPill === 'all' || sh.day === filterPill || sh.status === filterPill) && (!searchQuery || (sh.area + sh.staff.join(' ')).toLowerCase().includes(searchQuery.toLowerCase())))
-                          .map(sh => {
-                            const isSelected = selectedShiftId === sh.id;
-                            return (
-                              <div
-                                key={sh.id}
-                                onClick={() => setSelectedShiftId(sh.id)}
-                                style={{ display: 'grid', gridTemplateColumns: 'minmax(170px, 1.2fr) minmax(160px, 1.2fr) minmax(170px, 1.3fr) 90px 120px 90px', alignItems: 'center', minHeight: '56px', borderBottom: '1px solid #f3f4f6', cursor: 'pointer', background: isSelected ? '#eff6ff' : '#fff' }}
-                              >
-                                <div style={{ padding: '10px 16px' }}>
-                                  <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>{sh.slot}</div>
-                                  <div style={{ fontSize: '12px', color: '#6b7280' }}>{sh.day}</div>
-                                </div>
-                                <div style={{ padding: '10px 16px', fontSize: '14px', color: '#111827' }}>{sh.area}</div>
-                                <div style={{ padding: '10px 16px', fontSize: '14px', color: sh.staff.length ? '#111827' : '#dc2626' }}>
-                                  {sh.staff.join(', ') || 'Unassigned'}
-                                </div>
-                                <div style={{ padding: '10px 16px', fontSize: '14px', fontWeight: 600, color: '#111827' }}>
-                                  {sh.staff.length} / {sh.need}
-                                </div>
-                                <div style={{ padding: '10px 16px' }}>{getStatusBadge(sh.status)}</div>
-                                <div style={{ padding: '10px 16px', textAlign: 'right' }}>
-                                  <button
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      handleOpenAssignShift(sh);
-                                    }}
-                                    style={{ height: '32px', padding: '0 10px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe' }}
-                                  >
-                                    Assign
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                      </>
-                    )}
-
-                    {/* PHARMACY OPERATIONS TABLE */}
-                    {activeTab === 'ops' && (
-                      <>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(190px, 1.4fr) minmax(150px, 1.1fr) 80px 110px 110px 110px 90px', alignItems: 'center', height: '44px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600, letterSpacing: '0.04em', color: '#4b5563' }}>
-                          <div style={{ padding: '0 16px' }}>SERVICE POINT</div>
-                          <div style={{ padding: '0 16px' }}>LEAD</div>
-                          <div style={{ padding: '0 16px' }}>QUEUE</div>
-                          <div style={{ padding: '0 16px' }}>TURNAROUND</div>
-                          <div style={{ padding: '0 16px' }}>HANDLED</div>
-                          <div style={{ padding: '0 16px' }}>STATUS</div>
-                          <div style={{ padding: '0 16px', textAlign: 'right' }}>ACTION</div>
-                        </div>
-                        {pointsList
-                          .filter(p => (filterPill === 'all' || p.status === filterPill) && (!searchQuery || (p.name + p.lead).toLowerCase().includes(searchQuery.toLowerCase())))
-                          .map(p => {
-                            const isSelected = selectedPointId === p.id;
-                            return (
-                              <div
-                                key={p.id}
-                                onClick={() => setSelectedPointId(p.id)}
-                                style={{ display: 'grid', gridTemplateColumns: 'minmax(190px, 1.4fr) minmax(150px, 1.1fr) 80px 110px 110px 110px 90px', alignItems: 'center', minHeight: '56px', borderBottom: '1px solid #f3f4f6', cursor: 'pointer', background: isSelected ? '#eff6ff' : '#fff' }}
-                              >
-                                <div style={{ padding: '10px 16px' }}>
-                                  <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>{p.name}</div>
-                                  <div style={{ fontSize: '12px', color: '#6b7280' }}>{p.type}</div>
-                                </div>
-                                <div style={{ padding: '10px 16px', fontSize: '14px', color: '#111827' }}>{p.lead}</div>
-                                <div style={{ padding: '10px 16px', fontSize: '14px', fontWeight: 600, color: p.queue > 6 ? '#b45309' : '#111827' }}>
-                                  {p.queue}
-                                </div>
-                                <div style={{ padding: '10px 16px' }}>
-                                  <div style={{ fontSize: '14px', color: '#111827' }}>{p.tat}</div>
-                                  <div style={{ fontSize: '12px', color: '#6b7280' }}>SLA {p.sla}</div>
-                                </div>
-                                <div style={{ padding: '10px 16px', fontSize: '14px', fontWeight: 600, color: '#111827' }}>
-                                  {p.today} today
-                                </div>
-                                <div style={{ padding: '10px 16px' }}>{getStatusBadge(p.status)}</div>
-                                <div style={{ padding: '10px 16px', textAlign: 'right' }}>
-                                  <button style={{ height: '32px', padding: '0 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', background: isSelected ? '#2563eb' : '#fff', color: isSelected ? '#fff' : '#111827', border: `1px solid ${isSelected ? '#2563eb' : '#d1d5db'}` }}>
-                                    View
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                      </>
-                    )}
-
-                    {/* INVENTORY HEALTH TABLE */}
-                    {activeTab === 'inv' && (
-                      <>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1.7fr) minmax(120px, 1fr) 80px 80px 140px 90px', alignItems: 'center', height: '44px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600, letterSpacing: '0.04em', color: '#4b5563' }}>
-                          <div style={{ padding: '0 16px' }}>ITEM</div>
-                          <div style={{ padding: '0 16px' }}>CATEGORY</div>
-                          <div style={{ padding: '0 16px' }}>STOCK</div>
-                          <div style={{ padding: '0 16px' }}>REORDER</div>
-                          <div style={{ padding: '0 16px' }}>ISSUE</div>
-                          <div style={{ padding: '0 16px', textAlign: 'right' }}>ACTION</div>
-                        </div>
-                        {invhList
-                          .filter(inv => (filterPill === 'all' || (filterPill === 'out' ? inv.c === 'red' : inv.c === 'amber')) && (!searchQuery || (inv.name + inv.impact).toLowerCase().includes(searchQuery.toLowerCase())))
-                          .map((inv, idx) => {
-                            const isSelected = selectedInvId === (inv.id || `inv-${idx}`);
-                            return (
-                              <div
-                                key={inv.id || idx}
-                                onClick={() => setSelectedInvId(inv.id || `inv-${idx}`)}
-                                style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1.7fr) minmax(120px, 1fr) 80px 80px 140px 90px', alignItems: 'center', minHeight: '56px', borderBottom: '1px solid #f3f4f6', cursor: 'pointer', background: isSelected ? '#eff6ff' : '#fff' }}
-                              >
-                                <div style={{ padding: '10px 16px' }}>
-                                  <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>{inv.name}</div>
-                                  <div style={{ fontSize: '12px', color: '#6b7280' }}>{inv.impact}</div>
-                                </div>
-                                <div style={{ padding: '10px 16px', fontSize: '13px', color: '#4b5563' }}>{inv.cat}</div>
-                                <div style={{ padding: '10px 16px', fontSize: '14px', fontWeight: 600, color: inv.stock === 0 ? '#dc2626' : '#111827' }}>
-                                  {inv.stock}
-                                </div>
-                                <div style={{ padding: '10px 16px', fontSize: '13px', color: '#4b5563' }}>{inv.par}</div>
-                                <div style={{ padding: '10px 16px' }}>
-                                  {renderBadge(inv.c === 'red' ? '#fef2f2' : '#fffbeb', inv.c === 'red' ? '#dc2626' : '#b45309', inv.c === 'red' ? '#fecaca' : '#fde68a', inv.issue)}
-                                </div>
-                                <div style={{ padding: '10px 16px', textAlign: 'right' }}>
-                                  <button style={{ height: '32px', padding: '0 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', background: isSelected ? '#2563eb' : '#fff', color: isSelected ? '#fff' : '#111827', border: `1px solid ${isSelected ? '#2563eb' : '#d1d5db'}` }}>
-                                    View
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                      </>
-                    )}
-
-                    {/* CONTROLLED DRUG MONITORING TABLE */}
-                    {activeTab === 'cd' && (
-                      <>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 1.6fr) 90px 80px 80px 80px 90px 90px 120px', alignItems: 'center', height: '44px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600, letterSpacing: '0.04em', color: '#4b5563' }}>
-                          <div style={{ padding: '0 16px' }}>DRUG</div>
-                          <div style={{ padding: '0 16px' }}>SCHEDULE</div>
-                          <div style={{ padding: '0 16px' }}>OPENING</div>
-                          <div style={{ padding: '0 16px' }}>IN</div>
-                          <div style={{ padding: '0 16px' }}>OUT</div>
-                          <div style={{ padding: '0 16px' }}>REGISTER</div>
-                          <div style={{ padding: '0 16px' }}>SHELF</div>
-                          <div style={{ padding: '0 16px' }}>STATUS</div>
-                        </div>
-                        {cdmList
-                          .filter(c => (filterPill === 'all' || (filterPill === 'disc' ? c.bal !== c.shelf : c.sched === filterPill)) && (!searchQuery || c.name.toLowerCase().includes(searchQuery.toLowerCase())))
-                          .map(c => {
-                            const isSelected = selectedCdCode === c.code;
-                            const isDisc = c.shelf !== c.bal;
-                            return (
-                              <div
-                                key={c.code}
-                                onClick={() => setSelectedCdCode(c.code)}
-                                style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 1.6fr) 90px 80px 80px 80px 90px 90px 120px', alignItems: 'center', minHeight: '56px', borderBottom: '1px solid #f3f4f6', cursor: 'pointer', background: isSelected ? '#eff6ff' : '#fff' }}
-                              >
-                                <div style={{ padding: '10px 16px' }}>
-                                  <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>{c.name}</div>
-                                  <div style={{ fontSize: '12px', color: '#6b7280' }}>{c.code}</div>
-                                </div>
-                                <div style={{ padding: '10px 16px' }}>{renderBadge('#111827', '#ffffff', '#111827', `Sch. ${c.sched}`)}</div>
-                                <div style={{ padding: '10px 16px', fontSize: '14px', color: '#111827' }}>{c.open}</div>
-                                <div style={{ padding: '10px 16px', fontSize: '14px', color: '#15803d' }}>+{c.rec + c.ret}</div>
-                                <div style={{ padding: '10px 16px', fontSize: '14px', color: '#4b5563' }}>−{c.iss}</div>
-                                <div style={{ padding: '10px 16px', fontSize: '14px', fontWeight: 600, color: '#111827' }}>{c.bal}</div>
-                                <div style={{ padding: '10px 16px', fontSize: '14px', fontWeight: 600, color: isDisc ? '#dc2626' : '#111827' }}>
-                                  {c.shelf}
-                                </div>
-                                <div style={{ padding: '10px 16px' }}>
-                                  {!isDisc ? renderBadge('#f0fdf4', '#15803d', '#bbf7d0', 'Reconciled') : renderBadge('#fef2f2', '#dc2626', '#fecaca', `Variance ${c.shelf - c.bal}`)}
-                                </div>
-                              </div>
-                            );
-                          })}
-                      </>
-                    )}
-
-                    {/* SUPPLIERS & PROCUREMENT TABLE */}
-                    {activeTab === 'supp' && (
-                      <>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(190px, 1.4fr) minmax(150px, 1.1fr) minmax(150px, 1.1fr) 90px 90px 140px 90px', alignItems: 'center', height: '44px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600, letterSpacing: '0.04em', color: '#4b5563' }}>
-                          <div style={{ padding: '0 16px' }}>SUPPLIER</div>
-                          <div style={{ padding: '0 16px' }}>CATEGORY</div>
-                          <div style={{ padding: '0 16px' }}>OPEN PO</div>
-                          <div style={{ padding: '0 16px' }}>LEAD</div>
-                          <div style={{ padding: '0 16px' }}>ON-TIME</div>
-                          <div style={{ padding: '0 16px' }}>STATUS</div>
-                          <div style={{ padding: '0 16px', textAlign: 'right' }}>ACTION</div>
-                        </div>
-                        {supsList
-                          .filter(s => (filterPill === 'all' || s.status === filterPill) && (!searchQuery || s.name.toLowerCase().includes(searchQuery.toLowerCase())))
-                          .map((s, idx) => {
-                            const isSelected = selectedSupIndex === idx;
-                            return (
-                              <div
-                                key={idx}
-                                onClick={() => setSelectedSupIndex(idx)}
-                                style={{ display: 'grid', gridTemplateColumns: 'minmax(190px, 1.4fr) minmax(150px, 1.1fr) minmax(150px, 1.1fr) 90px 90px 140px 90px', alignItems: 'center', minHeight: '56px', borderBottom: '1px solid #f3f4f6', cursor: 'pointer', background: isSelected ? '#eff6ff' : '#fff' }}
-                              >
-                                <div style={{ padding: '10px 16px', fontSize: '14px', fontWeight: 600, color: '#111827' }}>{s.name}</div>
-                                <div style={{ padding: '10px 16px', fontSize: '13px', color: '#4b5563' }}>{s.cat}</div>
-                                <div style={{ padding: '10px 16px', fontSize: '13px', fontFamily: 'monospace', color: '#111827' }}>{s.po}</div>
-                                <div style={{ padding: '10px 16px', fontSize: '14px', color: '#111827' }}>{s.lead}</div>
-                                <div style={{ padding: '10px 16px', fontSize: '14px', fontWeight: 600, color: s.ontime < 80 ? '#dc2626' : '#111827' }}>
-                                  {s.ontime}%
-                                </div>
-                                <div style={{ padding: '10px 16px' }}>{getStatusBadge(s.status)}</div>
-                                <div style={{ padding: '10px 16px', textAlign: 'right' }}>
-                                  {s.status === 'Awaiting approval' ? (
-                                    <button
-                                      onClick={e => {
-                                        e.stopPropagation();
-                                        handleReviewPR(s, 'APPROVE');
-                                      }}
-                                      style={{ height: '32px', padding: '0 10px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', background: '#2563eb', color: '#fff', border: '1px solid #2563eb' }}
-                                    >
-                                      Approve
-                                    </button>
-                                  ) : (
-                                    <button style={{ height: '32px', padding: '0 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', background: isSelected ? '#2563eb' : '#fff', color: isSelected ? '#fff' : '#111827', border: `1px solid ${isSelected ? '#2563eb' : '#d1d5db'}` }}>
-                                      View
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
-                      </>
-                    )}
-
-                    {/* AUDIT LOGS TABLE */}
-                    {activeTab === 'audit' && (
-                      <>
-                        <div style={{ display: 'grid', gridTemplateColumns: '72px minmax(140px, 1fr) minmax(160px, 1.2fr) minmax(180px, 1.4fr) 120px 90px', alignItems: 'center', height: '44px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600, letterSpacing: '0.04em', color: '#4b5563' }}>
-                          <div style={{ padding: '0 16px' }}>TIME</div>
-                          <div style={{ padding: '0 16px' }}>USER</div>
-                          <div style={{ padding: '0 16px' }}>ACTION</div>
-                          <div style={{ padding: '0 16px' }}>ENTITY</div>
-                          <div style={{ padding: '0 16px' }}>TYPE</div>
-                          <div style={{ padding: '0 16px', textAlign: 'right' }}>ACTION</div>
-                        </div>
-                        {auditList
-                          .filter(a => (filterPill === 'all' || a.sev === filterPill) && (!searchQuery || (a.user + a.act + a.ent).toLowerCase().includes(searchQuery.toLowerCase())))
-                          .map(a => {
-                            const isSelected = selectedAuditId === a.id;
-                            return (
-                              <div
-                                key={a.id}
-                                onClick={() => setSelectedAuditId(a.id)}
-                                style={{ display: 'grid', gridTemplateColumns: '72px minmax(140px, 1fr) minmax(160px, 1.2fr) minmax(180px, 1.4fr) 120px 90px', alignItems: 'center', minHeight: '56px', borderBottom: '1px solid #f3f4f6', cursor: 'pointer', background: isSelected ? '#eff6ff' : '#fff' }}
-                              >
-                                <div style={{ padding: '10px 16px', fontSize: '13px', color: '#4b5563' }}>{a.time}</div>
-                                <div style={{ padding: '10px 16px' }}>
-                                  <div style={{ fontSize: '14px', fontWeight: 500, color: '#111827' }}>{a.user}</div>
-                                  <div style={{ fontSize: '12px', color: '#6b7280' }}>{a.ip}</div>
-                                </div>
-                                <div style={{ padding: '10px 16px', fontSize: '14px', fontWeight: 600, color: '#111827' }}>{a.act}</div>
-                                <div style={{ padding: '10px 16px', fontSize: '13px', fontFamily: 'monospace', color: '#374151' }}>{a.ent}</div>
-                                <div style={{ padding: '10px 16px' }}>{getSeverityBadge(a.sev)}</div>
-                                <div style={{ padding: '10px 16px', textAlign: 'right' }}>
-                                  <button style={{ height: '32px', padding: '0 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', background: isSelected ? '#2563eb' : '#fff', color: isSelected ? '#fff' : '#111827', border: `1px solid ${isSelected ? '#2563eb' : '#d1d5db'}` }}>
-                                    View
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                      </>
-                    )}
-
-                    {/* DEPARTMENT SETTINGS TABLE */}
-                    {activeTab === 'settings' && (
-                      <>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, 1.9fr) minmax(130px, 1fr) 130px minmax(160px, 1.1fr) 90px', alignItems: 'center', height: '44px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600, letterSpacing: '0.04em', color: '#4b5563' }}>
-                          <div style={{ padding: '0 16px' }}>POLICY</div>
-                          <div style={{ padding: '0 16px' }}>SCOPE</div>
-                          <div style={{ padding: '0 16px' }}>VALUE</div>
-                          <div style={{ padding: '0 16px' }}>LAST CHANGED</div>
-                          <div style={{ padding: '0 16px', textAlign: 'right' }}>ACTION</div>
-                        </div>
-                        {settingsList
-                          .filter(s => (filterPill === 'all' || s.scope.includes(filterPill)) && (!searchQuery || s.name.toLowerCase().includes(searchQuery.toLowerCase())))
-                          .map(s => {
-                            const isSelected = selectedSettingKey === s.key;
-                            return (
-                              <div
-                                key={s.key}
-                                onClick={() => setSelectedSettingKey(s.key)}
-                                style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, 1.9fr) minmax(130px, 1fr) 130px minmax(160px, 1.1fr) 90px', alignItems: 'center', minHeight: '56px', borderBottom: '1px solid #f3f4f6', cursor: 'pointer', background: isSelected ? '#eff6ff' : '#fff' }}
-                              >
-                                <div style={{ padding: '10px 16px' }}>
-                                  <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>{s.name}</div>
-                                  <div style={{ fontSize: '12px', color: '#6b7280' }}>{s.description}</div>
-                                </div>
-                                <div style={{ padding: '10px 16px', fontSize: '13px', color: '#4b5563' }}>{s.scope}</div>
-                                <div style={{ padding: '10px 16px' }}>
-                                  {typeof s.value === 'boolean'
-                                    ? renderBadge(s.value ? '#f0fdf4' : '#f3f4f6', s.value ? '#15803d' : '#4b5563', s.value ? '#bbf7d0' : '#e5e7eb', s.value ? 'On' : 'Off')
-                                    : renderBadge('#eff6ff', '#1d4ed8', '#bfdbfe', String(s.value))}
-                                </div>
-                                <div style={{ padding: '10px 16px', fontSize: '13px', color: '#4b5563' }}>{s.by}</div>
-                                <div style={{ padding: '10px 16px', textAlign: 'right' }}>
-                                  <button style={{ height: '32px', padding: '0 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', background: isSelected ? '#2563eb' : '#fff', color: isSelected ? '#fff' : '#111827', border: `1px solid ${isSelected ? '#2563eb' : '#d1d5db'}` }}>
-                                    View
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                      </>
-                    )}
-
-                    {/* REPORTS TABLE */}
-                    {activeTab === 'reports' && (
-                      <>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1.8fr) 120px minmax(130px, 1fr) 110px 100px 110px 90px', alignItems: 'center', height: '44px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600, letterSpacing: '0.04em', color: '#4b5563' }}>
-                          <div style={{ padding: '0 16px' }}>REPORT</div>
-                          <div style={{ padding: '0 16px' }}>PERIOD</div>
-                          <div style={{ padding: '0 16px' }}>OWNER</div>
-                          <div style={{ padding: '0 16px' }}>GENERATED</div>
-                          <div style={{ padding: '0 16px' }}>FORMAT</div>
-                          <div style={{ padding: '0 16px' }}>STATUS</div>
-                          <div style={{ padding: '0 16px', textAlign: 'right' }}>ACTION</div>
-                        </div>
-                        {reportsList
-                          .filter(r => (filterPill === 'all' || r.period === filterPill) && (!searchQuery || r.name.toLowerCase().includes(searchQuery.toLowerCase())))
-                          .map(r => {
-                            const isSelected = selectedReportId === r.id;
-                            return (
-                              <div
-                                key={r.id}
-                                onClick={() => setSelectedReportId(r.id)}
-                                style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1.8fr) 120px minmax(130px, 1fr) 110px 100px 110px 90px', alignItems: 'center', minHeight: '56px', borderBottom: '1px solid #f3f4f6', cursor: 'pointer', background: isSelected ? '#eff6ff' : '#fff' }}
-                              >
-                                <div style={{ padding: '10px 16px' }}>
-                                  <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>{r.name}</div>
-                                  <div style={{ fontSize: '12px', color: '#6b7280' }}>{r.id}</div>
-                                </div>
-                                <div style={{ padding: '10px 16px', fontSize: '13px', color: '#4b5563' }}>{r.period}</div>
-                                <div style={{ padding: '10px 16px', fontSize: '13px', color: '#111827' }}>{r.owner}</div>
-                                <div style={{ padding: '10px 16px', fontSize: '13px', color: '#4b5563' }}>{r.gen}</div>
-                                <div style={{ padding: '10px 16px', fontSize: '13px', color: '#4b5563' }}>{r.fmt}</div>
-                                <div style={{ padding: '10px 16px' }}>{getStatusBadge(r.status)}</div>
-                                <div style={{ padding: '10px 16px', textAlign: 'right' }}>
-                                  <button style={{ height: '32px', padding: '0 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', background: isSelected ? '#2563eb' : '#fff', color: isSelected ? '#fff' : '#111827', border: `1px solid ${isSelected ? '#2563eb' : '#d1d5db'}` }}>
-                                    View
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                      </>
+                      <button
+                        type="button"
+                        onClick={handleOpenAddStaff}
+                        aria-keyshortcuts="Alt+N"
+                        title="Add staff (Alt+N)"
+                        style={{ whiteSpace: 'nowrap', height: '40px', padding: '0 14px', borderRadius: '10px', border: '1px solid #2563eb', backgroundColor: '#2563eb', fontSize: '14px', fontWeight: 600, color: '#ffffff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}
+                      >
+                        <Plus size={18} />
+                        Add Staff
+                      </button>
                     )}
                   </div>
+                  <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>{md.desc}</p>
+
+                  <div style={{ position: 'relative' }}>
+                    <Search size={18} color="#2563eb" style={{ position: 'absolute', left: '12px', top: '11px', pointerEvents: 'none' }} />
+                    <input
+                      ref={listSearchRef}
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      onKeyDown={e => handleListKeyDown(e, true)}
+                      placeholder={`${md.searchPh}…`}
+                      aria-label={md.searchPh}
+                      aria-keyshortcuts="/"
+                      aria-controls="pa-md-list"
+                      aria-activedescendant={mdActiveKey ? domId(mdActiveKey) : undefined}
+                      style={{ width: '100%', height: '40px', padding: '0 64px 0 40px', border: '1px solid #d1d5db', borderRadius: '10px', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+                      onFocus={e => { e.currentTarget.style.borderColor = '#2563eb'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(37,99,235,0.12)'; }}
+                      onBlur={e => { e.currentTarget.style.borderColor = '#d1d5db'; e.currentTarget.style.boxShadow = 'none'; }}
+                    />
+                    {searchQuery ? (
+                      <button type="button" onClick={() => { setSearchQuery(''); listSearchRef.current?.focus(); }} aria-label="Clear search" style={{ position: 'absolute', right: '10px', top: '10px', width: '20px', height: '20px', borderRadius: '50%', border: 'none', background: '#f1f5f9', color: '#64748b', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+                        <X size={13} />
+                      </button>
+                    ) : (
+                      <span className="pa-kbd" style={{ position: 'absolute', right: '10px', top: '11px' }}>/</span>
+                    )}
+                  </div>
+
+                  <div role="group" aria-label="Filters" style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    {md.pillCounts.map(([k, label, count]) => {
+                      const on = filterPill === k;
+                      return (
+                        <button
+                          key={k}
+                          type="button"
+                          onClick={() => setFilterPill(k)}
+                          aria-pressed={on}
+                          style={{ height: '32px', padding: '0 12px', borderRadius: '9999px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px', background: on ? '#2563eb' : '#ffffff', color: on ? '#ffffff' : '#4b5563', border: `1px solid ${on ? '#2563eb' : '#e5e7eb'}`, boxShadow: on ? '0 1px 3px rgba(37,99,235,0.25)' : 'none' }}
+                        >
+                          <span>{label}</span>
+                          <span style={{ fontSize: '12px', fontWeight: 600, padding: '0 6px', borderRadius: '4px', background: on ? 'rgba(255,255,255,0.22)' : '#f1f5f9', color: on ? '#ffffff' : '#64748b' }}>{count}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {activeTab === 'reports' && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '12px', padding: '12px 14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px' }}>
+                      <div>
+                        <div style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Revenue today</div>
+                        <div style={{ fontSize: '20px', fontWeight: 700, color: '#111827', marginTop: '2px' }}>{metrics ? metrics.kpis.revenue_today_inr : '—'}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>OTC revenue</div>
+                        <div style={{ fontSize: '20px', fontWeight: 700, color: '#111827', marginTop: '2px' }}>{metrics ? metrics.kpis.revenue_otc_inr : '—'}</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                {/* Table Footer */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 20px', fontSize: '12px', color: '#6b7280', borderTop: '1px solid #e5e7eb' }}>
-                  <span>Showing {activeTab === 'staff' ? staffList.length : activeTab === 'schedule' ? shiftsList.length : activeTab === 'ops' ? pointsList.length : activeTab === 'inv' ? invhList.length : activeTab === 'cd' ? cdmList.length : activeTab === 'supp' ? supsList.length : activeTab === 'audit' ? auditList.length : activeTab === 'settings' ? settingsList.length : reportsList.length} records</span>
-                  <span>1 / 1</span>
+                <div
+                  id="pa-md-list"
+                  role="listbox"
+                  aria-label={md.title}
+                  onKeyDown={e => handleListKeyDown(e)}
+                  style={{ maxHeight: 'calc(100vh - 320px)', overflowY: 'auto', borderTop: '1px solid #f3f4f6', display: 'flex', flexDirection: 'column' }}
+                >
+                  {md.rows.length === 0 ? (
+                    <div style={{ padding: '36px 16px', textAlign: 'center', color: '#6b7280', fontSize: '14px' }}>Nothing matches this search or filter.</div>
+                  ) : (
+                    md.rows.map(row => {
+                      const isSel = row.key === mdActiveKey;
+                      const done = row.progress && row.progress.pct >= 100;
+                      return (
+                        <div
+                          key={row.key}
+                          id={domId(row.key)}
+                          role="option"
+                          aria-selected={isSel}
+                          tabIndex={isSel ? 0 : -1}
+                          className="pa-row"
+                          onClick={() => mdSelect(row.key)}
+                          onFocus={() => mdSelect(row.key)}
+                          onDoubleClick={() => runPrimaryAction(row.key)}
+                          style={{ padding: '12px 16px', borderBottom: '1px solid #f1f5f9', borderLeft: `3px solid ${isSel ? '#2563eb' : 'transparent'}`, background: isSel ? '#eff6ff' : '#ffffff', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '6px', transition: 'background 0.12s ease' }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                            <span title={row.title} style={{ flex: 1, minWidth: 0, fontSize: '14px', fontWeight: 600, color: isSel ? '#1d4ed8' : '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.title}</span>
+                            <span style={{ flexShrink: 0 }}>{row.badge}</span>
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.sub}</div>
+                          {(row.metaLeft || row.metaRight) && (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', fontSize: '12px', color: '#475569' }}>
+                              <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.metaLeft}</span>
+                              <span style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>{row.metaRight}</span>
+                            </div>
+                          )}
+                          {row.progress && (done ? (
+                            <span style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', fontWeight: 600, color: '#15803d' }}>
+                              <CheckCircle2 size={14} /> {row.progress.doneLabel}
+                            </span>
+                          ) : (
+                            <span
+                              role="progressbar"
+                              aria-valuenow={row.progress.pct}
+                              aria-valuemin={0}
+                              aria-valuemax={100}
+                              aria-label={`${row.progress.pct}% complete`}
+                              style={{ display: 'block', height: '6px', borderRadius: '3px', background: '#f1f5f9', overflow: 'hidden' }}
+                            >
+                              <span style={{ display: 'block', height: '6px', width: `${row.progress.pct}%`, borderRadius: '3px', background: '#2563eb' }} />
+                            </span>
+                          ))}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', padding: '12px 16px', fontSize: '12px', color: '#6b7280', borderTop: '1px solid #e5e7eb' }}>
+                  <span>{md.rows.length} of {md.total} shown</span>
+                  <span>↑ ↓ move · Enter {md.primary}</span>
                 </div>
               </div>
 
-              {/* Right Sticky Inspection Drawer */}
-              <div style={{ flex: '0 1 400px', minWidth: '340px', display: 'flex', flexDirection: 'column', gap: '8px', position: 'sticky', top: '76px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 4px' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 600, letterSpacing: '0.06em', color: '#6b7280' }}>
-                    {activeTab === 'staff' && 'STAFF MEMBER'}
-                    {activeTab === 'schedule' && 'SHIFT'}
-                    {activeTab === 'ops' && 'SERVICE POINT'}
-                    {activeTab === 'inv' && 'ITEM'}
-                    {activeTab === 'cd' && 'CONTROLLED DRUG'}
-                    {activeTab === 'supp' && 'SUPPLIER'}
-                    {activeTab === 'audit' && 'LOG ENTRY'}
-                    {activeTab === 'settings' && 'POLICY'}
-                    {activeTab === 'reports' && 'REPORT PREVIEW'}
-                  </span>
-                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#374151', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: '4px', padding: '1px 6px' }}>
-                    Read-only
-                  </span>
-                </div>
+              {/* Right: detail */}
+              <div
+                ref={detailRef}
+                tabIndex={-1}
+                aria-label={`${md.detail} details`}
+                style={{ ...PANEL, position: 'sticky', top: '76px', maxHeight: 'calc(100vh - 100px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', outline: 'none' }}
+              >
+                {activeTab === 'staff' ? (
+                <>{!activeStaff ? (
+                  <div style={{ padding: '48px 24px', textAlign: 'center', color: '#6b7280', fontSize: '13px' }}>Select a staff member to see their shift, productivity and compliance.</div>
+                ) : (() => {
+                  const staff = activeStaff;
+                  const pct = staff.target ? Math.round((staff.done / staff.target) * 100) : 0;
+                  return (
+                    <>
+                      <div style={{ padding: '16px 24px', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexShrink: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+                          <span style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#eff6ff', color: '#1d4ed8', border: '1.5px solid #bfdbfe', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 700, flexShrink: 0 }}>
+                            {staff.name.split(/\s+/).map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                          </span>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                              <h3 aria-live="polite" style={{ fontSize: '18px', fontWeight: 700, color: '#111827', margin: 0 }}>{staff.name}</h3>
+                              {getStatusBadge(staff.status)}
+                            </div>
+                            <p style={{ fontSize: '12px', color: '#64748b', margin: '2px 0 0' }}>{staff.role} · {staff.id} · {staff.area}</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="pa-focus"
+                          onClick={() => handleOpenEditStaff(staff)}
+                          title="Edit profile (Enter on the selected row)"
+                          style={{ height: '40px', padding: '0 16px', borderRadius: '10px', border: '1px solid #d1d5db', background: '#ffffff', color: '#111827', fontSize: '14px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}
+                        >
+                          <Edit2 size={16} />
+                          Complete / Edit Profile
+                        </button>
+                      </div>
 
-                <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', overflow: 'hidden', maxHeight: 'calc(100vh - 110px)', display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
-                    {/* STAFF DRAWER CONTENT */}
-                    {activeTab === 'staff' && (() => {
-                      const staff = staffList.find(s => s.id === selectedStaffId) || staffList[0];
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '12px', padding: '16px 24px', background: '#f8fafc', borderBottom: '1px solid #e5e7eb', flexShrink: 0 }}>
+                        {[
+                          { l: 'Shift', v: staff.shift, n: staff.status === 'On duty' ? 'Currently on duty' : staff.status },
+                          { l: 'Processed', v: String(staff.done), n: `Target ${staff.target}` },
+                          { l: 'Of Target', v: `${pct}%`, n: pct >= 80 ? 'On pace' : pct >= 50 ? 'Below pace' : 'Well below pace', c: pct >= 80 ? '#16a34a' : pct >= 50 ? '#111827' : '#b45309' },
+                          { l: 'Turnaround', v: staff.tat, n: 'Average per order' },
+                        ].map(b => (
+                          <div key={b.l} style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{b.l}</div>
+                            <div style={{ fontSize: '18px', fontWeight: 700, color: b.c || '#111827', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.v}</div>
+                            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '1px' }}>{b.n}</div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                        <div>
+                          <div style={{ fontSize: '12px', fontWeight: 700, color: '#475569', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: '8px' }}>Staff performance</div>
+                          {pct >= 100 ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 600, color: '#15803d' }}>
+                              <CheckCircle2 size={18} /> Target met · {staff.done} of {staff.target} processed
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <span role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Progress to target" style={{ flex: 1, height: '8px', borderRadius: '4px', background: '#f1f5f9', overflow: 'hidden' }}>
+                                <span style={{ display: 'block', height: '8px', width: `${pct}%`, borderRadius: '4px', background: '#2563eb' }} />
+                              </span>
+                              <span style={{ fontSize: '14px', fontWeight: 600, color: '#111827', whiteSpace: 'nowrap' }}>{staff.done} of {staff.target} processed</span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', overflow: 'hidden' }}>
+                          <div style={{ padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 700, color: '#475569', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Safety &amp; compliance</div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center', padding: '12px 14px', borderBottom: '1px solid #f1f5f9' }}>
+                            <div>
+                              <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827' }}>Allergy overrides today</div>
+                              <div style={{ fontSize: '12px', color: '#6b7280' }}>Each logged with reason</div>
+                            </div>
+                            {staff.ovr > 0 ? renderBadge('#fef2f2', '#dc2626', '#fecaca', String(staff.ovr)) : renderBadge('#f0fdf4', '#15803d', '#bbf7d0', '0')}
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center', padding: '12px 14px' }}>
+                            <div>
+                              <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827' }}>Controlled drug entries</div>
+                              <div style={{ fontSize: '12px', color: '#6b7280' }}>Dispensed or witnessed</div>
+                            </div>
+                            {renderBadge('#111827', '#ffffff', '#111827', String(staff.cd))}
+                          </div>
+                        </div>
+
+                        <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', overflow: 'hidden' }}>
+                          <div style={{ padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 700, color: '#475569', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Recent actions</div>
+                          {staff.recent.length === 0 ? (
+                            <div style={{ padding: '12px 14px', fontSize: '13px', color: '#6b7280' }}>No actions recorded this shift.</div>
+                          ) : (
+                            staff.recent.map((rec, rIdx) => (
+                              <div key={rIdx} style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center', padding: '10px 14px', borderBottom: rIdx < staff.recent.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                                <div style={{ fontSize: '13px', color: '#111827' }}>{rec}</div>
+                                {renderBadge('#f3f4f6', '#4b5563', '#e5e7eb', 'Logged')}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}</>
+                ) : (
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 20px', borderBottom: '1px solid #f3f4f6', flexShrink: 0 }}>
+                      <span style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#64748b' }}>{md.detail}</span>
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: '#374151', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: '6px', padding: '1px 8px' }}>Read-only</span>
+                    </div>
+                    {!mdActiveKey ? (
+                      <div style={{ padding: '48px 24px', textAlign: 'center', color: '#6b7280', fontSize: '14px' }}>Select an item from the list to see its details.</div>
+                    ) : (
+                      <div style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
+                    {/* PHARMACY OPERATIONS DRAWER CONTENT */}
+                    {activeTab === 'ops' && (() => {
+                      const pt = pointsList.find(x => x.id === mdActiveKey);
+                      if (!pt) return null;
                       return (
                         <>
                           <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid #f3f4f6', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                             <div>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                                <h3 style={{ fontSize: '20px', fontWeight: 600, color: '#111827', margin: 0 }}>{staff.name}</h3>
-                                {getStatusBadge(staff.status)}
+                                <h3 style={{ fontSize: '20px', fontWeight: 600, color: '#111827', margin: 0 }}>{pt.name}</h3>
+                                {getStatusBadge(pt.status)}
                               </div>
-                              <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '2px' }}>
-                                {staff.role} · {staff.id} · {staff.shift}
-                              </div>
+                              <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '2px' }}>{pt.type} · Lead {pt.lead}</div>
                             </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', padding: '12px', background: '#f9fafb', borderRadius: '10px' }}>
-                              <div>
-                                <div style={{ fontSize: '12px', color: '#6b7280' }}>Processed</div>
-                                <div style={{ fontSize: '20px', fontWeight: 700, color: '#111827' }}>{staff.done}</div>
-                              </div>
-                              <div>
-                                <div style={{ fontSize: '12px', color: '#6b7280' }}>Target</div>
-                                <div style={{ fontSize: '20px', fontWeight: 700, color: '#111827' }}>{staff.target}</div>
-                              </div>
-                              <div>
-                                <div style={{ fontSize: '12px', color: '#6b7280' }}>Turnaround</div>
-                                <div style={{ fontSize: '20px', fontWeight: 700, color: '#111827' }}>{staff.tat}</div>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                            <div>
-                              <div style={{ fontSize: '12px', fontWeight: 600, letterSpacing: '0.06em', color: '#6b7280', marginBottom: '8px' }}>
-                                SAFETY & COMPLIANCE
-                              </div>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #f3f4f6' }}>
-                                <div>
-                                  <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827' }}>Allergy overrides today</div>
-                                  <div style={{ fontSize: '12px', color: '#6b7280' }}>Each logged with reason</div>
-                                </div>
-                                {staff.ovr > 0 ? renderBadge('#fef2f2', '#dc2626', '#fecaca', String(staff.ovr)) : renderBadge('#f0fdf4', '#15803d', '#bbf7d0', '0')}
-                              </div>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #f3f4f6' }}>
-                                <div>
-                                  <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827' }}>Controlled drug entries</div>
-                                  <div style={{ fontSize: '12px', color: '#6b7280' }}>Dispensed or witnessed</div>
-                                </div>
-                                {renderBadge('#111827', '#ffffff', '#111827', String(staff.cd))}
-                              </div>
-                            </div>
-
-                            <div>
-                              <div style={{ fontSize: '12px', fontWeight: 600, letterSpacing: '0.06em', color: '#6b7280', marginBottom: '8px' }}>
-                                RECENT ACTIONS
-                              </div>
-                              {staff.recent.map((rec, rIdx) => (
-                                <div key={rIdx} style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
-                                  <div style={{ fontSize: '13px', color: '#111827' }}>{rec}</div>
-                                  {renderBadge('#f3f4f6', '#4b5563', '#e5e7eb', 'Logged')}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', padding: '12px', background: '#f9fafb', borderRadius: '10px' }}>
+                              {[['Queue', String(pt.queue)], ['Turnaround', pt.tat], ['SLA', pt.sla], ['Handled today', String(pt.today)]].map(([l, v]) => (
+                                <div key={l}>
+                                  <div style={{ fontSize: '12px', color: '#6b7280' }}>{l}</div>
+                                  <div style={{ fontSize: '20px', fontWeight: 700, color: l === 'Queue' && pt.queue > 6 ? '#b45309' : '#111827' }}>{v}</div>
                                 </div>
                               ))}
                             </div>
-
-                            <div style={{ marginTop: '8px', paddingTop: '14px', borderTop: '1px solid #f3f4f6' }}>
-                              <button
-                                onClick={() => handleOpenEditStaff(staff)}
-                                style={{
-                                  width: '100%',
-                                  height: '38px',
-                                  borderRadius: '8px',
-                                  background: '#eff6ff',
-                                  color: '#2563eb',
-                                  border: '1px solid #bfdbfe',
-                                  fontSize: '13px',
-                                  fontWeight: 600,
-                                  cursor: 'pointer',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  gap: '6px'
-                                }}
-                              >
-                                <Edit2 size={15} />
-                                Complete / Edit Profile
-                              </button>
-                            </div>
                           </div>
+                          {pt.status !== 'Normal' && (
+                            <div style={{ padding: '16px 20px' }}>
+                              <div style={{ padding: '12px', borderRadius: '10px', background: pt.status === 'Busy' ? '#fffbeb' : '#fef2f2', border: `1px solid ${pt.status === 'Busy' ? '#fde68a' : '#fecaca'}` }}>
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                  <AlertTriangle size={16} color={pt.status === 'Busy' ? '#b45309' : '#dc2626'} />
+                                  <span style={{ fontSize: '14px', fontWeight: 600, color: pt.status === 'Busy' ? '#b45309' : '#dc2626' }}>
+                                    {pt.status === 'Busy' ? 'Queue above normal load' : 'No cover for the night shift'}
+                                  </span>
+                                </div>
+                                <div style={{ fontSize: '13px', color: '#4b5563', marginTop: '4px' }}>
+                                  {pt.status === 'Busy' ? 'Consider moving staff from a quieter service point.' : 'Assign staff in Duty scheduling (Alt+3).'}
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </>
                       );
                     })()}
 
                     {/* DUTY SCHEDULING DRAWER CONTENT */}
                     {activeTab === 'schedule' && (() => {
-                      const sh = shiftsList.find(s => s.id === selectedShiftId) || shiftsList[0];
+                      const sh = shiftsList.find(s => s.id === mdActiveKey);
+                      if (!sh) return null;
                       return (
                         <>
                           <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid #f3f4f6', display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -1782,7 +1875,7 @@ export const PharmacyAdminWorkspace: React.FC = () => {
 
                             <button
                               onClick={() => handleOpenAssignShift(sh)}
-                              style={{ height: '38px', borderRadius: '8px', background: '#2563eb', color: '#fff', border: 'none', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}
+                              style={{ height: '40px', borderRadius: '10px', background: '#2563eb', color: '#fff', border: 'none', fontWeight: 600, fontSize: '14px', cursor: 'pointer' }}
                             >
                               Edit shift assignment
                             </button>
@@ -1793,7 +1886,8 @@ export const PharmacyAdminWorkspace: React.FC = () => {
 
                     {/* CONTROLLED DRUG DRAWER CONTENT */}
                     {activeTab === 'cd' && (() => {
-                      const cd = cdmList.find(c => c.code === selectedCdCode) || cdmList[0];
+                      const cd = cdmList.find(c => c.code === mdActiveKey);
+                      if (!cd) return null;
                       const isDisc = cd.shelf !== cd.bal;
                       return (
                         <>
@@ -1860,7 +1954,7 @@ export const PharmacyAdminWorkspace: React.FC = () => {
 
                             <button
                               onClick={() => navigate('/pharmacy/controlled-drugs')}
-                              style={{ height: '38px', borderRadius: '8px', background: '#111827', color: '#fff', border: 'none', fontWeight: 600, fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                              style={{ height: '40px', borderRadius: '10px', background: '#111827', color: '#fff', border: 'none', fontWeight: 600, fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
                             >
                               <Lock size={14} /> Open controlled drug register
                             </button>
@@ -1871,7 +1965,8 @@ export const PharmacyAdminWorkspace: React.FC = () => {
 
                     {/* INVENTORY HEALTH DRAWER CONTENT */}
                     {activeTab === 'inv' && (() => {
-                      const item = invhList.find(i => (i.id || '') === selectedInvId) || invhList[0];
+                      const item = invhList.find((i, idx) => invKey(i, idx) === mdActiveKey);
+                      if (!item) return null;
                       return (
                         <>
                           <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid #f3f4f6', display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -1923,7 +2018,8 @@ export const PharmacyAdminWorkspace: React.FC = () => {
 
                     {/* SUPPLIER DRAWER CONTENT */}
                     {activeTab === 'supp' && (() => {
-                      const sup = supsList[selectedSupIndex] || supsList[0];
+                      const sup = supsList.find(s => s.name === mdActiveKey);
+                      if (!sup) return null;
                       return (
                         <>
                           <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid #f3f4f6', display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -1962,7 +2058,7 @@ export const PharmacyAdminWorkspace: React.FC = () => {
                             {sup.status === 'Awaiting approval' && (
                               <button
                                 onClick={() => handleReviewPR(sup, 'APPROVE')}
-                                style={{ height: '38px', borderRadius: '8px', background: '#2563eb', color: '#fff', border: 'none', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}
+                                style={{ height: '40px', borderRadius: '10px', background: '#2563eb', color: '#fff', border: 'none', fontWeight: 600, fontSize: '14px', cursor: 'pointer' }}
                               >
                                 Approve procurement budget
                               </button>
@@ -1971,7 +2067,7 @@ export const PharmacyAdminWorkspace: React.FC = () => {
                             {sup.status === 'Approved' && (
                               <button
                                 onClick={() => handleDispatchPO(sup)}
-                                style={{ height: '38px', borderRadius: '8px', background: '#15803d', color: '#fff', border: 'none', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}
+                                style={{ height: '40px', borderRadius: '10px', background: '#15803d', color: '#fff', border: 'none', fontWeight: 600, fontSize: '14px', cursor: 'pointer' }}
                               >
                                 Formal PO dispatch to vendor
                               </button>
@@ -1983,7 +2079,8 @@ export const PharmacyAdminWorkspace: React.FC = () => {
 
                     {/* AUDIT DRAWER CONTENT */}
                     {activeTab === 'audit' && (() => {
-                      const log = auditList.find(a => a.id === selectedAuditId) || auditList[0];
+                      const log = auditList.find(a => a.id === mdActiveKey);
+                      if (!log) return null;
                       return (
                         <>
                           <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid #f3f4f6', display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -2050,7 +2147,8 @@ export const PharmacyAdminWorkspace: React.FC = () => {
 
                     {/* SETTINGS DRAWER CONTENT */}
                     {activeTab === 'settings' && (() => {
-                      const sett = settingsList.find(s => s.key === selectedSettingKey) || settingsList[0];
+                      const sett = settingsList.find(s => s.key === mdActiveKey);
+                      if (!sett) return null;
                       return (
                         <>
                           <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid #f3f4f6', display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -2100,7 +2198,8 @@ export const PharmacyAdminWorkspace: React.FC = () => {
 
                     {/* REPORTS DRAWER CONTENT */}
                     {activeTab === 'reports' && (() => {
-                      const rep = reportsList.find(r => r.id === selectedReportId) || reportsList[0];
+                      const rep = reportsList.find(r => r.id === mdActiveKey);
+                      if (!rep) return null;
                       return (
                         <>
                           <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid #f3f4f6', display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -2157,8 +2256,8 @@ export const PharmacyAdminWorkspace: React.FC = () => {
                         </>
                       );
                     })()}
-                  </div>
-
+                      </div>
+                    )}
                   {/* Drawer Export Buttons */}
                   <div style={{ padding: '16px 20px', borderTop: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {drawerNote && (
@@ -2181,7 +2280,8 @@ export const PharmacyAdminWorkspace: React.FC = () => {
                       </button>
                     </div>
                   </div>
-                </div>
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -2190,8 +2290,11 @@ export const PharmacyAdminWorkspace: React.FC = () => {
 
       {/* SHIFT ASSIGNMENT MODAL */}
       {isAssignModalOpen && assigningShift && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: '#fff', borderRadius: '14px', width: '480px', maxWidth: '90%', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)' }}>
+        <div
+          onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); setIsAssignModalOpen(false); } }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
+        >
+          <div role="dialog" aria-modal="true" aria-label="Assign shift coverage" style={{ background: '#fff', borderRadius: '14px', width: '480px', maxWidth: '90%', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <div>
                 <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#111827', margin: 0 }}>Assign Shift Coverage</h3>
@@ -2199,7 +2302,7 @@ export const PharmacyAdminWorkspace: React.FC = () => {
                   {assigningShift.area} · {assigningShift.slot} ({assigningShift.day})
                 </p>
               </div>
-              <button onClick={() => setIsAssignModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af' }}>
+              <button onClick={() => setIsAssignModalOpen(false)} aria-label="Close" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af' }}>
                 <X size={20} />
               </button>
             </div>
@@ -2210,11 +2313,15 @@ export const PharmacyAdminWorkspace: React.FC = () => {
                   Select Staff Members (Required: {assigningShift.need})
                 </label>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '160px', overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px' }}>
-                  {staffList.map(s => {
+                  {staffList.map((s, sIdx) => {
                     const isSelected = selectedStaffToAssign.includes(s.name);
                     return (
-                      <div
+                      <button
+                        type="button"
                         key={s.id}
+                        role="checkbox"
+                        aria-checked={isSelected}
+                        autoFocus={sIdx === 0}
                         onClick={() => {
                           if (isSelected) {
                             setSelectedStaffToAssign(selectedStaffToAssign.filter(name => name !== s.name));
@@ -2222,14 +2329,14 @@ export const PharmacyAdminWorkspace: React.FC = () => {
                             setSelectedStaffToAssign([...selectedStaffToAssign, s.name]);
                           }
                         }}
-                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', borderRadius: '6px', cursor: 'pointer', background: isSelected ? '#eff6ff' : 'transparent' }}
+                        style={{ width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', borderRadius: '6px', cursor: 'pointer', border: 'none', background: isSelected ? '#eff6ff' : 'transparent' }}
                       >
-                        <div>
-                          <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827' }}>{s.name}</div>
-                          <div style={{ fontSize: '12px', color: '#6b7280' }}>{s.role} · {s.status}</div>
-                        </div>
+                        <span>
+                          <span style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: '#111827' }}>{s.name}</span>
+                          <span style={{ display: 'block', fontSize: '12px', color: '#6b7280' }}>{s.role} · {s.status}</span>
+                        </span>
                         {isSelected && <Check size={16} color="#2563eb" />}
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -2251,13 +2358,13 @@ export const PharmacyAdminWorkspace: React.FC = () => {
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px' }}>
                 <button
                   onClick={() => setIsAssignModalOpen(false)}
-                  style={{ height: '38px', padding: '0 16px', borderRadius: '8px', background: '#fff', border: '1px solid #d1d5db', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+                  style={{ height: '40px', padding: '0 16px', borderRadius: '10px', background: '#fff', border: '1px solid #d1d5db', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSaveShiftAssignment}
-                  style={{ height: '38px', padding: '0 16px', borderRadius: '8px', background: '#2563eb', color: '#fff', border: 'none', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+                  style={{ height: '40px', padding: '0 16px', borderRadius: '10px', background: '#2563eb', color: '#fff', border: 'none', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
                 >
                   Save Assignment
                 </button>
@@ -2266,6 +2373,55 @@ export const PharmacyAdminWorkspace: React.FC = () => {
           </div>
         </div>
       )}
+      <MyProfileModal
+        isOpen={isMyProfileOpen}
+        onClose={() => setIsMyProfileOpen(false)}
+        user={user}
+        role={(role || RoleType.DEPARTMENT_ADMIN) as RoleType}
+        displayName={displayName}
+        designation={designation}
+        initials={initials}
+        onChangePasswordClick={() => {
+          setIsMyProfileOpen(false);
+          setIsChangePasswordOpen(true);
+        }}
+      />
+      <ChangePasswordModal isOpen={isChangePasswordOpen} onClose={() => setIsChangePasswordOpen(false)} />
+
+      {/* KEYBOARD SHORTCUTS (press ?) */}
+      {isShortcutsOpen && (
+        <div
+          onClick={() => setIsShortcutsOpen(false)}
+          onKeyDown={e => { if (e.key === 'Escape') setIsShortcutsOpen(false); }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(17,24,39,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
+        >
+          <div role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" onClick={e => e.stopPropagation()} style={{ background: '#ffffff', borderRadius: '12px', width: '520px', maxWidth: '92%', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '20px', fontWeight: 600, color: '#111827', margin: 0 }}>Keyboard shortcuts</h3>
+              <button type="button" autoFocus onClick={() => setIsShortcutsOpen(false)} aria-label="Close" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280', padding: '4px' }}>
+                <X size={20} />
+              </button>
+            </div>
+            {[
+              ['Alt+1 … Alt+0', 'Open a sidebar section (Overview … Reports)'],
+              ['/', 'Search the current list'],
+              ['↑ ↓  ·  Home End', 'Move through the list'],
+              ['Enter', 'Edit profile (Staff) · Assign staff (Duty scheduling) · Open details'],
+              ['Esc', 'Clear search · close dialogs and menus'],
+              ['Alt+N', 'Add staff (Staff & roster)'],
+              ['Alt+L  ·  Alt+R', 'Audit logs · Daily report'],
+              ['Alt+P', 'Account menu'],
+              ['?', 'Show this list'],
+            ].map(([k, d]) => (
+              <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', padding: '10px 0', borderBottom: '1px solid #f3f4f6', fontSize: '14px' }}>
+                <span style={{ color: '#374151' }}>{d}</span>
+                <span className="pa-kbd" style={{ fontSize: '12px', alignSelf: 'center' }}>{k}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* PHARMACY STAFF ADD / EDIT / ONBOARDING MODAL */}
       <PharmacyStaffModal
         isOpen={isStaffModalOpen}

@@ -104,9 +104,10 @@ export const CreateBatchModal: React.FC<CreateBatchModalProps> = ({
 
       const newBatch = await pharmacyInventoryService.createBatch(medicineId, {
         batch_number: batchNumber.trim().toUpperCase(),
+        manufacturing_date: manufacturingDate,
         expiry_date: expiryDate,
-        initial_quantity: initialQuantity,
-        available_quantity: initialQuantity,
+        initial_quantity: Number(initialQuantity),
+        available_quantity: Number(initialQuantity),
         cost_price: Number(costPrice),
         supplier_name: supplierName || 'Direct Vendor Intake',
         storage_location: storageLocation,
@@ -116,7 +117,23 @@ export const CreateBatchModal: React.FC<CreateBatchModalProps> = ({
       onCreated(newBatch);
       onClose();
     } catch (err: any) {
-      setError(err?.response?.data?.detail || err?.message || 'Failed to create and log batch.');
+      let errMsg = 'Failed to create and log batch.';
+      if (err?.response?.data) {
+        if (typeof err.response.data === 'string') {
+          errMsg = err.response.data;
+        } else if (err.response.data.detail) {
+          errMsg = err.response.data.detail;
+        } else if (err.response.data.error) {
+          errMsg = err.response.data.error;
+        } else if (typeof err.response.data === 'object') {
+          errMsg = Object.entries(err.response.data)
+            .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`)
+            .join(' | ');
+        }
+      } else if (err?.message) {
+        errMsg = err.message;
+      }
+      setError(errMsg);
     } finally {
       setIsSubmitting(false);
     }

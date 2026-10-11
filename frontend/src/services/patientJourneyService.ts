@@ -45,6 +45,8 @@ export interface SharedPatient {
   insurance: string;
   visitsCount: number;
   outstandingDue: number;
+  allergies?: string[];
+  chronicConditions?: string[];
   recentVisits?: any[];
 }
 

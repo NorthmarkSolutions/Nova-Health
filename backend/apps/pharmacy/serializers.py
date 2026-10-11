@@ -185,13 +185,45 @@ class PharmacyBatchSerializer(serializers.ModelSerializer):
     medicine_schedule = serializers.ReadOnlyField(source='medicine.schedule')
     is_narcotic = serializers.ReadOnlyField(source='medicine.is_narcotic')
     is_cold_chain = serializers.ReadOnlyField(source='medicine.is_cold_chain')
-    supplier_name = serializers.ReadOnlyField(source='supplier.name')
+    supplier_name = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    received_by = serializers.PrimaryKeyRelatedField(read_only=True)
     received_by_name = serializers.ReadOnlyField(source='received_by.get_full_name')
     months_left = serializers.SerializerMethodField()
+    manufacturing_date = serializers.DateField(required=False)
+    available_quantity = serializers.IntegerField(required=False)
+    medicine = serializers.PrimaryKeyRelatedField(queryset=PharmacyMedicine.objects.all(), required=False)
 
     class Meta:
         model = PharmacyBatch
         fields = '__all__'
+
+    def to_internal_value(self, data):
+        data = data.copy() if hasattr(data, 'copy') else dict(data)
+        if 'medicine' not in data and 'medicine_id' in data:
+            data['medicine'] = data['medicine_id']
+        if 'manufacturing_date' not in data or not data.get('manufacturing_date'):
+            data['manufacturing_date'] = str(timezone.now().date())
+        if 'available_quantity' not in data and 'initial_quantity' in data:
+            data['available_quantity'] = data['initial_quantity']
+
+        # Handle supplier lookup/creation if supplier_name passed but not supplier ID
+        supplier_val = data.get('supplier')
+        supplier_name_val = data.get('supplier_name')
+        if not supplier_val and supplier_name_val and isinstance(supplier_name_val, str) and supplier_name_val.strip():
+            sup = PharmacySupplier.objects.filter(name__iexact=supplier_name_val.strip()).first()
+            if not sup:
+                sup = PharmacySupplier.objects.create(
+                    supplier_code=f"SUP-{timezone.now().strftime('%y%m')}-{PharmacySupplier.objects.count() + 1:03d}",
+                    name=supplier_name_val.strip(),
+                    category='General formulary',
+                    phone='022-87654321',
+                    drug_license_number='DL-MH-GEN-2026',
+                    status='Active'
+                )
+            data['supplier'] = str(sup.id)
+            data.pop('supplier_name', None)
+
+        return super().to_internal_value(data)
 
     def get_months_left(self, obj):
         today = timezone.now().date()

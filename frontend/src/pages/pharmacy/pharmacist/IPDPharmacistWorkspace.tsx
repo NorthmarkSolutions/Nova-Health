@@ -32,6 +32,7 @@ import {
   FileCheck,
   Printer,
   LogOut,
+  BedDouble,
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import pharmacyIpdService, {
@@ -108,6 +109,28 @@ export const RETURN_CLASS_STYLES: Record<string, { bg: string; fg: string; bd: s
   Damaged: { bg: '#fdf2f8', fg: '#be185d', bd: '#fbcfe8' },
 };
 
+const getPillStyle = (active: boolean) => ({
+  height: '30px',
+  padding: '0 12px',
+  borderRadius: '9999px',
+  fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+  fontSize: '13px',
+  fontWeight: (active ? 600 : 500) as number,
+  letterSpacing: '-0.01em',
+  cursor: 'pointer',
+  whiteSpace: 'nowrap' as const,
+  background: active ? '#2563eb' : '#ffffff',
+  color: active ? '#ffffff' : '#4b5563',
+  border: active ? '1px solid #2563eb' : '1px solid #e5e7eb',
+  boxShadow: active ? '0 1px 2px rgba(37,99,235,0.2)' : 'none',
+  outline: 'none',
+  transition: 'all 0.15s ease',
+  display: 'flex',
+  alignItems: 'center',
+  gap: '6px',
+  flexShrink: 0,
+});
+
 // MAR Badges (Requirement 5)
 export const MAR_STATUS_STYLES: Record<string, { bg: string; fg: string; bd: string; icon: any }> = {
   'Awaiting Supply': { bg: '#fffbeb', fg: '#b45309', bd: '#fde68a', icon: Clock },
@@ -143,12 +166,28 @@ const TABS: Record<string, { title: string; subtitle: string; icon: any }> = {
   },
 };
 
-export const IPDPharmacistWorkspace: React.FC = () => {
+export interface IPDPharmacistWorkspaceProps {
+  isEmbedded?: boolean;
+  activeSubTab?: 'requests' | 'pending' | 'issued' | 'emergency' | 'returns';
+  onSubTabChange?: (tab: string) => void;
+  hideSidebar?: boolean;
+  hideHeader?: boolean;
+  triggerCallNext?: number;
+}
+
+export const IPDPharmacistWorkspace: React.FC<IPDPharmacistWorkspaceProps> = ({
+  isEmbedded = false,
+  activeSubTab,
+  onSubTabChange,
+  hideSidebar = false,
+  hideHeader = false,
+  triggerCallNext,
+}) => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
 
   const displayName = user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user?.username || 'Sneha Nair';
-  const designation = 'IPD Pharmacist · PH-4380';
+  const designation = user?.designation || (user?.employeeId ? `Clinical Pharmacist · ${user.employeeId}` : 'Clinical Pharmacist · PH-4380');
   const initials = displayName
     .split(' ')
     .filter(Boolean)
@@ -158,7 +197,12 @@ export const IPDPharmacistWorkspace: React.FC = () => {
     .toUpperCase() || 'SN';
 
   // Navigation / Tabs
-  const [activeTab, setActiveTab] = useState<'requests' | 'pending' | 'issued' | 'emergency' | 'returns'>('requests');
+  const [internalActiveTab, setInternalActiveTab] = useState<'requests' | 'pending' | 'issued' | 'emergency' | 'returns'>('requests');
+  const activeTab = activeSubTab || internalActiveTab;
+  const setActiveTab = (t: 'requests' | 'pending' | 'issued' | 'emergency' | 'returns') => {
+    setInternalActiveTab(t);
+    if (onSubTabChange) onSubTabChange(t);
+  };
   const [selectedWard, setSelectedWard] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -202,7 +246,7 @@ export const IPDPharmacistWorkspace: React.FC = () => {
   const [collectionTimeInput, setCollectionTimeInput] = useState(
     new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
   );
-  const [pharmacistName] = useState('Sneha Nair · PH-4380');
+  const pharmacistName = user ? `${displayName} · ${user.employeeId || 'PH-4380'}` : 'Sneha Nair · PH-4380';
   const [handoverCounted, setHandoverCounted] = useState(false);
   const [handoverSigned, setHandoverSigned] = useState(false);
   const [handoverFridge, setHandoverFridge] = useState(false);
@@ -405,6 +449,15 @@ export const IPDPharmacistWorkspace: React.FC = () => {
     }
   };
 
+  // Listen for external triggerCallNext signal
+  const lastTriggerRef = useRef<number | undefined>(triggerCallNext);
+  useEffect(() => {
+    if (triggerCallNext !== undefined && triggerCallNext !== lastTriggerRef.current) {
+      lastTriggerRef.current = triggerCallNext;
+      handleCallNext();
+    }
+  }, [triggerCallNext]);
+
   const handleQueryPrescriber = async () => {
     if (!activeOrder) return;
     const reason = prompt('Enter query notes for prescriber:', 'Allergy warning detected on regimen');
@@ -602,10 +655,11 @@ export const IPDPharmacistWorkspace: React.FC = () => {
   };
 
   return (
-    <div style={{ display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', background: '#f9fafb', fontFamily: 'Inter, sans-serif' }}>
+    <div style={{ display: 'flex', height: isEmbedded ? 'auto' : '100vh', width: isEmbedded ? '100%' : '100vw', overflow: isEmbedded ? 'visible' : 'hidden', background: '#f9fafb', fontFamily: 'Inter, sans-serif' }}>
       {/* ------------------------------------------ */}
       {/* LEFT NAVIGATION SIDEBAR (260px)            */}
       {/* ------------------------------------------ */}
+      {!hideSidebar && !isEmbedded && (
       <aside style={{ width: '260px', flexShrink: 0, background: '#fff', borderRight: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column' }}>
         {/* Brand */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '18px 20px' }}>
@@ -786,12 +840,14 @@ export const IPDPharmacistWorkspace: React.FC = () => {
           </button>
         </div>
       </aside>
+      )}
 
       {/* ------------------------------------------ */}
       {/* MAIN CONTENT AREA                          */}
       {/* ------------------------------------------ */}
-      <main style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+      <main style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflowY: isEmbedded ? 'visible' : 'auto' }}>
         {/* Sticky Breadcrumb Bar */}
+        {!hideHeader && !isEmbedded && (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', height: '52px', padding: '0 24px', borderBottom: '1px solid #e5e7eb', background: '#fff', flexShrink: 0, position: 'sticky', top: 0, zIndex: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#6b7280' }}>
             <span>North Hospital</span>
@@ -804,14 +860,76 @@ export const IPDPharmacistWorkspace: React.FC = () => {
               Live
             </span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '32px', padding: '0 12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '12px', color: '#374151', whiteSpace: 'nowrap' }}>
-            <Clock size={14} color="#6b7280" />
-            Morning shift · 07:00–15:00
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {/* Station Switcher Pill (Unified Pharmacist Role) */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                background: '#f1f5f9',
+                borderRadius: '8px',
+                padding: '2px',
+                border: '1px solid #e2e8f0',
+              }}
+            >
+              <button
+                onClick={() => navigate('/pharmacy/opd')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  height: '28px',
+                  padding: '0 10px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  background: 'transparent',
+                  color: '#64748b',
+                  fontSize: '12px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+                title="Switch station to OPD Dispense Counter"
+              >
+                <Pill size={13} />
+                <span>OPD Counter</span>
+              </button>
+              <button
+                onClick={() => navigate('/pharmacy/ipd')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  height: '28px',
+                  padding: '0 10px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  background: '#ffffff',
+                  color: '#1d4ed8',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
+                }}
+                title="Currently active: IPD Ward Supply"
+              >
+                <BedDouble size={13} />
+                <span>IPD Ward Supply</span>
+                <span style={{ fontSize: '10px', background: '#dcfce7', color: '#15803d', padding: '0 4px', borderRadius: '4px', fontWeight: 700 }}>
+                  ACTIVE
+                </span>
+              </button>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '32px', padding: '0 12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '12px', color: '#374151', whiteSpace: 'nowrap' }}>
+              <Clock size={14} color="#6b7280" />
+              Morning shift · 07:00–15:00
+            </div>
           </div>
         </div>
+        )}
 
         {/* Body Container */}
-        <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div style={{ padding: isEmbedded ? '0' : '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
           {/* Notification Toast */}
           {notice && (
             <div
@@ -834,6 +952,7 @@ export const IPDPharmacistWorkspace: React.FC = () => {
           )}
 
           {/* Screen Header Banner */}
+          {!hideHeader && !isEmbedded && (
           <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '24px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
             <div>
               <h1 style={{ fontSize: '30px', fontWeight: 700, color: '#111827', letterSpacing: '-0.01em' }}>
@@ -897,9 +1016,11 @@ export const IPDPharmacistWorkspace: React.FC = () => {
               </button>
             </div>
           </div>
+          )}
 
           {/* 5 Real-Time KPI Cards (Retained Exact Design) */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
+          {!hideHeader && !isEmbedded && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: '16px' }}>
             {/* KPI 1 */}
             <div
               onClick={() => setActiveTab('requests')}
@@ -985,33 +1106,87 @@ export const IPDPharmacistWorkspace: React.FC = () => {
               </div>
             </div>
           </div>
+          )}
 
-          {/* ------------------------------------------ */}
-          {/* TWO-COLUMN LAYOUT: TABLE + 400PX PANEL     */}
-          {/* ------------------------------------------ */}
-          <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-            {/* Left 620px Table Block */}
-            <div style={{ flex: '1 1 620px', minWidth: 0, background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', overflow: 'hidden' }}>
-              {/* Filter Bar */}
-              <div style={{ padding: '20px 20px 16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
-                  <div>
-                    <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#111827' }}>{TABS[activeTab].title}</h2>
-                    <p style={{ fontSize: '13px', color: '#4b5563', marginTop: '2px' }}>{TABS[activeTab].subtitle}</p>
-                  </div>
-                  <div style={{ position: 'relative' }}>
-                    <Search size={16} color="#9ca3af" style={{ position: 'absolute', left: '12px', top: '12px' }} />
-                    <input
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Filter by patient, admission or ward"
-                      style={{ height: '40px', width: '280px', maxWidth: '100%', paddingLeft: '36px', paddingRight: '12px', border: '1px solid #e5e7eb', borderRadius: '10px', fontSize: '13px', color: '#111827', outline: 'none' }}
-                    />
-                  </div>
+          {/* ------------------------------------------------------------- */}
+          {/* STANDARDIZED 4-COLUMN TWO-PANEL WORKSPACE (1 COL : 3 COLS)    */}
+          {/* ------------------------------------------------------------- */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+              gap: '16px',
+              alignItems: 'start',
+              width: '100%',
+              minWidth: 0,
+              boxSizing: 'border-box',
+            }}
+          >
+            {/* Left Panel: 1 Column */}
+            <div
+              style={{
+                gridColumn: 'span 1',
+                width: '100%',
+                minWidth: 0,
+                maxWidth: '100%',
+                boxSizing: 'border-box',
+                background: '#ffffff',
+                border: '1px solid #e5e7eb',
+                borderRadius: '12px',
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+              }}
+            >
+              {/* Header with Title and Count Pill */}
+              <div style={{ padding: '16px 16px 14px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                  <h2 style={{ fontSize: '15px', fontWeight: 600, color: '#111827', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {TABS[activeTab].title}
+                  </h2>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      color: '#2563eb',
+                      background: '#eff6ff',
+                      border: '1px solid #bfdbfe',
+                      padding: '1px 8px',
+                      borderRadius: '9999px',
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {activeTab === 'returns' ? displayedReturns.length : displayedQueue.length} {activeTab === 'returns' ? 'Returns' : 'Orders'}
+                  </span>
+                </div>
+                <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>
+                  {TABS[activeTab].subtitle}
+                </p>
+
+                {/* 36px Search Input */}
+                <div style={{ position: 'relative', width: '100%' }}>
+                  <Search size={15} style={{ position: 'absolute', left: '11px', top: '11px', color: '#9ca3af' }} />
+                  <input
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search patient, admission, ward..."
+                    style={{
+                      width: '100%',
+                      height: '36px',
+                      padding: '0 12px 0 34px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '8px',
+                      fontSize: '13px',
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                    }}
+                  />
                 </div>
 
                 {/* Ward Pills */}
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px', scrollbarWidth: 'none' }}>
                   {availableWards.map((wardName) => {
                     const isSelected = selectedWard === wardName;
                     return (
@@ -1019,30 +1194,28 @@ export const IPDPharmacistWorkspace: React.FC = () => {
                         key={wardName}
                         onClick={() => setSelectedWard(wardName)}
                         style={{
-                          height: '32px',
-                          padding: '0 12px',
-                          borderRadius: '9999px',
-                          fontSize: '13px',
+                          height: '26px',
+                          padding: '0 9px',
+                          borderRadius: '6px',
+                          fontSize: '11px',
                           fontWeight: 600,
                           cursor: 'pointer',
                           whiteSpace: 'nowrap',
-                          background: isSelected ? '#2563eb' : '#fff',
-                          color: isSelected ? '#fff' : '#374151',
+                          background: isSelected ? '#2563eb' : '#ffffff',
+                          color: isSelected ? '#ffffff' : '#4b5563',
                           border: `1px solid ${isSelected ? '#2563eb' : '#e5e7eb'}`,
+                          flexShrink: 0,
                         }}
                       >
-                        {wardName === 'All' ? `All wards · ${queue.length}` : wardName}
+                        {wardName === 'All' ? `All (${queue.length})` : wardName}
                       </button>
                     );
                   })}
                 </div>
 
-                {/* Requirement 6: Pending Issue Status Filters */}
+                {/* Sub-status pills for Pending Issues */}
                 {activeTab === 'pending' && (
-                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', paddingTop: '4px', borderTop: '1px solid #f3f4f6' }}>
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#6b7280', alignSelf: 'center', marginRight: '4px' }}>
-                      Status:
-                    </span>
+                  <div style={{ display: 'flex', gap: '5px', overflowX: 'auto', paddingBottom: '2px', scrollbarWidth: 'none', borderTop: '1px solid #f1f5f9', paddingTop: '8px' }}>
                     {PENDING_STATUS_FILTERS.map((st) => {
                       const isSelected = pendingStatusFilter === st;
                       const sStyle = PENDING_STATUS_STYLES[st];
@@ -1051,16 +1224,17 @@ export const IPDPharmacistWorkspace: React.FC = () => {
                           key={st}
                           onClick={() => setPendingStatusFilter(st)}
                           style={{
-                            height: '28px',
-                            padding: '0 10px',
-                            borderRadius: '6px',
-                            fontSize: '12px',
+                            height: '24px',
+                            padding: '0 8px',
+                            borderRadius: '5px',
+                            fontSize: '11px',
                             fontWeight: 600,
                             cursor: 'pointer',
                             whiteSpace: 'nowrap',
-                            background: isSelected ? (sStyle ? sStyle.bg : '#2563eb') : '#f9fafb',
-                            color: isSelected ? (sStyle ? sStyle.fg : '#fff') : '#4b5563',
-                            border: `1px solid ${isSelected ? (sStyle ? sStyle.bd : '#2563eb') : '#e5e7eb'}`,
+                            background: isSelected ? (sStyle ? sStyle.bg : '#2563eb') : '#ffffff',
+                            color: isSelected ? (sStyle ? sStyle.fg : '#ffffff') : '#64748b',
+                            border: `1px solid ${isSelected ? (sStyle ? sStyle.bd : '#2563eb') : '#e2e8f0'}`,
+                            flexShrink: 0,
                           }}
                         >
                           {st}
@@ -1070,12 +1244,9 @@ export const IPDPharmacistWorkspace: React.FC = () => {
                   </div>
                 )}
 
-                {/* Requirement 7: Ward Return Classification Filters */}
+                {/* Return classification pills */}
                 {activeTab === 'returns' && (
-                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', paddingTop: '4px', borderTop: '1px solid #f3f4f6' }}>
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#6b7280', alignSelf: 'center', marginRight: '4px' }}>
-                      Classification:
-                    </span>
+                  <div style={{ display: 'flex', gap: '5px', overflowX: 'auto', paddingBottom: '2px', scrollbarWidth: 'none', borderTop: '1px solid #f1f5f9', paddingTop: '8px' }}>
                     {WARD_RETURN_CLASSIFICATIONS.map((cls) => {
                       const isSelected = returnClassificationFilter === cls;
                       const cStyle = RETURN_CLASS_STYLES[cls];
@@ -1084,16 +1255,17 @@ export const IPDPharmacistWorkspace: React.FC = () => {
                           key={cls}
                           onClick={() => setReturnClassificationFilter(cls)}
                           style={{
-                            height: '28px',
-                            padding: '0 10px',
-                            borderRadius: '6px',
-                            fontSize: '12px',
+                            height: '24px',
+                            padding: '0 8px',
+                            borderRadius: '5px',
+                            fontSize: '11px',
                             fontWeight: 600,
                             cursor: 'pointer',
                             whiteSpace: 'nowrap',
-                            background: isSelected ? (cStyle ? cStyle.bg : '#2563eb') : '#f9fafb',
-                            color: isSelected ? (cStyle ? cStyle.fg : '#fff') : '#4b5563',
-                            border: `1px solid ${isSelected ? (cStyle ? cStyle.bd : '#2563eb') : '#e5e7eb'}`,
+                            background: isSelected ? (cStyle ? cStyle.bg : '#2563eb') : '#ffffff',
+                            color: isSelected ? (cStyle ? cStyle.fg : '#ffffff') : '#64748b',
+                            border: `1px solid ${isSelected ? (cStyle ? cStyle.bd : '#2563eb') : '#e2e8f0'}`,
+                            flexShrink: 0,
                           }}
                         >
                           {cls}
@@ -1104,280 +1276,414 @@ export const IPDPharmacistWorkspace: React.FC = () => {
                 )}
               </div>
 
-              {/* Table */}
-              <div style={{ overflowX: 'auto' }}>
-                <div style={{ minWidth: '840px' }}>
-                  {/* Table Header */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(170px, 1.2fr) minmax(130px, 0.9fr) minmax(210px, 1.6fr) 96px 150px 112px', alignItems: 'center', height: '44px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600, letterSpacing: '0.04em', color: '#4b5563' }}>
-                    <div style={{ padding: '0 16px' }}>PATIENT · ADMISSION</div>
-                    <div style={{ padding: '0 16px' }}>WARD · BED</div>
-                    <div style={{ padding: '0 16px' }}>{activeTab === 'returns' ? 'RETURNED ITEMS' : 'MEDICATION REQUEST'}</div>
-                    <div style={{ padding: '0 16px' }}>{activeTab === 'returns' ? 'CLASSIFICATION' : 'PRIORITY'}</div>
-                    <div style={{ padding: '0 16px' }}>STATUS</div>
-                    <div style={{ padding: '0 16px', textAlign: 'right' }}>ACTION</div>
-                  </div>
-
-                  {/* Returns Rows (Requirement 7) */}
-                  {activeTab === 'returns' ? (
-                    displayedReturns.length === 0 ? (
-                      <div style={{ padding: '48px 20px', textAlign: 'center' }}>
-                        <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>No ward returns found</div>
-                        <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>New returns from wards will appear here</div>
-                      </div>
-                    ) : (
-                      displayedReturns.map((ret) => {
-                        const isSelected = ret.id === selectedReturnId;
-                        const returnClass = ret.classification || ret.type || 'Unused';
-                        const cStyle = RETURN_CLASS_STYLES[returnClass] || RETURN_CLASS_STYLES.Unused;
-                        return (
-                          <div
-                            key={ret.id}
-                            onClick={() => setSelectedReturnId(ret.id)}
-                            style={{
-                              display: 'grid',
-                              gridTemplateColumns: 'minmax(170px, 1.2fr) minmax(130px, 0.9fr) minmax(210px, 1.6fr) 96px 150px 112px',
-                              alignItems: 'center',
-                              minHeight: '56px',
-                              borderBottom: '1px solid #f3f4f6',
-                              cursor: 'pointer',
-                              background: isSelected ? '#eff6ff' : '#fff',
-                            }}
-                          >
-                            <div style={{ padding: '10px 16px' }}>
-                              <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>{ret.patient || ret.customer_name}</div>
-                              <div style={{ fontSize: '12px', color: '#6b7280', fontFamily: 'monospace', marginTop: '2px' }}>{ret.return_number || ret.id} · {ret.adm || 'Ward'}</div>
-                            </div>
-                            <div style={{ padding: '10px 16px' }}>
-                              <div style={{ fontSize: '14px', fontWeight: 500, color: '#111827' }}>{ret.ward || 'Ward'}</div>
-                              <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>{ret.bed || 'Imprest'}</div>
-                            </div>
-                            <div style={{ padding: '10px 16px' }}>
-                              <div style={{ fontSize: '14px', fontWeight: 500, color: '#111827' }}>
-                                {ret.items ? ret.items.map((i: any) => i.name).join(', ') : 'Returned Medicine'}
-                              </div>
-                              <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>{ret.reason}</div>
-                            </div>
-                            <div style={{ padding: '10px 16px' }}>
-                              <span style={{ display: 'inline-flex', alignItems: 'center', height: '24px', padding: '0 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, background: cStyle.bg, color: cStyle.fg, border: `1px solid ${cStyle.bd}` }}>
-                                {returnClass}
-                              </span>
-                            </div>
-                            <div style={{ padding: '10px 16px' }}>
-                              <span style={{ display: 'inline-flex', alignItems: 'center', height: '24px', padding: '0 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, background: ret.status === 'Credited' ? '#f0fdf4' : ret.status === 'Received' ? '#eff6ff' : '#fffbeb', color: ret.status === 'Credited' ? '#15803d' : ret.status === 'Received' ? '#1d4ed8' : '#b45309' }}>
-                                {ret.status}
-                              </span>
-                            </div>
-                            <div style={{ padding: '10px 16px', display: 'flex', justifyContent: 'flex-end' }}>
-                              <button
-                                onClick={() => setSelectedReturnId(ret.id)}
-                                style={{
-                                  height: '36px',
-                                  padding: '0 14px',
-                                  borderRadius: '10px',
-                                  fontSize: '13px',
-                                  fontWeight: 600,
-                                  cursor: 'pointer',
-                                  background: isSelected ? '#2563eb' : '#fff',
-                                  color: isSelected ? '#fff' : '#1d4ed8',
-                                  border: `1px solid ${isSelected ? '#2563eb' : '#bfdbfe'}`,
-                                }}
-                              >
-                                {ret.status === 'Credited' || ret.status === 'Destroyed' ? 'View' : 'Process'}
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })
-                    )
+              {/* Scrollable Items List */}
+              <div
+                style={{
+                  maxHeight: 'calc(100vh - 290px)',
+                  overflowY: 'auto',
+                  borderTop: '1px solid #f3f4f6',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
+              >
+                {activeTab === 'returns' ? (
+                  displayedReturns.length === 0 ? (
+                    <div style={{ padding: '36px 16px', textAlign: 'center', color: '#6b7280', fontSize: '13px' }}>
+                      No ward returns found
+                    </div>
                   ) : (
-                    /* Inpatient Queue Rows */
-                    displayedQueue.length === 0 ? (
-                      <div style={{ padding: '48px 20px', textAlign: 'center' }}>
-                        <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>Nothing here right now</div>
-                        <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>New ward requests appear automatically</div>
-                      </div>
-                    ) : (
-                      displayedQueue.map((req) => {
-                        const isSelected = req.id === selectedOrderId;
-                        const prio = PRIO_STYLES[req.priority] || PRIO_STYLES.ROUTINE;
-                        const pendingSt = getOrderPendingStatus(req);
-                        const pendingStyle = PENDING_STATUS_STYLES[pendingSt] || PENDING_STATUS_STYLES.Reviewing;
+                    displayedReturns.map((ret) => {
+                      const isSelected = ret.id === selectedReturnId;
+                      const returnClass = ret.classification || ret.type || 'Unused';
+                      const cStyle = RETURN_CLASS_STYLES[returnClass] || RETURN_CLASS_STYLES.Unused;
 
-                        return (
-                          <div
-                            key={req.id}
-                            onClick={() => {
-                              setCompletedOrder(null);
-                              setSelectedOrderId(req.id);
-                            }}
-                            style={{
-                              display: 'grid',
-                              gridTemplateColumns: 'minmax(170px, 1.2fr) minmax(130px, 0.9fr) minmax(210px, 1.6fr) 96px 150px 112px',
-                              alignItems: 'center',
-                              minHeight: '56px',
-                              borderBottom: '1px solid #f3f4f6',
-                              cursor: 'pointer',
-                              background: isSelected ? '#eff6ff' : '#fff',
-                            }}
-                          >
-                            {/* Patient · Admission */}
-                            <div style={{ padding: '10px 16px' }}>
-                              <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>{req.patient_name}</div>
-                              <div style={{ fontSize: '12px', color: '#6b7280', fontFamily: 'monospace', marginTop: '2px' }}>
-                                {req.admission_number} · {req.age}y/{req.gender.slice(0, 1)}
-                              </div>
-                            </div>
-
-                            {/* Ward · Bed */}
-                            <div style={{ padding: '10px 16px' }}>
-                              <div style={{ fontSize: '14px', fontWeight: 500, color: '#111827' }}>{req.ward}</div>
-                              <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>{req.bed}</div>
-                            </div>
-
-                            {/* Medication Request + Badges */}
-                            <div style={{ padding: '10px 16px' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                <span style={{ fontSize: '14px', fontWeight: 500, color: '#111827' }}>
-                                  {req.lines.map((l) => l.name.replace(/ \d.*$/, '')).join(', ')}
-                                </span>
-                                {req.has_cd && (
-                                  <span style={{ fontSize: '11px', fontWeight: 700, borderRadius: '4px', padding: '1px 6px', background: '#111827', color: '#fff' }}>
-                                    CD
-                                  </span>
-                                )}
-                                {req.allergy_conflict && !req.allergy_override && (
-                                  <span style={{ fontSize: '11px', fontWeight: 700, borderRadius: '4px', padding: '1px 6px', background: '#fef2f2', color: '#dc2626' }}>
-                                    Allergy
-                                  </span>
-                                )}
-                                {req.has_cold_chain && (
-                                  <span style={{ fontSize: '11px', fontWeight: 700, borderRadius: '4px', padding: '1px 6px', background: '#f0f9ff', color: '#0369a1' }}>
-                                    Cold chain
-                                  </span>
-                                )}
-                                {req.any_shortage && (
-                                  <span style={{ fontSize: '11px', fontWeight: 700, borderRadius: '4px', padding: '1px 6px', background: '#fffbeb', color: '#b45309' }}>
-                                    Partial stock
-                                  </span>
-                                )}
-                                {req.is_emergency && (
-                                  <span style={{ fontSize: '11px', fontWeight: 700, borderRadius: '4px', padding: '1px 6px', background: '#fef2f2', color: '#dc2626' }}>
-                                    Emergency
-                                  </span>
-                                )}
-                              </div>
-                              <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>
-                                {req.lines.length} item{req.lines.length > 1 ? 's' : ''} · {req.nurse_name} · {req.created_at_time}
-                              </div>
-                            </div>
-
-                            {/* Priority */}
-                            <div style={{ padding: '10px 16px' }}>
-                              <span style={{ display: 'inline-flex', alignItems: 'center', height: '24px', padding: '0 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, background: prio.bg, color: prio.fg, border: `1px solid ${prio.bd}` }}>
-                                {req.priority}
-                              </span>
-                            </div>
-
-                            {/* Requirement 6: Pending Status & Lifecycle */}
-                            <div style={{ padding: '10px 16px' }}>
-                              <span
-                                style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  height: '24px',
-                                  padding: '0 8px',
-                                  borderRadius: '6px',
-                                  fontSize: '12px',
-                                  fontWeight: 600,
-                                  background: activeTab === 'pending' ? pendingStyle.bg : (req.status === 'DISPENSED' ? '#f0fdf4' : req.is_cancelled ? '#f3f4f6' : '#eff6ff'),
-                                  color: activeTab === 'pending' ? pendingStyle.fg : (req.status === 'DISPENSED' ? '#15803d' : req.is_cancelled ? '#6b7280' : '#1d4ed8'),
-                                  border: `1px solid ${activeTab === 'pending' ? pendingStyle.bd : (req.status === 'DISPENSED' ? '#bbf7d0' : '#bfdbfe')}`,
-                                }}
-                              >
-                                {activeTab === 'pending'
-                                  ? pendingSt
-                                  : (req.is_cancelled
-                                    ? 'Cancelled'
-                                    : req.status === 'DISPENSED'
-                                    ? (req.is_emergency ? 'Emergency issued' : 'Issued')
-                                    : req.hold_reason
-                                    ? 'Query sent'
-                                    : req.step === 1
-                                    ? 'Reviewing'
-                                    : req.step === 2
-                                    ? 'Allocated'
-                                    : req.step === 3
-                                    ? 'Issuing'
-                                    : 'Awaiting handover')}
-                              </span>
-                              <div style={{ fontSize: '12px', color: req.priority === 'STAT' || req.wait_minutes > 30 ? '#dc2626' : '#6b7280', marginTop: '3px' }}>
-                                {req.is_cancelled ? 'Not issued' : req.status === 'DISPENSED' ? `Issued ${req.tracking.issued_at || ''}` : `${req.wait_minutes}m waiting`}
-                              </div>
-                            </div>
-
-                            {/* Action Button */}
-                            <div style={{ padding: '10px 16px', display: 'flex', justifyContent: 'flex-end' }}>
-                              <button
-                                onClick={() => {
-                                  setCompletedOrder(null);
-                                  setSelectedOrderId(req.id);
-                                }}
-                                style={{
-                                  height: '36px',
-                                  padding: '0 14px',
-                                  borderRadius: '10px',
-                                  fontSize: '13px',
-                                  fontWeight: 600,
-                                  cursor: 'pointer',
-                                  background: isSelected ? '#2563eb' : '#fff',
-                                  color: isSelected ? '#fff' : '#1d4ed8',
-                                  border: `1px solid ${isSelected ? '#2563eb' : '#bfdbfe'}`,
-                                }}
-                              >
-                                {req.status === 'DISPENSED' || req.is_cancelled ? 'View' : 'Continue'}
-                              </button>
-                            </div>
+                      return (
+                        <div
+                          key={ret.id}
+                          onClick={() => setSelectedReturnId(ret.id)}
+                          style={{
+                            padding: '12px 14px',
+                            borderBottom: '1px solid #f1f5f9',
+                            borderLeft: isSelected ? '3px solid #2563eb' : '3px solid transparent',
+                            background: isSelected ? '#eff6ff' : '#ffffff',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '5px',
+                            transition: 'all 0.12s ease',
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '14px', fontWeight: 600, color: isSelected ? '#1d4ed8' : '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '170px' }}>
+                              {ret.patient || ret.customer_name}
+                            </span>
+                            <span style={{ fontSize: '11px', fontWeight: 700, padding: '1px 6px', borderRadius: '4px', background: cStyle.bg, color: cStyle.fg, border: `1px solid ${cStyle.bd}` }}>
+                              {returnClass}
+                            </span>
                           </div>
-                        );
-                      })
-                    )
-                  )}
-                </div>
-              </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: '#64748b' }}>
+                            <span style={{ fontFamily: 'monospace', fontSize: '11px', color: '#475569' }}>
+                              {ret.return_number || ret.id}
+                            </span>
+                            <span style={{ fontSize: '11px', color: '#64748b' }}>
+                              {ret.ward || 'Ward'} · {ret.bed || 'Bed'}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {ret.items ? ret.items.map((i: any) => i.name).join(', ') : 'Returned items'}
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
+                            <span style={{ fontSize: '11px', fontWeight: 600, color: ret.status === 'Credited' ? '#15803d' : '#b45309' }}>
+                              ₹{Number(ret.total_refund_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </span>
+                            <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 6px', borderRadius: '4px', background: ret.status === 'Credited' ? '#f0fdf4' : '#fffbeb', color: ret.status === 'Credited' ? '#15803d' : '#b45309' }}>
+                              {ret.status}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )
+                ) : (
+                  displayedQueue.length === 0 ? (
+                    <div style={{ padding: '36px 16px', textAlign: 'center', color: '#6b7280', fontSize: '13px' }}>
+                      No requisitions matching filters
+                    </div>
+                  ) : (
+                    displayedQueue.map((req) => {
+                      const isSelected = req.id === selectedOrderId;
+                      const prio = PRIO_STYLES[req.priority] || PRIO_STYLES.ROUTINE;
+                      const pendingSt = getOrderPendingStatus(req);
+                      const pendingStyle = PENDING_STATUS_STYLES[pendingSt] || PENDING_STATUS_STYLES.Reviewing;
 
-              {/* Table Footer */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 20px', fontSize: '12px', color: '#6b7280' }}>
-                <span>
-                  {activeTab === 'returns'
-                    ? `Showing ${displayedReturns.length} returns`
-                    : `Showing ${displayedQueue.length} · STAT first, then urgent, routine and discharge by wait time`}
-                </span>
-                <span>1 / 1</span>
+                      return (
+                        <div
+                          key={req.id}
+                          onClick={() => {
+                            setCompletedOrder(null);
+                            setSelectedOrderId(req.id);
+                          }}
+                          style={{
+                            padding: '12px 14px',
+                            borderBottom: '1px solid #f1f5f9',
+                            borderLeft: isSelected ? '3px solid #2563eb' : '3px solid transparent',
+                            background: isSelected ? '#eff6ff' : '#ffffff',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '5px',
+                            transition: 'all 0.12s ease',
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '14px', fontWeight: 600, color: isSelected ? '#1d4ed8' : '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '170px' }}>
+                              {req.patient_name}
+                            </span>
+                            <span style={{ fontSize: '11px', fontWeight: 700, padding: '1px 6px', borderRadius: '4px', background: prio.bg, color: prio.fg, border: `1px solid ${prio.bd}` }}>
+                              {req.priority}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: '#64748b' }}>
+                            <span style={{ fontFamily: 'monospace', fontSize: '11px', color: '#475569' }}>
+                              {req.admission_number}
+                            </span>
+                            <span style={{ fontSize: '11px', color: '#64748b' }}>
+                              {req.ward} · {req.bed}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {req.lines.map((l) => l.name.replace(/ \d.*$/, '')).join(', ')}
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
+                            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                              {req.has_cd && (
+                                <span style={{ fontSize: '9px', fontWeight: 700, borderRadius: '3px', padding: '1px 4px', background: '#111827', color: '#ffffff' }}>
+                                  CD
+                                </span>
+                              )}
+                              {req.has_cold_chain && (
+                                <span style={{ fontSize: '9px', fontWeight: 700, borderRadius: '3px', padding: '1px 4px', background: '#f0f9ff', color: '#0369a1' }}>
+                                  COLD
+                                </span>
+                              )}
+                              {req.allergy_conflict && !req.allergy_override && (
+                                <span style={{ fontSize: '9px', fontWeight: 700, borderRadius: '3px', padding: '1px 4px', background: '#fef2f2', color: '#dc2626' }}>
+                                  ALLERGY
+                                </span>
+                              )}
+                              <span style={{ fontSize: '11px', color: req.priority === 'STAT' ? '#dc2626' : '#64748b', fontWeight: req.priority === 'STAT' ? 700 : 400 }}>
+                                {req.wait_minutes}m wait
+                              </span>
+                            </div>
+                            <span
+                              style={{
+                                fontSize: '10px',
+                                fontWeight: 600,
+                                padding: '1px 6px',
+                                borderRadius: '4px',
+                                background: activeTab === 'pending' ? pendingStyle.bg : (req.status === 'DISPENSED' ? '#f0fdf4' : '#eff6ff'),
+                                color: activeTab === 'pending' ? pendingStyle.fg : (req.status === 'DISPENSED' ? '#15803d' : '#1d4ed8'),
+                                border: `1px solid ${activeTab === 'pending' ? pendingStyle.bd : (req.status === 'DISPENSED' ? '#bbf7d0' : '#bfdbfe')}`,
+                              }}
+                            >
+                              {activeTab === 'pending'
+                                ? pendingSt
+                                : (req.status === 'DISPENSED' ? 'Issued' : (req.step === 1 ? 'Review' : req.step === 2 ? 'Allocated' : 'Issuing'))}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )
+                )}
               </div>
             </div>
 
-            {/* ------------------------------------------ */}
-            {/* RIGHT STICKY 400PX PANEL (INPATIENT WIZARD)*/}
-            {/* ------------------------------------------ */}
-            <div style={{ flex: '0 1 400px', minWidth: '340px', display: 'flex', flexDirection: 'column', gap: '8px', position: 'sticky', top: '76px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 4px' }}>
-                <span style={{ fontSize: '12px', fontWeight: 600, letterSpacing: '0.06em', color: '#6b7280' }}>
-                  {activeTab === 'returns' ? 'ACTIVE WARD RETURN' : 'ACTIVE WARD REQUEST'}
-                </span>
-                <span style={{ fontSize: '12px', fontWeight: 600, color: '#1d4ed8', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '4px', padding: '1px 6px' }}>
-                  Posts to admission ledger
-                </span>
+            {/* Right Panel: 3 Columns */}
+            <div
+              style={{
+                gridColumn: 'span 3',
+                width: '100%',
+                minWidth: 0,
+                maxWidth: '100%',
+                boxSizing: 'border-box',
+                background: '#ffffff',
+                border: '1px solid #e5e7eb',
+                borderRadius: '12px',
+                position: 'sticky',
+                top: '70px',
+                maxHeight: 'calc(100vh - 120px)',
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+              }}
+            >
+              {/* Header */}
+              <div
+                style={{
+                  padding: '16px 24px',
+                  borderBottom: '1px solid #e5e7eb',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  background: '#ffffff',
+                  flexShrink: 0,
+                  gap: '12px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                  <PackageOpen size={20} color="#2563eb" />
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#111827', margin: 0 }}>
+                        {activeTab === 'returns'
+                          ? (activeReturn?.return_number || 'Ward Return Details')
+                          : (activeOrder?.order_number || 'Ward Requisition Inspection')}
+                      </h3>
+                      {activeTab === 'returns' && activeReturn ? (
+                        <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '6px', background: (RETURN_CLASS_STYLES[activeReturn.classification || activeReturn.type || 'Unused'] || RETURN_CLASS_STYLES.Unused).bg, color: (RETURN_CLASS_STYLES[activeReturn.classification || activeReturn.type || 'Unused'] || RETURN_CLASS_STYLES.Unused).fg }}>
+                          {activeReturn.classification || activeReturn.type || 'Unused'}
+                        </span>
+                      ) : activeOrder ? (
+                        <>
+                          <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '6px', background: PRIO_STYLES[activeOrder.priority]?.bg, color: PRIO_STYLES[activeOrder.priority]?.fg }}>
+                            {activeOrder.priority}
+                          </span>
+                          <span style={{ fontSize: '11px', fontWeight: 600, color: '#1d4ed8', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '4px', padding: '1px 6px' }}>
+                            Step {wizardStep} of 5 · {OPERATIONAL_STEPS[wizardStep - 1]?.label}
+                          </span>
+                        </>
+                      ) : null}
+                    </div>
+                    <p style={{ fontSize: '12px', color: '#64748b', margin: '2px 0 0' }}>
+                      {activeTab === 'returns'
+                        ? 'Inspection and credit return to inpatient admission ledger'
+                        : 'MAR clinical check, stock allocation and nurse handover verification'}
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {activeOrder && activeOrder.is_emergency && activeOrder.status !== 'DISPENSED' && (
+                    <button
+                      onClick={() => setEmergencyModalOpen(true)}
+                      style={{
+                        height: '36px',
+                        padding: '0 14px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        background: '#dc2626',
+                        color: '#ffffff',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <Siren size={15} />
+                      STAT Fast-Track
+                    </button>
+                  )}
+                  <button
+                    onClick={handleCallNext}
+                    style={{
+                      height: '36px',
+                      padding: '0 16px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: '#2563eb',
+                      color: '#ffffff',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                  >
+                    <ArrowRight size={15} />
+                    Call Next
+                  </button>
+                </div>
               </div>
 
-              <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', overflow: 'hidden', maxHeight: 'calc(100vh - 110px)', display: 'flex', flexDirection: 'column' }}>
+              {/* 4-Box Overview Strip */}
+              {activeOrder && activeTab !== 'returns' ? (
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                    gap: '12px',
+                    padding: '16px 24px',
+                    background: '#f8fafc',
+                    borderBottom: '1px solid #e5e7eb',
+                    flexShrink: 0,
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                      Patient &amp; Admission
+                    </div>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#111827', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {activeOrder.patient_name}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '1px', fontFamily: 'monospace' }}>
+                      {activeOrder.admission_number} · {activeOrder.age}y/{activeOrder.gender.slice(0, 1)}
+                    </div>
+                  </div>
+
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                      Location &amp; Care Team
+                    </div>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#111827', marginTop: '2px' }}>
+                      {activeOrder.ward} · {activeOrder.bed}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '1px' }}>
+                      {activeOrder.doctor_name}
+                    </div>
+                  </div>
+
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                      Priority &amp; Turnaround
+                    </div>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: activeOrder.priority === 'STAT' ? '#dc2626' : '#111827', marginTop: '2px' }}>
+                      {activeOrder.priority} · {activeOrder.wait_minutes}m wait
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '1px' }}>
+                      Req by {activeOrder.nurse_name} at {activeOrder.created_at_time}
+                    </div>
+                  </div>
+
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                      Clinical Status
+                    </div>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: wizardStep >= 4 || activeOrder.status === 'DISPENSED' ? '#15803d' : '#b45309', marginTop: '2px' }}>
+                      MAR: {wizardStep >= 4 || activeOrder.status === 'DISPENSED' ? 'Ready to Administer' : 'Awaiting Supply'}
+                    </div>
+                    <div style={{ fontSize: '11px', color: activeOrder.allergies.length > 0 ? '#dc2626' : '#16a34a', fontWeight: 600, marginTop: '1px' }}>
+                      {activeOrder.allergies.length > 0 ? `Allergies: ${activeOrder.allergies.join(', ')}` : 'No Known Allergies'}
+                    </div>
+                  </div>
+                </div>
+              ) : activeReturn ? (
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                    gap: '12px',
+                    padding: '16px 24px',
+                    background: '#f8fafc',
+                    borderBottom: '1px solid #e5e7eb',
+                    flexShrink: 0,
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                      Patient &amp; UHID
+                    </div>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#111827', marginTop: '2px' }}>
+                      {activeReturn.patient || activeReturn.customer_name}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '1px', fontFamily: 'monospace' }}>
+                      {activeReturn.adm || 'Admission'}
+                    </div>
+                  </div>
+
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                      Ward Location
+                    </div>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#111827', marginTop: '2px' }}>
+                      {activeReturn.ward}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '1px' }}>
+                      Bed: {activeReturn.bed || 'General'}
+                    </div>
+                  </div>
+
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                      Classification
+                    </div>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#111827', marginTop: '2px' }}>
+                      {activeReturn.classification || activeReturn.type || 'Unused'}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '1px' }}>
+                      Reason: {activeReturn.reason}
+                    </div>
+                  </div>
+
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                      Refund Value
+                    </div>
+                    <div style={{ fontSize: '16px', fontWeight: 700, color: '#b45309', marginTop: '2px' }}>
+                      ₹{Number(activeReturn.total_refund_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </div>
+                    <div style={{ fontSize: '11px', color: activeReturn.status === 'Credited' ? '#15803d' : '#2563eb', fontWeight: 600, marginTop: '1px' }}>
+                      {activeReturn.status === 'Credited' ? 'Credited to Ledger' : 'Credit Pending Intake'}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Wizard Body Container */}
+              <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
                 {!activeOrder && activeTab !== 'returns' ? (
                   <div style={{ padding: '48px 24px', textAlign: 'center' }}>
                     <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>Nothing selected</div>
-                    <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>Open a row from the table</div>
+                    <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>Open a row from the left queue</div>
                   </div>
                 ) : activeTab === 'returns' && activeReturn ? (
                   /* ===================================== */
                   /* RETURNS WIZARD (Right Panel - Req 7)  */
+                  /* ===================================== */
                   /* ===================================== */
                   <div style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
                     <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid #f3f4f6', display: 'flex', flexDirection: 'column', gap: '12px' }}>

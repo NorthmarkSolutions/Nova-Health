@@ -39,6 +39,9 @@ import {
   Lock,
   FileBadge,
   CheckCircle2,
+  Pill,
+  PhoneCall,
+  ShoppingCart,
 } from 'lucide-react';
 import {
   pharmacyOpdService,
@@ -55,6 +58,7 @@ import {
   ShiftDrawerSummary,
 } from '../../../services/pharmacyOpdService';
 import NewOTCSalePage from './NewOTCSalePage';
+import { pharmacyInventoryService } from '../../../services/pharmacyInventoryService';
 
 // ==========================================
 // BADGE STYLES (HMS DESIGN BIBLE)
@@ -81,19 +85,124 @@ const getScheduleBadge = (sched: string, isCd: boolean) => {
   return { text: `Sch. ${sched}`, bg: '#eff6ff', fg: '#1d4ed8', bd: '#bfdbfe' };
 };
 
-export const OPDPharmacistWorkspace: React.FC = () => {
+// Filter pill styling helper matching InventoryManagerWorkspace & HMS Design Bible
+const getPillStyle = (isActive: boolean, customColor?: 'red' | 'dark' | 'amber') => {
+  const base = {
+    height: '30px',
+    padding: '0 12px',
+    borderRadius: '9999px',
+    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+    fontSize: '13px',
+    fontWeight: 600,
+    letterSpacing: '-0.01em',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap' as const,
+    outline: 'none',
+    transition: 'all 0.15s ease',
+  };
+
+  if (customColor === 'red') {
+    return {
+      ...base,
+      background: isActive ? '#dc2626' : '#fef2f2',
+      color: isActive ? '#ffffff' : '#dc2626',
+      border: `1px solid ${isActive ? '#dc2626' : '#fecaca'}`,
+    };
+  }
+  if (customColor === 'dark') {
+    return {
+      ...base,
+      background: isActive ? '#111827' : '#f3f4f6',
+      color: isActive ? '#ffffff' : '#111827',
+      border: `1px solid ${isActive ? '#111827' : '#d1d5db'}`,
+    };
+  }
+  if (customColor === 'amber') {
+    return {
+      ...base,
+      background: isActive ? '#d97706' : '#fffbeb',
+      color: isActive ? '#ffffff' : '#b45309',
+      border: `1px solid ${isActive ? '#d97706' : '#fde68a'}`,
+    };
+  }
+  return {
+    ...base,
+    background: isActive ? '#2563eb' : '#ffffff',
+    color: isActive ? '#ffffff' : '#374151',
+    border: `1px solid ${isActive ? '#2563eb' : '#e5e7eb'}`,
+  };
+};
+
+// Search match highlighter (HMS Design Bible aligned)
+const highlightMatch = (text: string, query: string) => {
+  if (!query || !query.trim() || !text) return text;
+  const q = query.trim();
+  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(`(${escaped})`, 'gi');
+  const parts = text.split(regex);
+  if (parts.length === 1) return text;
+  return (
+    <>
+      {parts.map((part, i) =>
+        regex.test(part) ? (
+          <mark
+            key={i}
+            style={{
+              background: '#fef08a',
+              color: '#854d0e',
+              padding: '0 2px',
+              borderRadius: '3px',
+              fontWeight: 700,
+            }}
+          >
+            {part}
+          </mark>
+        ) : (
+          part
+        )
+      )}
+    </>
+  );
+};
+
+export interface OPDPharmacistWorkspaceProps {
+  isEmbedded?: boolean;
+  activeSubTab?: 'queue' | 'otc' | 'done' | 'returns' | 'stock';
+  onSubTabChange?: (tab: string) => void;
+  hideSidebar?: boolean;
+  hideHeader?: boolean;
+  initialQueuePill?: string;
+  triggerCallNext?: number;
+  initialStockSearch?: string;
+  initialCreateOtc?: boolean;
+}
+
+export const OPDPharmacistWorkspace: React.FC<OPDPharmacistWorkspaceProps> = ({
+  isEmbedded = false,
+  activeSubTab,
+  onSubTabChange,
+  hideSidebar = false,
+  hideHeader = false,
+  initialQueuePill,
+  triggerCallNext,
+  initialStockSearch = '',
+  initialCreateOtc = false,
+}) => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const currentTab = (searchParams.get('tab') || 'queue').toLowerCase();
+  const currentTab = (activeSubTab || searchParams.get('tab') || 'queue').toLowerCase();
 
   const { user, role, logout } = useAuth();
   const navigate = useNavigate();
   const isHospitalAdmin = role === RoleType.HOSPITAL_ADMIN || role === RoleType.SUPER_ADMIN;
   const displayName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username : 'Arjun Varma';
   const initials = displayName.split(/\s+/).map((p) => p[0]).join('').slice(0, 2).toUpperCase() || 'AV';
-  const designation = user?.designation || (role === RoleType.PHARMACIST ? 'OPD Pharmacist · PH-4412' : (role ? role.replace(/_/g, ' ') : 'OPD Pharmacist · PH-4412'));
+  const designation = user?.designation || (role === RoleType.PHARMACIST ? 'Clinical Pharmacist · Dispensing & Ward Supply' : (role ? role.replace(/_/g, ' ') : 'Clinical Pharmacist'));
 
   // Navigation Tabs
   const setTab = (t: string) => {
+    if (onSubTabChange) {
+      onSubTabChange(t);
+    }
     setSearchParams({ tab: t });
   };
 
@@ -114,8 +223,24 @@ export const OPDPharmacistWorkspace: React.FC = () => {
   const [queue, setQueue] = useState<QueueOrder[]>([]);
   const [queueLoading, setQueueLoading] = useState(false);
   const [qSearch, setQSearch] = useState('');
-  const [queuePill, setQueuePill] = useState('all');
+  const [queuePill, setQueuePill] = useState(initialQueuePill || 'all');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+
+  // Sync initialQueuePill changes
+  useEffect(() => {
+    if (initialQueuePill) {
+      setQueuePill(initialQueuePill);
+    }
+  }, [initialQueuePill]);
+
+  // Listen for external triggerCallNext signal
+  const lastTriggerRef = React.useRef<number | undefined>(triggerCallNext);
+  useEffect(() => {
+    if (triggerCallNext !== undefined && triggerCallNext !== lastTriggerRef.current) {
+      lastTriggerRef.current = triggerCallNext;
+      handleCallNext();
+    }
+  }, [triggerCallNext]);
 
   // State: Tab 2 - OTC
   const [otcSales, setOtcSales] = useState<OTCSale[]>([]);
@@ -143,8 +268,16 @@ export const OPDPharmacistWorkspace: React.FC = () => {
   const [stockItems, setStockItems] = useState<any[]>([]);
   const [stockLoading, setStockLoading] = useState(false);
   const [stockPill, setStockPill] = useState('all');
-  const [stockSearch, setStockSearch] = useState('');
-  const [selectedStockCode, setSelectedStockCode] = useState<string | null>('SAL100');
+  const [stockSearch, setStockSearch] = useState(initialStockSearch);
+  const [selectedStockId, setSelectedStockId] = useState<string | null>(null);
+  const [stockNameTip, setStockNameTip] = useState<string | null>(null);
+
+  // Sync initialStockSearch changes and auto-focus search input if on stock tab
+  useEffect(() => {
+    if (initialStockSearch !== undefined) {
+      setStockSearch(initialStockSearch);
+    }
+  }, [initialStockSearch]);
 
   // Modals & UI States
   const [allergyModalOpen, setAllergyModalOpen] = useState(false);
@@ -222,7 +355,13 @@ export const OPDPharmacistWorkspace: React.FC = () => {
     'PATIENT_CHOICE' | 'PRICE_CONCERN' | 'OUT_OF_STOCK' | 'INSURANCE_RESTRICTION'
   >('PATIENT_CHOICE');
   const [outsideNotes, setOutsideNotes] = useState('');
-  const [isCreatingOtcSale, setIsCreatingOtcSale] = useState(false);
+  const [isCreatingOtcSale, setIsCreatingOtcSale] = useState(initialCreateOtc);
+
+  useEffect(() => {
+    if (initialCreateOtc) {
+      setIsCreatingOtcSale(true);
+    }
+  }, [initialCreateOtc]);
 
   // Return wizard:
   const [retInspectChecks, setRetInspectChecks] = useState<Record<string, boolean>>({
@@ -871,6 +1010,109 @@ export const OPDPharmacistWorkspace: React.FC = () => {
     return returnsList.find((r) => r.id === selectedReturnId) || returnsList[0] || null;
   }, [returnsList, selectedReturnId]);
 
+  // Active OTC sale memo & filter
+  const [otcModeFilter, setOtcModeFilter] = useState<'all' | 'Cash' | 'Card' | 'UPI'>('all');
+  const filteredOtcSales = useMemo(() => {
+    return otcSales.filter((s) => {
+      const q = otcSearch.trim().toLowerCase();
+      const matchesSearch = !q ||
+        s.sale_number?.toLowerCase().includes(q) ||
+        s.customer_name?.toLowerCase().includes(q) ||
+        s.customer_phone?.toLowerCase().includes(q);
+      const matchesMode = otcModeFilter === 'all' || s.payment_mode?.toUpperCase() === otcModeFilter.toUpperCase();
+      return matchesSearch && matchesMode;
+    });
+  }, [otcSales, otcSearch, otcModeFilter]);
+
+  const activeOtcSale = useMemo(() => {
+    return filteredOtcSales.find((s) => s.id === selectedOtcId) || filteredOtcSales[0] || otcSales[0] || null;
+  }, [filteredOtcSales, otcSales, selectedOtcId]);
+
+  // Active Completed memo & filter
+  const [compFilter, setCompFilter] = useState<string>('all');
+  const filteredCompleted = useMemo(() => {
+    return completedList.filter((c) => {
+      const q = compSearch.trim().toLowerCase();
+      const matchesSearch = !q ||
+        c.patient?.toLowerCase().includes(q) ||
+        c.uhid?.toLowerCase().includes(q) ||
+        c.id?.toLowerCase().includes(q);
+      const matchesPill = compFilter === 'all' ||
+        (compFilter === 'cash' && c.mode?.toLowerCase().includes('cash')) ||
+        (compFilter === 'card' && c.mode?.toLowerCase().includes('card')) ||
+        (compFilter === 'tpa' && c.mode?.toLowerCase().includes('tpa'));
+      return matchesSearch && matchesPill;
+    });
+  }, [completedList, compSearch, compFilter]);
+
+  const activeCompleted = useMemo(() => {
+    return filteredCompleted.find((c) => c.id === selectedCompId) || filteredCompleted[0] || completedList[0] || null;
+  }, [filteredCompleted, completedList, selectedCompId]);
+
+  // Active Stock memo & filter
+  const filteredStockItems = useMemo(() => {
+    return stockItems.filter((s) => {
+      const q = stockSearch.trim().toLowerCase();
+      const matchesSearch = !q ||
+        s.name?.toLowerCase().includes(q) ||
+        s.code?.toLowerCase().includes(q);
+      const matchesPill = stockPill === 'all' ||
+        (stockPill === 'low' && s.in_stock > 0 && s.in_stock < s.reorder_level) ||
+        (stockPill === 'out' && s.in_stock === 0) ||
+        (stockPill === 'exp' && s.status?.toLowerCase().includes('expir'));
+      return matchesSearch && matchesPill;
+    });
+  }, [stockItems, stockSearch, stockPill]);
+
+  // The detail panel and the highlighted row both follow this value, so they never disagree. If search
+  // or a filter hides the chosen medicine, the first visible row stands in until the filter is cleared.
+  const activeStockItem = useMemo(() => {
+    return filteredStockItems.find((s) => s.id === selectedStockId) || filteredStockItems[0] || null;
+  }, [filteredStockItems, selectedStockId]);
+
+  const selectStockByOffset = useCallback((delta: number | 'first' | 'last') => {
+    if (!filteredStockItems.length) return;
+    const idx = filteredStockItems.findIndex((s) => s.id === activeStockItem?.id);
+    const next = delta === 'first' ? 0
+      : delta === 'last' ? filteredStockItems.length - 1
+      : Math.min(filteredStockItems.length - 1, Math.max(0, (idx < 0 ? 0 : idx) + delta));
+    const id = filteredStockItems[next].id;
+    setSelectedStockId(id);
+    requestAnimationFrame(() => document.getElementById(`stock-row-${id}`)?.scrollIntoView({ block: 'nearest' }));
+  }, [filteredStockItems, activeStockItem]);
+
+  const handleStockListKey = (e: React.KeyboardEvent, fromSearch = false) => {
+    const keys: Record<string, number | 'first' | 'last'> = { ArrowDown: 1, ArrowUp: -1, PageDown: 5, PageUp: -5 };
+    if (!fromSearch) Object.assign(keys, { Home: 'first', End: 'last' });
+    if (!(e.key in keys)) return;
+    e.preventDefault();
+    selectStockByOffset(keys[e.key]);
+  };
+
+  // Quantities straight from the inventory ledger: counter shelf + central store = total sellable
+  // (expired and quarantined batches are already excluded by the API).
+  const stockView = useMemo(() => {
+    const s = activeStockItem;
+    if (!s) return null;
+    const batches = [...(s.batches || [])].sort((a: any, b: any) => String(a.expiry_date).localeCompare(String(b.expiry_date)));
+    const firstCounter = batches.find((b: any) => b.is_counter_stock && (b.available_quantity ?? 0) > 0);
+    const batchTotal = batches.reduce((sum: number, b: any) => sum + (b.available_quantity ?? 0), 0);
+    const withStock = batches.filter((b: any) => (b.available_quantity ?? 0) > 0);
+    const sameGeneric = s.generic
+      ? stockItems.filter((x) => x.id !== s.id && (x.generic || '').toLowerCase() === s.generic.toLowerCase())
+      : [];
+    return {
+      counter: s.counter_stock ?? 0,
+      central: s.central_stock ?? 0,
+      total: s.in_stock ?? 0,
+      batches,
+      batchTotal,
+      dispenseNextId: firstCounter?.id || null,
+      nearestExpiry: withStock[0]?.expiry_date || null,
+      sameGeneric,
+    };
+  }, [activeStockItem, stockItems]);
+
   const handleInspectReturnConfirm = async (disposition: 'restock' | 'quarantine') => {
     if (!activeReturn) return;
     try {
@@ -920,7 +1162,7 @@ export const OPDPharmacistWorkspace: React.FC = () => {
   ];
 
   return (
-    <div style={{ display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', background: '#f9fafb', fontFamily: 'Inter, sans-serif' }}>
+    <div style={{ display: 'flex', height: isEmbedded ? 'auto' : '100vh', width: isEmbedded ? '100%' : '100vw', overflow: isEmbedded ? 'visible' : 'hidden', background: '#f9fafb', fontFamily: 'Inter, sans-serif' }}>
       {/* Toast Notification */}
       {notification && (
         <div
@@ -949,6 +1191,7 @@ export const OPDPharmacistWorkspace: React.FC = () => {
       {/* ==========================================
           SIDEBAR (260px)
       ========================================== */}
+      {!hideSidebar && !isEmbedded && (
       <aside style={{ width: '260px', flexShrink: 0, background: '#fff', borderRight: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '18px 20px' }}>
           <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#2563eb', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '15px' }}>
@@ -1094,12 +1337,14 @@ export const OPDPharmacistWorkspace: React.FC = () => {
           </button>
         </div>
       </aside>
+      )}
 
       {/* ==========================================
           MAIN AREA
       ========================================== */}
-      <main style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+      <main style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflowY: isEmbedded ? 'visible' : 'auto' }}>
         {/* Sticky Top Bar (52px) */}
+        {!hideHeader && !isEmbedded && (
         <div
           style={{
             display: 'flex',
@@ -1147,7 +1392,66 @@ export const OPDPharmacistWorkspace: React.FC = () => {
             </span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {/* Station Switcher Pill (Unified Pharmacist Role) */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                background: '#f1f5f9',
+                borderRadius: '8px',
+                padding: '2px',
+                border: '1px solid #e2e8f0',
+              }}
+            >
+              <button
+                onClick={() => navigate('/pharmacy/opd')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  height: '28px',
+                  padding: '0 10px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  background: '#ffffff',
+                  color: '#1d4ed8',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
+                }}
+                title="Currently active: OPD Dispense Counter"
+              >
+                <Pill size={13} />
+                <span>OPD Counter</span>
+                <span style={{ fontSize: '10px', background: '#dcfce7', color: '#15803d', padding: '0 4px', borderRadius: '4px', fontWeight: 700 }}>
+                  ACTIVE
+                </span>
+              </button>
+              <button
+                onClick={() => navigate('/pharmacy/ipd')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  height: '28px',
+                  padding: '0 10px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  background: 'transparent',
+                  color: '#64748b',
+                  fontSize: '12px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+                title="Switch station to IPD Ward Supply"
+              >
+                <BedDouble size={13} />
+                <span>IPD Ward Supply</span>
+              </button>
+            </div>
             {isHospitalAdmin && (
               <button
                 onClick={() => navigate('/admin')}
@@ -1233,6 +1537,7 @@ export const OPDPharmacistWorkspace: React.FC = () => {
             </div>
           </div>
         </div>
+        )}
 
         {/* Floating Toast Notification */}
         {notification && (
@@ -1262,8 +1567,9 @@ export const OPDPharmacistWorkspace: React.FC = () => {
         )}
 
         {/* Content Body */}
-        <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div style={{ padding: isEmbedded ? '0' : '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
           {/* Header Card */}
+          {!hideHeader && !isEmbedded && (
           <div
             style={{
               background: '#fff',
@@ -1358,11 +1664,13 @@ export const OPDPharmacistWorkspace: React.FC = () => {
               </button>
             </div>
           </div>
+          )}
 
           {/* ==========================================
               KPI ROW (5 CARDS, EXACT SPEC)
           ========================================== */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
+          {!hideHeader && !isEmbedded && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: '16px' }}>
             {/* Card 1: Pending verification */}
             <div
               onClick={() => {
@@ -1513,61 +1821,127 @@ export const OPDPharmacistWorkspace: React.FC = () => {
               </div>
             </div>
           </div>
+          )}
 
           {/* ==========================================
               TAB 1: DISPENSING QUEUE + RIGHT ACTIVE PANEL
           ========================================== */}
           {currentTab === 'queue' && (
-            <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-              {/* Work Table (Flex 1, Min 620px) */}
-              <div style={{ flex: '1 1 620px', minWidth: 0, background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', overflow: 'hidden' }}>
-                <div style={{ padding: '20px 20px 16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                gap: '16px',
+                alignItems: 'start',
+                width: '100%',
+                minWidth: 0,
+                boxSizing: 'border-box',
+              }}
+            >
+              {/* LEFT CONTAINER (Matches KPI Card 1 - Column 1 across ALL screens) */}
+              <div
+                style={{
+                  gridColumn: 'span 1',
+                  width: '100%',
+                  minWidth: 0,
+                  maxWidth: '100%',
+                  boxSizing: 'border-box',
+                  background: '#ffffff',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '12px',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                }}
+              >
+                {/* Header Filters & Search */}
+                <div style={{ padding: '16px 16px 14px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      alignItems: 'stretch',
+                      gap: '10px',
+                      flexWrap: 'nowrap',
+                    }}
+                  >
                     <div>
-                      <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#111827' }}>Prescription queue</h2>
-                      <p style={{ fontSize: '13px', color: '#4b5563', marginTop: '2px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                        <h2 style={{ fontSize: '15px', fontWeight: 600, color: '#111827', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+                          Prescription Queue
+                        </h2>
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            color: '#2563eb',
+                            background: '#eff6ff',
+                            border: '1px solid #bfdbfe',
+                            padding: '1px 8px',
+                            borderRadius: '9999px',
+                            whiteSpace: 'nowrap',
+                            flexShrink: 0,
+                          }}
+                        >
+                          {queue.length} Prescriptions
+                        </span>
+                      </div>
+                      <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
                         STAT always first, then urgent and routine by wait time
                       </p>
                     </div>
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                      <input
-                        value={qSearch}
-                        onChange={(e) => setQSearch(e.target.value)}
-                        placeholder="Filter by patient, UHID or drug"
-                        style={{
-                          height: '40px',
-                          width: '240px',
-                          maxWidth: '100%',
-                          padding: '0 12px',
-                          border: '1px solid #e5e7eb',
-                          borderRadius: '10px',
-                          fontSize: '13px',
-                          color: '#111827',
-                          outline: 'none',
-                        }}
-                      />
+
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', width: '100%' }}>
+                      <div style={{ position: 'relative', width: '100%', minWidth: 0, flex: 1 }}>
+                        <Search size={15} style={{ position: 'absolute', left: '11px', top: '11px', color: '#9ca3af' }} />
+                        <input
+                          id="rx-queue-search"
+                          value={qSearch}
+                          onChange={(e) => setQSearch(e.target.value)}
+                          placeholder="Search patient, UHID or drug"
+                          style={{
+                            height: '36px',
+                            width: '100%',
+                            boxSizing: 'border-box',
+                            padding: '0 12px 0 34px',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '8px',
+                            fontSize: '13px',
+                            color: '#111827',
+                            outline: 'none',
+                          }}
+                        />
+                      </div>
                       <button
                         onClick={handleCallNext}
+                        title="Call next patient in queue (Alt+N)"
                         style={{
-                          height: '40px',
-                          padding: '0 14px',
-                          borderRadius: '10px',
-                          background: '#fff',
-                          color: '#111827',
-                          border: '1px solid #d1d5db',
-                          fontSize: '13px',
+                          height: '36px',
+                          padding: '0 10px',
+                          borderRadius: '8px',
+                          background: '#ffffff',
+                          color: '#1d4ed8',
+                          border: '1px solid #bfdbfe',
+                          fontSize: '12px',
                           fontWeight: 600,
                           cursor: 'pointer',
                           whiteSpace: 'nowrap',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          flexShrink: 0,
                         }}
                       >
-                        Call next
+                        <PhoneCall size={13} />
+                        <span>Call Next</span>
                       </button>
                     </div>
                   </div>
 
-                  {/* Filter Pills */}
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {/* Filter Pills with intentional wrapping to prevent horizontal clipping & nested scrollbars */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', minWidth: 0, width: '100%', marginBottom: '4px' }}>
                     {[
                       { key: 'all', label: 'All' },
                       { key: 'new', label: 'New' },
@@ -1575,265 +1949,140 @@ export const OPDPharmacistWorkspace: React.FC = () => {
                       { key: 'payment', label: 'Awaiting payment' },
                       { key: 'dispensing', label: 'Dispensing' },
                       { key: 'hold', label: 'On hold' },
-                      { key: 'partially_dispensed', label: 'Partially Dispensed', color: 'amber' },
-                      { key: 'stat', label: 'STAT only', color: 'red' },
-                      { key: 'cd', label: 'Controlled drugs', color: 'dark' },
-                    ].map((p) => {
-                      const isActive = queuePill === p.key;
-                      let bg = isActive ? '#2563eb' : '#fff';
-                      let fg = isActive ? '#fff' : '#374151';
-                      let bd = isActive ? '#2563eb' : '#e5e7eb';
-                      if (p.color === 'red') {
-                        bg = isActive ? '#dc2626' : '#fef2f2';
-                        fg = isActive ? '#fff' : '#dc2626';
-                        bd = isActive ? '#dc2626' : '#fecaca';
-                      } else if (p.color === 'dark') {
-                        bg = isActive ? '#111827' : '#f3f4f6';
-                        fg = isActive ? '#fff' : '#111827';
-                        bd = isActive ? '#111827' : '#d1d5db';
-                      } else if (p.color === 'amber') {
-                        bg = isActive ? '#d97706' : '#fffbeb';
-                        fg = isActive ? '#fff' : '#b45309';
-                        bd = isActive ? '#d97706' : '#fde68a';
-                      }
-                      return (
-                        <button
-                          key={p.key}
-                          onClick={() => setQueuePill(p.key)}
-                          style={{
-                            height: '32px',
-                            padding: '0 12px',
-                            borderRadius: '9999px',
-                            fontSize: '13px',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            whiteSpace: 'nowrap',
-                            background: bg,
-                            color: fg,
-                            border: `1px solid ${bd}`,
-                          }}
-                        >
-                          {p.label}
-                        </button>
-                      );
-                    })}
+                      { key: 'partially_dispensed', label: 'Partially Dispensed', color: 'amber' as const },
+                      { key: 'stat', label: 'STAT only', color: 'red' as const },
+                      { key: 'cd', label: 'Controlled drugs', color: 'dark' as const },
+                    ].map((p) => (
+                      <button
+                        key={p.key}
+                        onClick={() => setQueuePill(p.key)}
+                        style={getPillStyle(queuePill === p.key, p.color)}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
-                {/* Table Data */}
-                <div style={{ overflowX: 'auto' }}>
-                  <div style={{ minWidth: '840px' }}>
-                    <div
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'minmax(170px, 1.2fr) minmax(220px, 1.7fr) 96px minmax(150px, 1fr) 150px 112px',
-                        alignItems: 'center',
-                        height: '44px',
-                        background: '#f9fafb',
-                        borderTop: '1px solid #e5e7eb',
-                        borderBottom: '1px solid #e5e7eb',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        letterSpacing: '0.04em',
-                        color: '#4b5563',
-                      }}
-                    >
-                      <div style={{ padding: '0 16px' }}>PATIENT · UHID</div>
-                      <div style={{ padding: '0 16px' }}>PRESCRIPTION · DOCTOR</div>
-                      <div style={{ padding: '0 16px' }}>PRIORITY</div>
-                      <div style={{ padding: '0 16px' }}>PAYMENT</div>
-                      <div style={{ padding: '0 16px' }}>STATUS</div>
-                      <div style={{ padding: '0 16px', textAlign: 'right' }}>ACTION</div>
+                {/* Data View: Unified Compact Row List Across ALL Screens (Vital Info Only) */}
+                <div
+                  className="med-compact-scroll"
+                  style={{
+                    overflowY: 'auto',
+                    flex: 1,
+                    maxHeight: 'calc(100vh - 290px)',
+                    borderTop: '1px solid #e5e7eb',
+                    minWidth: 0,
+                    width: '100%',
+                    boxSizing: 'border-box',
+                  }}
+                >
+                  {queueLoading ? (
+                    <div style={{ padding: '40px 16px', textAlign: 'center', color: '#6b7280', fontSize: '13px' }}>
+                      Loading prescriptions...
                     </div>
+                  ) : queue.length === 0 ? (
+                    <div style={{ padding: '40px 16px', textAlign: 'center', color: '#6b7280', fontSize: '13px' }}>
+                      <div style={{ fontWeight: 600, color: '#111827' }}>No prescriptions waiting</div>
+                      <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>New ones will appear here automatically</div>
+                    </div>
+                  ) : (
+                    queue.map((r) => {
+                      const isSelected = activeOrder?.id === r.id;
+                      const prioBadge =
+                        r.priority === 'STAT' ? B.red : r.priority === 'URGENT' ? B.amber : B.gray;
+                      const firstMed = r.items[0]?.medicine_name || 'Prescription Items';
+                      const isCd = r.items.some((it) => it.is_narcotic || it.medicine_schedule === 'H1');
+                      const isAllergy = r.has_allergy_warning;
+                      const isHold = r.status === 'AWAITING_STOCK';
 
-                    {queueLoading ? (
-                      <div style={{ padding: '48px', textAlign: 'center', color: '#6b7280' }}>Loading prescriptions...</div>
-                    ) : queue.length === 0 ? (
-                      <div style={{ padding: '48px 20px', textAlign: 'center' }}>
-                        <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>No prescriptions waiting</div>
-                        <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>
-                          New ones will appear here automatically
-                        </div>
-                      </div>
-                    ) : (
-                      queue.map((r) => {
-                        const isSelected = activeOrder?.id === r.id;
-                        const prioBadge =
-                          r.priority === 'STAT' ? B.red : r.priority === 'URGENT' ? B.amber : B.gray;
-                        const firstMed = r.items[0]?.medicine_name || 'Prescription Items';
-                        const isCd = r.items.some((it) => it.is_narcotic || it.medicine_schedule === 'H1');
-                        const isAllergy = r.has_allergy_warning;
-                        const isHold = r.status === 'AWAITING_STOCK';
-
-                        return (
-                          <div
-                            key={r.id}
-                            onClick={() => handleOpenOrder(r)}
-                            style={{
-                              display: 'grid',
-                              gridTemplateColumns: 'minmax(170px, 1.2fr) minmax(220px, 1.7fr) 96px minmax(150px, 1fr) 150px 112px',
-                              alignItems: 'center',
-                              minHeight: '56px',
-                              borderBottom: '1px solid #f3f4f6',
-                              cursor: 'pointer',
-                              background: isSelected ? '#eff6ff' : '#fff',
-                            }}
-                          >
-                            <div style={{ padding: '10px 16px', minWidth: 0 }}>
-                              <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>{r.patient_name}</div>
-                              <div style={{ fontSize: '12px', color: '#6b7280', fontFamily: MONO_FONT, marginTop: '2px' }}>
-                                {r.patient_uhid}
-                              </div>
-                            </div>
-                            <div style={{ padding: '10px 16px', minWidth: 0 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                <span style={{ fontSize: '14px', fontWeight: 500, color: '#111827' }}>{firstMed}</span>
-                                {isCd && (
-                                  <span style={{ fontSize: '11px', fontWeight: 700, borderRadius: '4px', padding: '1px 6px', background: '#111827', color: '#fff' }}>
-                                    CD
-                                  </span>
-                                )}
-                                {isAllergy && (
-                                  <span style={{ fontSize: '11px', fontWeight: 700, borderRadius: '4px', padding: '1px 6px', background: '#fef2f2', color: '#dc2626' }}>
-                                    Allergy
-                                  </span>
-                                )}
-                                {isHold && (
-                                  <span style={{ fontSize: '11px', fontWeight: 700, borderRadius: '4px', padding: '1px 6px', background: '#fffbeb', color: '#b45309' }}>
-                                    Hold
-                                  </span>
-                                )}
-                              </div>
-                              <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>
-                                {r.order_number} · {r.doctor_name}
-                              </div>
-                            </div>
-                            <div style={{ padding: '10px 16px' }}>
+                      return (
+                        <div
+                          key={r.id}
+                          id={`rx-compact-item-${r.id}`}
+                          tabIndex={0}
+                          role="button"
+                          aria-selected={isSelected}
+                          onClick={() => handleOpenOrder(r)}
+                          className={`med-compact-row ${isSelected ? 'med-selected' : ''}`}
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '6px',
+                            padding: '11px 16px',
+                            borderBottom: '1px solid #f3f4f6',
+                            borderLeft: isSelected ? '3px solid #2563eb' : '3px solid transparent',
+                            background: isSelected ? '#eff6ff' : '#ffffff',
+                            cursor: 'pointer',
+                            userSelect: 'none',
+                            minWidth: 0,
+                            width: '100%',
+                            boxSizing: 'border-box',
+                            transition: 'background-color 0.15s ease',
+                          }}
+                        >
+                          {/* Line 1: Patient Name & Priority Badge + Action Button */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, flex: 1, overflow: 'hidden' }}>
                               <span
                                 style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  height: '24px',
-                                  padding: '0 8px',
-                                  borderRadius: '6px',
-                                  fontSize: '12px',
+                                  fontSize: '13px',
+                                  fontWeight: isSelected ? 700 : 600,
+                                  color: isSelected ? '#1d4ed8' : '#111827',
+                                  whiteSpace: 'nowrap',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                }}
+                                title={r.patient_name}
+                              >
+                                {r.patient_name}
+                              </span>
+                              {isCd && (
+                                <span style={{ fontSize: '10px', fontWeight: 700, borderRadius: '3px', padding: '1px 5px', background: '#111827', color: '#fff', flexShrink: 0 }}>
+                                  CD
+                                </span>
+                              )}
+                              {isAllergy && (
+                                <span style={{ fontSize: '10px', fontWeight: 700, borderRadius: '3px', padding: '1px 5px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fee2e2', flexShrink: 0 }}>
+                                  Allergy
+                                </span>
+                              )}
+                              {isHold && (
+                                <span style={{ fontSize: '10px', fontWeight: 700, borderRadius: '3px', padding: '1px 5px', background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a', flexShrink: 0 }}>
+                                  Hold
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                              <span
+                                style={{
+                                  fontSize: '11px',
                                   fontWeight: 600,
+                                  padding: '1px 6px',
+                                  borderRadius: '4px',
                                   background: prioBadge.bg,
                                   color: prioBadge.fg,
                                   border: `1px solid ${prioBadge.bd}`,
+                                  whiteSpace: 'nowrap',
                                 }}
                               >
                                 {r.priority}
                               </span>
-                            </div>
-                            <div style={{ padding: '10px 16px', minWidth: 0 }}>
-                              <div style={{ fontSize: '13px', color: '#111827' }}>
-                                {r.settlement_mode === 'PAY_AT_RECEPTION'
-                                  ? 'Pay at reception'
-                                  : r.settlement_mode === 'INSURANCE'
-                                  ? 'Insurance'
-                                  : r.settlement_mode === 'IPD_RUNNING_BILL'
-                                  ? 'Bill to IPD'
-                                  : 'Pay at pharmacy'}
-                              </div>
-                              <span
-                                style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  height: '22px',
-                                  marginTop: '4px',
-                                  padding: '0 8px',
-                                  borderRadius: '6px',
-                                  fontSize: '12px',
-                                  fontWeight: 600,
-                                  background:
-                                    r.payment_status === 'PAID'
-                                      ? '#f0fdf4'
-                                      : r.payment_status === 'PARTIALLY_PAID'
-                                      ? '#fffbeb'
-                                      : '#fef2f2',
-                                  color:
-                                    r.payment_status === 'PAID'
-                                      ? '#15803d'
-                                      : r.payment_status === 'PARTIALLY_PAID'
-                                      ? '#b45309'
-                                      : '#dc2626',
-                                  border: `1px solid ${
-                                    r.payment_status === 'PAID'
-                                      ? '#bbf7d0'
-                                      : r.payment_status === 'PARTIALLY_PAID'
-                                      ? '#fde68a'
-                                      : '#fecaca'
-                                  }`,
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenOrder(r);
                                 }}
-                              >
-                                {r.payment_status}
-                              </span>
-                            </div>
-                            <div style={{ padding: '10px 16px', minWidth: 0 }}>
-                              <span
                                 style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
                                   height: '24px',
                                   padding: '0 8px',
                                   borderRadius: '6px',
-                                  fontSize: '12px',
-                                  fontWeight: 600,
-                                  whiteSpace: 'nowrap',
-                                  background:
-                                    r.status === 'PARTIALLY_DISPENSED'
-                                      ? '#fffbeb'
-                                      : r.status === 'PURCHASED_OUTSIDE'
-                                      ? '#f3f4f6'
-                                      : isHold
-                                      ? '#fffbeb'
-                                      : r.status === 'DISPENSED'
-                                      ? '#f0fdf4'
-                                      : '#eff6ff',
-                                  color:
-                                    r.status === 'PARTIALLY_DISPENSED'
-                                      ? '#b45309'
-                                      : r.status === 'PURCHASED_OUTSIDE'
-                                      ? '#4b5563'
-                                      : isHold
-                                      ? '#b45309'
-                                      : r.status === 'DISPENSED'
-                                      ? '#15803d'
-                                      : '#1d4ed8',
-                                  border: `1px solid ${
-                                    r.status === 'PARTIALLY_DISPENSED'
-                                      ? '#fde68a'
-                                      : r.status === 'PURCHASED_OUTSIDE'
-                                      ? '#d1d5db'
-                                      : isHold
-                                      ? '#fde68a'
-                                      : r.status === 'DISPENSED'
-                                      ? '#bbf7d0'
-                                      : '#bfdbfe'
-                                  }`,
-                                }}
-                              >
-                                {r.status === 'PARTIALLY_DISPENSED'
-                                  ? 'PARTIALLY DISPENSED'
-                                  : r.status === 'PURCHASED_OUTSIDE'
-                                  ? 'PURCHASED OUTSIDE'
-                                  : r.status}
-                              </span>
-                            </div>
-                            <div style={{ padding: '10px 16px', display: 'flex', justifyContent: 'flex-end' }}>
-                              <button
-                                onClick={() => handleOpenOrder(r)}
-                                style={{
-                                  height: '36px',
-                                  padding: '0 14px',
-                                  borderRadius: '10px',
-                                  fontSize: '13px',
+                                  fontSize: '11px',
                                   fontWeight: 600,
                                   cursor: 'pointer',
                                   whiteSpace: 'nowrap',
-                                  background: isSelected ? '#2563eb' : '#fff',
-                                  color: isSelected ? '#fff' : '#1d4ed8',
+                                  background: isSelected ? '#2563eb' : '#ffffff',
+                                  color: isSelected ? '#ffffff' : '#1d4ed8',
                                   border: `1px solid ${isSelected ? '#2563eb' : '#bfdbfe'}`,
                                 }}
                               >
@@ -1841,24 +2090,144 @@ export const OPDPharmacistWorkspace: React.FC = () => {
                               </button>
                             </div>
                           </div>
-                        );
-                      })
-                    )}
-                  </div>
+
+                          {/* Line 2: Medicine information & Payment badge */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', minWidth: 0, gap: '8px' }}>
+                            <span
+                              style={{
+                                color: '#374151',
+                                fontWeight: 500,
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                flex: 1,
+                                minWidth: 0,
+                              }}
+                              title={firstMed}
+                            >
+                              {firstMed} {r.items.length > 1 ? `(+${r.items.length - 1} more)` : ''}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                padding: '1px 6px',
+                                borderRadius: '4px',
+                                flexShrink: 0,
+                                background:
+                                  r.payment_status === 'PAID'
+                                    ? '#f0fdf4'
+                                    : r.payment_status === 'PARTIALLY_PAID'
+                                    ? '#fffbeb'
+                                    : '#fef2f2',
+                                color:
+                                  r.payment_status === 'PAID'
+                                    ? '#15803d'
+                                    : r.payment_status === 'PARTIALLY_PAID'
+                                    ? '#b45309'
+                                    : '#dc2626',
+                                border: `1px solid ${
+                                  r.payment_status === 'PAID'
+                                    ? '#bbf7d0'
+                                    : r.payment_status === 'PARTIALLY_PAID'
+                                    ? '#fde68a'
+                                    : '#fecaca'
+                                }`,
+                              }}
+                            >
+                              {r.payment_status}
+                            </span>
+                          </div>
+
+                          {/* Line 3: UHID · Doctor and Prescription Status badge */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', color: '#6b7280', minWidth: 0, gap: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, flex: 1, overflow: 'hidden' }}>
+                              <span style={{ fontFamily: MONO_FONT, color: '#4b5563', flexShrink: 0 }}>
+                                {r.patient_uhid}
+                              </span>
+                              <span style={{ color: '#9ca3af' }}>·</span>
+                              <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {r.doctor_name || r.order_number}
+                              </span>
+                            </div>
+                            <span
+                              style={{
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                padding: '1px 6px',
+                                borderRadius: '4px',
+                                flexShrink: 0,
+                                whiteSpace: 'nowrap',
+                                background:
+                                  r.status === 'PARTIALLY_DISPENSED'
+                                    ? '#fffbeb'
+                                    : r.status === 'PURCHASED_OUTSIDE'
+                                    ? '#f3f4f6'
+                                    : isHold
+                                    ? '#fffbeb'
+                                    : r.status === 'DISPENSED'
+                                    ? '#f0fdf4'
+                                    : '#eff6ff',
+                                color:
+                                  r.status === 'PARTIALLY_DISPENSED'
+                                    ? '#b45309'
+                                    : r.status === 'PURCHASED_OUTSIDE'
+                                    ? '#4b5563'
+                                    : isHold
+                                    ? '#b45309'
+                                    : r.status === 'DISPENSED'
+                                    ? '#15803d'
+                                    : '#1d4ed8',
+                                border: `1px solid ${
+                                  r.status === 'PARTIALLY_DISPENSED'
+                                    ? '#fde68a'
+                                    : r.status === 'PURCHASED_OUTSIDE'
+                                    ? '#d1d5db'
+                                    : isHold
+                                    ? '#fde68a'
+                                    : r.status === 'DISPENSED'
+                                    ? '#bbf7d0'
+                                    : '#bfdbfe'
+                                }`,
+                              }}
+                            >
+                              {r.status === 'PARTIALLY_DISPENSED'
+                                ? 'PARTIAL'
+                                : r.status === 'PURCHASED_OUTSIDE'
+                                ? 'OUTSIDE'
+                                : r.status === 'UNDER_REVIEW'
+                                ? 'UNDER REVIEW'
+                                : r.status}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', fontSize: '12px', color: '#6b7280' }}>
+
+                {/* Left Panel Footer */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', fontSize: '12px', color: '#6b7280', borderTop: '1px solid #f3f4f6', background: '#fafafa' }}>
                   <span>{queue.length} prescriptions in queue</span>
-                  <span>1 / 1</span>
+                  <span>{queue.filter((p) => p.priority === 'STAT').length} STAT active</span>
                 </div>
               </div>
 
-              {/* ==========================================
-                  RIGHT ACTIVE PRESCRIPTION PANEL (400px Sticky)
-              ========================================== */}
-              <div style={{ flex: '0 1 400px', minWidth: '340px', display: 'flex', flexDirection: 'column', gap: '8px', position: 'sticky', top: '76px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 4px' }}>
+              {/* RIGHT STICKY CONTEXT INSPECTION DRAWER */}
+              <div
+                style={{
+                  gridColumn: 'span 3',
+                  width: '100%',
+                  minWidth: 0,
+                  maxWidth: '100%',
+                  boxSizing: 'border-box',
+                  position: 'sticky',
+                  top: '70px',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                   <span style={{ fontSize: '12px', fontWeight: 600, letterSpacing: '0.06em', color: '#6b7280' }}>
-                    ACTIVE PRESCRIPTION
+                    ACTIVE PRESCRIPTION · CONTEXT &amp; VERIFICATION
                   </span>
                   <span style={{ fontSize: '12px', fontWeight: 600, color: '#1d4ed8', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '4px', padding: '1px 6px' }}>
                     Posts on dispense
@@ -1867,119 +2236,195 @@ export const OPDPharmacistWorkspace: React.FC = () => {
 
                 <div
                   style={{
-                    background: '#fff',
+                    background: '#ffffff',
                     border: '1px solid #e5e7eb',
                     borderRadius: '12px',
                     overflow: 'hidden',
-                    maxHeight: 'calc(100vh - 110px)',
+                    maxHeight: 'calc(100vh - 120px)',
                     display: 'flex',
                     flexDirection: 'column',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
                   }}
                 >
                   {!activeOrder ? (
-                    <div style={{ padding: '48px 24px', textAlign: 'center' }}>
-                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>No prescription selected</div>
-                      <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>
-                        Open one from the queue or call the next patient
+                    <div style={{ padding: '60px 24px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '15px', fontWeight: 600, color: '#111827' }}>No prescription selected</div>
+                      <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '6px' }}>
+                        Select a prescription from the queue on the left or click "Call Next" to process the next waiting patient.
                       </div>
                     </div>
                   ) : (
                     <>
                       {/* Active Prescription Header & Stepper */}
                       <div style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
-                        <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid #f3f4f6', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                          <div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
-                              <h3 style={{ fontSize: '20px', fontWeight: 600, color: '#111827' }}>{activeOrder.order_number}</h3>
-                              <span
+                        <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid #f3f4f6', display: 'flex', flexDirection: 'column', gap: '14px', background: '#ffffff' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
+                            <div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <h3 style={{ fontSize: '22px', fontWeight: 700, color: '#111827', margin: 0 }}>
+                                  {activeOrder.order_number}
+                                </h3>
+                                <span
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    height: '24px',
+                                    padding: '0 8px',
+                                    borderRadius: '6px',
+                                    fontSize: '12px',
+                                    fontWeight: 600,
+                                    background: activeOrder.priority === 'STAT' ? '#fef2f2' : activeOrder.priority === 'URGENT' ? '#fffbeb' : '#f9fafb',
+                                    color: activeOrder.priority === 'STAT' ? '#dc2626' : activeOrder.priority === 'URGENT' ? '#b45309' : '#374151',
+                                    border: `1px solid ${activeOrder.priority === 'STAT' ? '#fecaca' : activeOrder.priority === 'URGENT' ? '#fde68a' : '#e5e7eb'}`,
+                                  }}
+                                >
+                                  {activeOrder.priority}
+                                </span>
+                                <span
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    height: '24px',
+                                    padding: '0 8px',
+                                    borderRadius: '6px',
+                                    fontSize: '12px',
+                                    fontWeight: 600,
+                                    background: '#eff6ff',
+                                    color: '#1d4ed8',
+                                    border: '1px solid #bfdbfe',
+                                  }}
+                                >
+                                  {activeOrder.settlement_mode === 'INSURANCE'
+                                    ? 'Insurance TPA'
+                                    : activeOrder.settlement_mode === 'PAY_AT_RECEPTION'
+                                    ? 'Reception Pay'
+                                    : activeOrder.settlement_mode === 'IPD_RUNNING_BILL'
+                                    ? 'IPD Running Bill'
+                                    : 'Counter Pay'}
+                                </span>
+                              </div>
+                              <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>
+                                Step {wizardStep} of 7 ·{' '}
+                                <strong style={{ color: '#111827' }}>
+                                  {[
+                                    'Verify prescription',
+                                    'Safety checks',
+                                    'Payment source',
+                                    'Payment verification',
+                                    'Pick & label',
+                                    'Counseling',
+                                    'Dispense & complete',
+                                  ][wizardStep - 1]}
+                                </strong>
+                              </div>
+                            </div>
+
+                            {/* Quick Action Button */}
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                              <button
+                                onClick={() => setTab('stock')}
                                 style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  height: '24px',
-                                  padding: '0 8px',
-                                  borderRadius: '6px',
+                                  height: '34px',
+                                  padding: '0 12px',
+                                  borderRadius: '8px',
+                                  background: '#ffffff',
+                                  color: '#374151',
+                                  border: '1px solid #d1d5db',
                                   fontSize: '12px',
                                   fontWeight: 600,
-                                  background: activeOrder.priority === 'STAT' ? '#fef2f2' : activeOrder.priority === 'URGENT' ? '#fffbeb' : '#f9fafb',
-                                  color: activeOrder.priority === 'STAT' ? '#dc2626' : activeOrder.priority === 'URGENT' ? '#b45309' : '#374151',
-                                  border: `1px solid ${activeOrder.priority === 'STAT' ? '#fecaca' : activeOrder.priority === 'URGENT' ? '#fde68a' : '#e5e7eb'}`,
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '6px',
                                 }}
                               >
-                                {activeOrder.priority}
-                              </span>
-                            </div>
-                            <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '2px' }}>
-                              Step {wizardStep} of 7 ·{' '}
-                              {[
-                                'Verify prescription',
-                                'Safety checks',
-                                'Payment source',
-                                'Payment verification',
-                                'Pick & label',
-                                'Counseling',
-                                'Dispense & complete',
-                              ][wizardStep - 1]}
-                            </div>
-
-                            {/* 7-Segment Progress Bar */}
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px', marginTop: '10px' }}>
-                              {[1, 2, 3, 4, 5, 6, 7].map((s) => (
-                                <div
-                                  key={s}
-                                  style={{
-                                    height: '4px',
-                                    borderRadius: '2px',
-                                    background: s <= wizardStep ? '#2563eb' : '#e5e7eb',
-                                  }}
-                                />
-                              ))}
+                                <Search size={14} color="#2563eb" />
+                                <span>Lookup Alternatives</span>
+                              </button>
                             </div>
                           </div>
 
-                          {/* Patient Summary Card */}
-                          <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', padding: '12px', background: '#f9fafb', borderRadius: '10px' }}>
-                            <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#fff', border: '1px solid #e5e7eb', color: '#374151', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 600, flexShrink: 0 }}>
-                              {activeOrder.patient_name
-                                .split(' ')
-                                .map((w) => w[0])
-                                .join('')
-                                .slice(0, 2)
-                                .toUpperCase()}
-                            </div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>{activeOrder.patient_name}</div>
-                              <div style={{ fontSize: '12px', color: '#4b5563', fontFamily: MONO_FONT, marginTop: '2px' }}>
-                                {activeOrder.patient_uhid}
+                          {/* 7-Segment Progress Bar */}
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '6px' }}>
+                            {[1, 2, 3, 4, 5, 6, 7].map((s) => (
+                              <div
+                                key={s}
+                                style={{
+                                  height: '4px',
+                                  borderRadius: '2px',
+                                  background: s <= wizardStep ? '#2563eb' : '#e5e7eb',
+                                  transition: 'background-color 0.2s ease',
+                                }}
+                              />
+                            ))}
+                          </div>
+
+                          {/* Patient Summary & Clinical Metadata Overview (4 Columns matching Inventory Manager's metric row) */}
+                          <div
+                            style={{
+                              display: 'grid',
+                              gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                              gap: '12px',
+                              padding: '12px 16px',
+                              background: '#f8fafc',
+                              border: '1px solid #e2e8f0',
+                              borderRadius: '10px',
+                            }}
+                          >
+                            <div>
+                              <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Patient</div>
+                              <div style={{ fontSize: '14px', fontWeight: 700, color: '#111827', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {activeOrder.patient_name}
                               </div>
-                              <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>{activeOrder.doctor_name}</div>
-                              <div style={{ fontSize: '12px', color: '#6b7280' }}>Dx: {activeOrder.diagnosis || 'Acute Outpatient Care'}</div>
+                              <div style={{ fontSize: '11px', color: '#64748b', fontFamily: MONO_FONT }}>{activeOrder.patient_uhid}</div>
                             </div>
-                          </div>
-
-                          {/* Tags: Allergies & Payment Source */}
-                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-                            {activeOrder.has_allergy_warning && (
-                              <span style={{ display: 'inline-flex', alignItems: 'center', height: '26px', padding: '0 10px', borderRadius: '9999px', fontSize: '12px', fontWeight: 600, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
-                                Allergy Alert
-                              </span>
-                            )}
-                            <span style={{ display: 'inline-flex', alignItems: 'center', height: '26px', padding: '0 10px', borderRadius: '9999px', fontSize: '12px', fontWeight: 600, background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>
-                              {activeOrder.settlement_mode === 'INSURANCE' ? 'Insurance' : activeOrder.settlement_mode === 'PAY_AT_RECEPTION' ? 'Reception Pay' : 'Counter Pay'}
-                            </span>
+                            <div>
+                              <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Prescribing Doctor</div>
+                              <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {activeOrder.doctor_name}
+                              </div>
+                              <div style={{ fontSize: '11px', color: '#64748b' }}>Outpatient Department</div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Diagnosis / Encounter</div>
+                              <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {activeOrder.diagnosis || 'Acute Outpatient Care'}
+                              </div>
+                              <div style={{ fontSize: '11px', color: '#64748b' }}>Order #{activeOrder.order_number}</div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Clinical Flags</div>
+                              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
+                                {activeOrder.has_allergy_warning ? (
+                                  <span style={{ fontSize: '11px', fontWeight: 700, borderRadius: '4px', padding: '1px 6px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
+                                    Allergy Alert
+                                  </span>
+                                ) : (
+                                  <span style={{ fontSize: '11px', fontWeight: 600, borderRadius: '4px', padding: '1px 6px', background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' }}>
+                                    No Allergies
+                                  </span>
+                                )}
+                                {activeOrder.items?.some((it) => it.is_narcotic || it.medicine_schedule === 'H1') && (
+                                  <span style={{ fontSize: '11px', fontWeight: 700, borderRadius: '4px', padding: '1px 6px', background: '#111827', color: '#ffffff' }}>
+                                    Schedule H1 / CD
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           </div>
 
                           {/* PRESCRIPTION OUTCOME (Requirement 1, 2, 3) */}
                           {activeOrder.status !== 'DISPENSED' && activeOrder.status !== 'PURCHASED_OUTSIDE' && (
-                            <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #f3f4f6' }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                <span style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.05em', color: '#4b5563' }}>
+                            <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.05em', color: '#4b5563', textTransform: 'uppercase' }}>
                                   PRESCRIPTION OUTCOME
                                 </span>
                                 <span style={{ fontSize: '11px', color: '#6b7280' }}>
                                   Patient purchase choice
                                 </span>
                               </div>
-                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px' }}>
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '8px' }}>
                                 {[
                                   { key: 'FULL_PURCHASE', label: 'Full Purchase', desc: 'All medicines' },
                                   { key: 'PARTIAL_PURCHASE', label: 'Partial Purchase', desc: 'Selected items only' },
@@ -2025,7 +2470,7 @@ export const OPDPharmacistWorkspace: React.FC = () => {
                                         <div style={{ fontSize: '12px', fontWeight: 600, color: isSelected ? '#1d4ed8' : '#111827' }}>
                                           {opt.label}
                                         </div>
-                                        <div style={{ fontSize: '10px', color: '#6b7280' }}>
+                                        <div style={{ fontSize: '10px', color: '#6b7280', marginTop: '1px' }}>
                                           {opt.desc}
                                         </div>
                                       </div>
@@ -2036,11 +2481,11 @@ export const OPDPharmacistWorkspace: React.FC = () => {
 
                               {/* If PURCHASED OUTSIDE selected, show reason selector & confirm button */}
                               {prescriptionOutcome === 'PURCHASED_OUTSIDE' && (
-                                <div style={{ marginTop: '10px', padding: '10px', borderRadius: '8px', background: '#fef2f2', border: '1px solid #fecaca', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <div style={{ marginTop: '10px', padding: '12px', borderRadius: '8px', background: '#fef2f2', border: '1px solid #fecaca', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                   <div style={{ fontSize: '12px', fontWeight: 600, color: '#991b1b' }}>
                                     Reason for Outside Purchase:
                                   </div>
-                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '6px' }}>
                                     {[
                                       { key: 'PATIENT_CHOICE', label: 'Patient Choice' },
                                       { key: 'PRICE_CONCERN', label: 'Price Concern' },
@@ -2056,10 +2501,10 @@ export const OPDPharmacistWorkspace: React.FC = () => {
                                           gap: '6px',
                                           fontSize: '11px',
                                           cursor: 'pointer',
-                                          padding: '4px 6px',
+                                          padding: '6px 8px',
                                           borderRadius: '6px',
                                           background: outsideReason === r.key ? '#fff' : 'transparent',
-                                          border: `1px solid ${outsideReason === r.key ? '#ef4444' : 'transparent'}`,
+                                          border: `1px solid ${outsideReason === r.key ? '#ef4444' : '#fee2e2'}`,
                                           color: outsideReason === r.key ? '#991b1b' : '#4b5563',
                                           fontWeight: outsideReason === r.key ? 600 : 400,
                                         }}
@@ -2079,17 +2524,17 @@ export const OPDPharmacistWorkspace: React.FC = () => {
                                     value={outsideNotes}
                                     onChange={(e) => setOutsideNotes(e.target.value)}
                                     placeholder="Pharmacist audit remarks (optional)"
-                                    style={{ height: '32px', padding: '0 8px', borderRadius: '6px', border: '1px solid #fca5a5', fontSize: '12px', background: '#fff' }}
+                                    style={{ height: '34px', padding: '0 10px', borderRadius: '6px', border: '1px solid #fca5a5', fontSize: '12px', background: '#fff' }}
                                   />
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <span style={{ fontSize: '10px', color: '#6b7280' }}>
+                                    <span style={{ fontSize: '11px', color: '#6b7280' }}>
                                       Prescription will close without stock or billing impact.
                                     </span>
                                     <button
                                       onClick={handleConfirmPurchasedOutside}
                                       style={{
-                                        height: '30px',
-                                        padding: '0 12px',
+                                        height: '32px',
+                                        padding: '0 14px',
                                         borderRadius: '6px',
                                         background: '#dc2626',
                                         color: '#fff',
@@ -2107,7 +2552,7 @@ export const OPDPharmacistWorkspace: React.FC = () => {
 
                               {/* If DECIDE LATER selected */}
                               {prescriptionOutcome === 'DECIDE_LATER' && (
-                                <div style={{ marginTop: '8px', padding: '8px 10px', borderRadius: '6px', background: '#fffbeb', border: '1px solid #fde68a', fontSize: '11px', color: '#92400e' }}>
+                                <div style={{ marginTop: '8px', padding: '10px 12px', borderRadius: '6px', background: '#fffbeb', border: '1px solid #fde68a', fontSize: '12px', color: '#92400e' }}>
                                   Patient needs time to decide. No stock reserved and no invoice created. Prescription stays in queue for counter revisit.
                                 </div>
                               )}
@@ -3516,95 +3961,442 @@ export const OPDPharmacistWorkspace: React.FC = () => {
                 }}
               />
             ) : (
-              <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', overflow: 'hidden' }}>
-                <div style={{ padding: '20px 20px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
-                  <div>
-                    <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#111827' }}>OTC &amp; walk-in sales</h2>
-                    <p style={{ fontSize: '13px', color: '#4b5563', marginTop: '2px' }}>
-                      Non-prescription medicines only · Schedule H / H1 items need a prescription
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                  gap: '16px',
+                  alignItems: 'start',
+                  width: '100%',
+                  minWidth: 0,
+                  boxSizing: 'border-box',
+                }}
+              >
+                {/* Left Panel: 1 Column */}
+                <div
+                  style={{
+                    gridColumn: 'span 1',
+                    width: '100%',
+                    minWidth: 0,
+                    maxWidth: '100%',
+                    boxSizing: 'border-box',
+                    background: '#ffffff',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '12px',
+                    overflow: 'hidden',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                  }}
+                >
+                  <div style={{ padding: '16px 16px 14px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                      <h2 style={{ fontSize: '15px', fontWeight: 600, color: '#111827', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        OTC Direct Sales
+                      </h2>
+                      <span
+                        style={{
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          color: '#2563eb',
+                          background: '#eff6ff',
+                          border: '1px solid #bfdbfe',
+                          padding: '1px 8px',
+                          borderRadius: '9999px',
+                          whiteSpace: 'nowrap',
+                          flexShrink: 0,
+                        }}
+                      >
+                        {filteredOtcSales.length} Sales
+                      </span>
+                    </div>
+                    <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>
+                      Non-prescription walk-in sales &amp; cash counter
                     </p>
-                  </div>
-                  <button
-                    onClick={() => setIsCreatingOtcSale(true)}
-                    style={{ height: '40px', padding: '0 16px', borderRadius: '10px', background: '#2563eb', color: '#fff', border: '1px solid #2563eb', fontSize: '13px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
-                  >
-                    <Plus size={16} /> New sale
-                  </button>
-                </div>
 
-                <div style={{ overflowX: 'auto' }}>
-                  <div style={{ minWidth: '780px' }}>
-                    <div
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'minmax(150px, 1fr) minmax(150px, 1fr) minmax(200px, 1.6fr) minmax(130px, 1fr) 110px 96px',
-                        alignItems: 'center',
-                        height: '44px',
-                        background: '#f9fafb',
-                        borderTop: '1px solid #e5e7eb',
-                        borderBottom: '1px solid #e5e7eb',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        letterSpacing: '0.04em',
-                        color: '#4b5563',
-                      }}
-                    >
-                      <div style={{ padding: '0 16px' }}>INVOICE · TIME</div>
-                      <div style={{ padding: '0 16px' }}>CUSTOMER</div>
-                      <div style={{ padding: '0 16px' }}>ITEMS</div>
-                      <div style={{ padding: '0 16px' }}>AMOUNT · METHOD</div>
-                      <div style={{ padding: '0 16px' }}>STATUS</div>
-                      <div style={{ padding: '0 16px', textAlign: 'right' }}>ACTION</div>
+                    <div style={{ position: 'relative', width: '100%' }}>
+                      <Search size={15} style={{ position: 'absolute', left: '11px', top: '11px', color: '#9ca3af' }} />
+                      <input
+                        value={otcSearch}
+                        onChange={(e) => setOtcSearch(e.target.value)}
+                        placeholder="Search invoice, customer or phone..."
+                        style={{
+                          width: '100%',
+                          height: '36px',
+                          padding: '0 12px 0 34px',
+                          border: '1px solid #d1d5db',
+                          borderRadius: '8px',
+                          fontSize: '13px',
+                          outline: 'none',
+                          boxSizing: 'border-box',
+                        }}
+                      />
                     </div>
 
-                    {otcSales.length === 0 ? (
-                      <div style={{ padding: '36px 16px', textAlign: 'center', color: '#6b7280', fontSize: '14px' }}>
-                        No OTC sales recorded yet today. Click "+ New sale" to start a new sale.
+                    {/* Mode Pills */}
+                    <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px', scrollbarWidth: 'none' }}>
+                      {(['all', 'Cash', 'Card', 'UPI'] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          onClick={() => setOtcModeFilter(mode)}
+                          style={getPillStyle(otcModeFilter === mode)}
+                        >
+                          {mode === 'all' ? 'All Payments' : mode}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* OTC Sales List */}
+                  <div
+                    style={{
+                      maxHeight: 'calc(100vh - 290px)',
+                      overflowY: 'auto',
+                      borderTop: '1px solid #f3f4f6',
+                      display: 'flex',
+                      flexDirection: 'column',
+                    }}
+                  >
+                    {filteredOtcSales.length === 0 ? (
+                      <div style={{ padding: '36px 16px', textAlign: 'center', color: '#6b7280', fontSize: '13px' }}>
+                        No OTC sales match filters. Click "+ New sale" to record one.
                       </div>
                     ) : (
-                      otcSales.map((s) => (
-                        <div
-                          key={s.id}
-                          style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'minmax(150px, 1fr) minmax(150px, 1fr) minmax(200px, 1.6fr) minmax(130px, 1fr) 110px 96px',
-                            alignItems: 'center',
-                            minHeight: '56px',
-                            borderBottom: '1px solid #f3f4f6',
-                            background: '#fff',
-                          }}
-                        >
-                          <div style={{ padding: '10px 16px' }}>
-                            <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827', fontFamily: MONO_FONT }}>{s.sale_number}</div>
-                            <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>Today</div>
+                      filteredOtcSales.map((s) => {
+                        const isSelected = activeOtcSale?.id === s.id;
+                        return (
+                          <div
+                            key={s.id}
+                            onClick={() => setSelectedOtcId(s.id)}
+                            style={{
+                              padding: '12px 14px',
+                              borderBottom: '1px solid #f1f5f9',
+                              borderLeft: isSelected ? '3px solid #2563eb' : '3px solid transparent',
+                              background: isSelected ? '#eff6ff' : '#ffffff',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '6px',
+                              transition: 'all 0.12s ease',
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ fontSize: '13px', fontWeight: 700, color: isSelected ? '#1d4ed8' : '#111827', fontFamily: MONO_FONT }}>
+                                {s.sale_number}
+                              </span>
+                              <span style={{ fontSize: '13px', fontWeight: 700, color: '#111827' }}>
+                                {formatINR(Number(s.total_amount))}
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: '#4b5563' }}>
+                              <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '170px' }}>
+                                {s.customer_name || 'Walk-in Customer'}
+                              </span>
+                              <span style={{ fontSize: '11px', color: '#64748b' }}>
+                                {s.items?.length || 1} items
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
+                              <span style={{ fontSize: '11px', fontWeight: 600, color: '#0f766e', background: '#f0fdfa', border: '1px solid #ccfbf1', padding: '1px 6px', borderRadius: '4px' }}>
+                                {s.payment_mode || 'Cash'}
+                              </span>
+                              <span style={{ fontSize: '11px', fontWeight: 600, color: '#16a34a', background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '1px 6px', borderRadius: '4px' }}>
+                                Settled
+                              </span>
+                            </div>
                           </div>
-                          <div style={{ padding: '10px 16px', minWidth: 0 }}>
-                            <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>{s.customer_name}</div>
-                            <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>{s.customer_phone || '—'}</div>
-                          </div>
-                          <div style={{ padding: '10px 16px', minWidth: 0 }}>
-                            <div style={{ fontSize: '14px', color: '#111827' }}>{s.items?.length || 1} items</div>
-                          </div>
-                          <div style={{ padding: '10px 16px' }}>
-                            <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>{formatINR(Number(s.total_amount))}</div>
-                            <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>{s.payment_mode}</div>
-                          </div>
-                          <div style={{ padding: '10px 16px' }}>
-                            <span style={{ display: 'inline-flex', alignItems: 'center', height: '24px', padding: '0 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' }}>
-                              Settled
-                            </span>
-                          </div>
-                          <div style={{ padding: '10px 16px', display: 'flex', justifyContent: 'flex-end' }}>
-                            <button
-                              onClick={() => showNotice(`Printed invoice for ${s.sale_number}`)}
-                              style={{ height: '36px', padding: '0 14px', borderRadius: '10px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', background: '#fff', color: '#111827', border: '1px solid #d1d5db' }}
-                            >
-                              Print
-                            </button>
-                          </div>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
+                  </div>
+                </div>
+
+                {/* Right Panel */}
+                <div
+                  style={{
+                    gridColumn: 'span 3',
+                    width: '100%',
+                    minWidth: 0,
+                    maxWidth: '100%',
+                    boxSizing: 'border-box',
+                    background: '#ffffff',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '12px',
+                    position: 'sticky',
+                    top: '70px',
+                    maxHeight: 'calc(100vh - 120px)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    overflow: 'hidden',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                  }}
+                >
+                  {/* Context Header */}
+                  <div
+                    style={{
+                      padding: '16px 24px',
+                      borderBottom: '1px solid #e5e7eb',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      background: '#ffffff',
+                      flexShrink: 0,
+                      gap: '12px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                      <Receipt size={20} color="#2563eb" />
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#111827', margin: 0, fontFamily: MONO_FONT }}>
+                            {activeOtcSale?.sale_number || 'Direct OTC Sale'}
+                          </h3>
+                          <span style={{ fontSize: '11px', fontWeight: 700, color: '#15803d', background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '2px 8px', borderRadius: '6px' }}>
+                            Settled &amp; Billed
+                          </span>
+                        </div>
+                        <p style={{ fontSize: '12px', color: '#64748b', margin: '2px 0 0' }}>
+                          Walk-in outpatient tax invoice · Dispensed at Main Counter 2
+                        </p>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <button
+                        onClick={() => showNotice(`Reprinted invoice ${activeOtcSale?.sale_number || ''}`)}
+                        style={{
+                          height: '36px',
+                          padding: '0 14px',
+                          borderRadius: '8px',
+                          border: '1px solid #d1d5db',
+                          background: '#ffffff',
+                          color: '#374151',
+                          fontSize: '13px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                        }}
+                      >
+                        <Printer size={15} />
+                        Reprint Invoice
+                      </button>
+                      <button
+                        onClick={() => setIsCreatingOtcSale(true)}
+                        style={{
+                          height: '36px',
+                          padding: '0 16px',
+                          borderRadius: '8px',
+                          border: 'none',
+                          background: '#2563eb',
+                          color: '#ffffff',
+                          fontSize: '13px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                        }}
+                      >
+                        <Plus size={15} />
+                        New Sale
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 4-Box Overview Strip */}
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                      gap: '12px',
+                      padding: '16px 24px',
+                      background: '#f8fafc',
+                      borderBottom: '1px solid #e5e7eb',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                        Customer
+                      </div>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827', marginTop: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {activeOtcSale?.customer_name || 'Walk-in Customer'}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#64748b', marginTop: '1px' }}>
+                        Ph: {activeOtcSale?.customer_phone || 'Not recorded'}
+                      </div>
+                    </div>
+
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                        Payment Mode
+                      </div>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827', marginTop: '3px' }}>
+                        {activeOtcSale?.payment_mode || 'Cash'}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#64748b', marginTop: '1px' }}>
+                        Ref: {activeOtcSale?.payment_reference || 'POS-CASH-OK'}
+                      </div>
+                    </div>
+
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                        Dispensed By
+                      </div>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827', marginTop: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {activeOtcSale?.sold_by_name || 'Counter Pharmacist'}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#64748b', marginTop: '1px' }}>
+                        Main OPD Counter 2
+                      </div>
+                    </div>
+
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                        Net Amount
+                      </div>
+                      <div style={{ fontSize: '16px', fontWeight: 700, color: '#16a34a', marginTop: '2px' }}>
+                        {formatINR(Number(activeOtcSale?.total_amount || 0))}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#64748b', marginTop: '1px' }}>
+                        Includes Tax: {formatINR(Number(activeOtcSale?.tax_amount || 0))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Scrollable Items Table & Financial Breakdown */}
+                  <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <div>
+                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#475569', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: '8px' }}>
+                        Dispensed Items ({activeOtcSale?.items?.length || 1})
+                      </div>
+                      <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', overflow: 'hidden' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 2fr) 110px 80px 100px 100px', background: '#f8fafc', padding: '10px 14px', fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', borderBottom: '1px solid #e5e7eb' }}>
+                          <div>MEDICINE / DESCRIPTION</div>
+                          <div>BATCH #</div>
+                          <div style={{ textAlign: 'center' }}>QTY</div>
+                          <div style={{ textAlign: 'right' }}>UNIT PRICE</div>
+                          <div style={{ textAlign: 'right' }}>TOTAL</div>
+                        </div>
+
+                        {(activeOtcSale?.items && activeOtcSale.items.length > 0) ? (
+                          activeOtcSale.items.map((it: any, idx: number) => (
+                            <div key={idx} style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 2fr) 110px 80px 100px 100px', padding: '12px 14px', borderBottom: idx < (activeOtcSale.items.length - 1) ? '1px solid #f1f5f9' : 'none', alignItems: 'center', fontSize: '13px' }}>
+                              <div>
+                                <div style={{ fontWeight: 600, color: '#111827' }}>{it.medicine_name}</div>
+                                <div style={{ fontSize: '11px', color: '#64748b' }}>Non-prescription OTC</div>
+                              </div>
+                              <div style={{ fontFamily: MONO_FONT, fontSize: '12px', color: '#475569' }}>
+                                {it.batch_number || 'BAT-2026-X'}
+                              </div>
+                              <div style={{ textAlign: 'center', fontWeight: 600, color: '#111827' }}>
+                                {it.quantity}
+                              </div>
+                              <div style={{ textAlign: 'right', color: '#475569' }}>
+                                {formatINR(Number(it.unit_price))}
+                              </div>
+                              <div style={{ textAlign: 'right', fontWeight: 600, color: '#111827' }}>
+                                {formatINR(Number(it.line_total || it.quantity * it.unit_price))}
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 2fr) 110px 80px 100px 100px', padding: '12px 14px', alignItems: 'center', fontSize: '13px' }}>
+                            <div>
+                              <div style={{ fontWeight: 600, color: '#111827' }}>Paracetamol 650 mg Tablets</div>
+                              <div style={{ fontSize: '11px', color: '#64748b' }}>Strip of 10 Tablets · OTC Analgesic</div>
+                            </div>
+                            <div style={{ fontFamily: MONO_FONT, fontSize: '12px', color: '#475569' }}>PCM-2026-A</div>
+                            <div style={{ textAlign: 'center', fontWeight: 600, color: '#111827' }}>2</div>
+                            <div style={{ textAlign: 'right', color: '#475569' }}>₹30.00</div>
+                            <div style={{ textAlign: 'right', fontWeight: 600, color: '#111827' }}>{formatINR(Number(activeOtcSale?.total_amount || 60))}</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Settlement Receipt Summary Box */}
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
+                      <div style={{ width: '280px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#64748b' }}>
+                          <span>Subtotal Amount</span>
+                          <span>{formatINR(Number(activeOtcSale?.subtotal_amount || activeOtcSale?.total_amount || 0))}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#64748b' }}>
+                          <span>CGST (6%) + SGST (6%)</span>
+                          <span>{formatINR(Number(activeOtcSale?.tax_amount || 0))}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: 700, color: '#0f172a', paddingTop: '6px', borderTop: '1px solid #cbd5e1' }}>
+                          <span>Net Payable</span>
+                          <span>{formatINR(Number(activeOtcSale?.total_amount || 0))}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#16a34a', fontWeight: 600, marginTop: '2px' }}>
+                          <span>Payment Received ({activeOtcSale?.payment_mode || 'Cash'})</span>
+                          <span>PAID IN FULL</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sticky Footer */}
+                  <div
+                    style={{
+                      padding: '14px 24px',
+                      background: '#ffffff',
+                      borderTop: '1px solid #e5e7eb',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <span style={{ fontSize: '12px', color: '#64748b' }}>
+                      Logged at {activeOtcSale?.created_at ? new Date(activeOtcSale.created_at).toLocaleTimeString() : '10:30 AM'} · Cash Drawer Reconciled
+                    </span>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        onClick={() => {
+                          setTab('returns');
+                          setNewReturnOpen(true);
+                          setNewReturnSearch(activeOtcSale?.sale_number || '');
+                        }}
+                        style={{
+                          height: '36px',
+                          padding: '0 14px',
+                          borderRadius: '8px',
+                          border: '1px solid #e2e8f0',
+                          background: '#ffffff',
+                          color: '#475569',
+                          fontSize: '13px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Initiate OTC Return
+                      </button>
+                      <button
+                        onClick={() => showNotice(`Printed tax invoice for ${activeOtcSale?.sale_number || ''}`)}
+                        style={{
+                          height: '36px',
+                          padding: '0 16px',
+                          borderRadius: '8px',
+                          border: 'none',
+                          background: '#2563eb',
+                          color: '#ffffff',
+                          fontSize: '13px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                        }}
+                      >
+                        <Printer size={15} />
+                        Print Customer Slip
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -3615,127 +4407,442 @@ export const OPDPharmacistWorkspace: React.FC = () => {
               TAB 3: COMPLETED TODAY
           ========================================== */}
           {currentTab === 'done' && (
-            <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-              <div style={{ flex: '1 1 620px', minWidth: 0, background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', overflow: 'hidden' }}>
-                <div style={{ padding: '20px 20px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
-                  <div>
-                    <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#111827' }}>Completed today</h2>
-                    <p style={{ fontSize: '13px', color: '#4b5563', marginTop: '2px' }}>
-                      Prescriptions dispensed this shift · billing, stock and patient record already posted
-                    </p>
-                  </div>
-                  <input
-                    value={compSearch}
-                    onChange={(e) => setCompSearch(e.target.value)}
-                    placeholder="Filter by patient, UHID or dispense ID"
-                    style={{ height: '40px', width: '260px', padding: '0 12px', border: '1px solid #e5e7eb', borderRadius: '10px', fontSize: '13px', outline: 'none' }}
-                  />
-                </div>
-
-                <div style={{ overflowX: 'auto' }}>
-                  <div style={{ minWidth: '820px' }}>
-                    <div
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                gap: '16px',
+                alignItems: 'start',
+                width: '100%',
+                minWidth: 0,
+                boxSizing: 'border-box',
+              }}
+            >
+              {/* Left Panel: 1 Column */}
+              <div
+                style={{
+                  gridColumn: 'span 1',
+                  width: '100%',
+                  minWidth: 0,
+                  maxWidth: '100%',
+                  boxSizing: 'border-box',
+                  background: '#ffffff',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '12px',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                }}
+              >
+                <div style={{ padding: '16px 16px 14px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                    <h2 style={{ fontSize: '15px', fontWeight: 600, color: '#111827', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      Completed Today
+                    </h2>
+                    <span
                       style={{
-                        display: 'grid',
-                        gridTemplateColumns: '72px minmax(170px, 1.2fr) minmax(200px, 1.5fr) minmax(150px, 1fr) minmax(140px, 1fr) 96px',
-                        alignItems: 'center',
-                        height: '44px',
-                        background: '#f9fafb',
-                        borderTop: '1px solid #e5e7eb',
-                        borderBottom: '1px solid #e5e7eb',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        letterSpacing: '0.04em',
-                        color: '#4b5563',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        color: '#16a34a',
+                        background: '#f0fdf4',
+                        border: '1px solid #bbf7d0',
+                        padding: '1px 8px',
+                        borderRadius: '9999px',
+                        whiteSpace: 'nowrap',
+                        flexShrink: 0,
                       }}
                     >
-                      <div style={{ padding: '0 16px' }}>TIME</div>
-                      <div style={{ padding: '0 16px' }}>PATIENT · DISPENSE</div>
-                      <div style={{ padding: '0 16px' }}>ITEMS</div>
-                      <div style={{ padding: '0 16px' }}>PAYMENT</div>
-                      <div style={{ padding: '0 16px' }}>FLAGS</div>
-                      <div style={{ padding: '0 16px', textAlign: 'right' }}>ACTION</div>
-                    </div>
+                      {filteredCompleted.length} Dispensed
+                    </span>
+                  </div>
+                  <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>
+                    Fulfilled prescriptions · ledger &amp; stock deducted
+                  </p>
 
-                    {completedList.map((d) => (
-                      <div
-                        key={d.id}
-                        onClick={() => setSelectedCompId(d.id)}
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: '72px minmax(170px, 1.2fr) minmax(200px, 1.5fr) minmax(150px, 1fr) minmax(140px, 1fr) 96px',
-                          alignItems: 'center',
-                          minHeight: '56px',
-                          borderBottom: '1px solid #f3f4f6',
-                          background: selectedCompId === d.id ? '#eff6ff' : '#fff',
-                          cursor: 'pointer',
-                        }}
+                  <div style={{ position: 'relative', width: '100%' }}>
+                    <Search size={15} style={{ position: 'absolute', left: '11px', top: '11px', color: '#9ca3af' }} />
+                    <input
+                      value={compSearch}
+                      onChange={(e) => setCompSearch(e.target.value)}
+                      placeholder="Filter patient, UHID or dispense ID..."
+                      style={{
+                        width: '100%',
+                        height: '36px',
+                        padding: '0 12px 0 34px',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '8px',
+                        fontSize: '13px',
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+
+                  {/* Filter Pills */}
+                  <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px', scrollbarWidth: 'none' }}>
+                    {[
+                      { k: 'all', l: 'All' },
+                      { k: 'cash', l: 'Cash' },
+                      { k: 'card', l: 'Card' },
+                      { k: 'tpa', l: 'Insurance' },
+                    ].map((p) => (
+                      <button
+                        key={p.k}
+                        onClick={() => setCompFilter(p.k)}
+                        style={getPillStyle(compFilter === p.k)}
                       >
-                        <div style={{ padding: '10px 16px', fontSize: '13px', color: '#4b5563' }}>{d.time || '10:31'}</div>
-                        <div style={{ padding: '10px 16px', minWidth: 0 }}>
-                          <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>{d.patient}</div>
-                          <div style={{ fontSize: '12px', color: '#6b7280', fontFamily: MONO_FONT, marginTop: '2px' }}>{d.id}</div>
-                        </div>
-                        <div style={{ padding: '10px 16px', minWidth: 0 }}>
-                          <div style={{ fontSize: '14px', color: '#111827' }}>{d.items}</div>
-                          <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>{d.items_sub}</div>
-                        </div>
-                        <div style={{ padding: '10px 16px' }}>
-                          <div style={{ fontSize: '13px', color: '#111827' }}>{d.mode}</div>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', height: '22px', marginTop: '4px', padding: '0 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' }}>
-                            Paid
-                          </span>
-                        </div>
-                        <div style={{ padding: '10px 16px', display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                          {d.flags?.map((f, fi) => (
-                            <span key={fi} style={{ fontSize: '11px', fontWeight: 700, borderRadius: '4px', padding: '1px 6px', background: f.bg, color: f.fg }}>
-                              {f.text}
-                            </span>
-                          ))}
-                        </div>
-                        <div style={{ padding: '10px 16px', display: 'flex', justifyContent: 'flex-end' }}>
-                          <button
-                            onClick={() => setSelectedCompId(d.id)}
-                            style={{ height: '36px', padding: '0 14px', borderRadius: '10px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', background: '#fff', color: '#2563eb', border: '1px solid #bfdbfe' }}
-                          >
-                            View
-                          </button>
-                        </div>
-                      </div>
+                        {p.l}
+                      </button>
                     ))}
                   </div>
                 </div>
+
+                {/* Completed Items List */}
+                <div
+                  style={{
+                    maxHeight: 'calc(100vh - 290px)',
+                    overflowY: 'auto',
+                    borderTop: '1px solid #f3f4f6',
+                    display: 'flex',
+                    flexDirection: 'column',
+                  }}
+                >
+                  {filteredCompleted.length === 0 ? (
+                    <div style={{ padding: '36px 16px', textAlign: 'center', color: '#6b7280', fontSize: '13px' }}>
+                      No completed dispenses found for this filter.
+                    </div>
+                  ) : (
+                    filteredCompleted.map((d) => {
+                      const isSelected = activeCompleted?.id === d.id;
+                      return (
+                        <div
+                          key={d.id}
+                          onClick={() => setSelectedCompId(d.id)}
+                          style={{
+                            padding: '12px 14px',
+                            borderBottom: '1px solid #f1f5f9',
+                            borderLeft: isSelected ? '3px solid #2563eb' : '3px solid transparent',
+                            background: isSelected ? '#eff6ff' : '#ffffff',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '5px',
+                            transition: 'all 0.12s ease',
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '14px', fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '170px' }}>
+                              {d.patient}
+                            </span>
+                            <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>
+                              {d.time || '10:31'}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: '#64748b' }}>
+                            <span style={{ fontFamily: MONO_FONT, fontSize: '11px', color: '#475569' }}>
+                              {d.id}
+                            </span>
+                            <span style={{ fontWeight: 600, color: '#0f172a' }}>
+                              {d.total_amount ? formatINR(d.total_amount) : 'Paid'}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#4b5563', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {d.items}
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '3px' }}>
+                            <span style={{ fontSize: '11px', fontWeight: 600, color: '#15803d', background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '1px 6px', borderRadius: '4px' }}>
+                              {d.mode || 'Settled'}
+                            </span>
+                            <div style={{ display: 'flex', gap: '4px' }}>
+                              {d.flags?.slice(0, 1).map((f, fi) => (
+                                <span key={fi} style={{ fontSize: '10px', fontWeight: 700, borderRadius: '4px', padding: '1px 5px', background: f.bg, color: f.fg }}>
+                                  {f.text}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               </div>
 
-              {/* Right Panel: Dispense Details & Initiate Return */}
-              <div style={{ flex: '0 1 400px', minWidth: '340px', display: 'flex', flexDirection: 'column', gap: '8px', position: 'sticky', top: '76px' }}>
-                <div style={{ padding: '0 4px', fontSize: '12px', fontWeight: 600, letterSpacing: '0.06em', color: '#6b7280' }}>
-                  DISPENSE RECORD
-                </div>
-                {selectedCompId && (
-                  <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', overflow: 'hidden' }}>
-                    <div style={{ padding: '20px', borderBottom: '1px solid #f3f4f6', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <h3 style={{ fontSize: '20px', fontWeight: 600, color: '#111827' }}>{selectedCompId}</h3>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', height: '24px', padding: '0 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' }}>
-                          Fulfilled
+              {/* Right Panel */}
+              <div
+                style={{
+                  gridColumn: 'span 3',
+                  width: '100%',
+                  minWidth: 0,
+                  maxWidth: '100%',
+                  boxSizing: 'border-box',
+                  background: '#ffffff',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '12px',
+                  position: 'sticky',
+                  top: '70px',
+                  maxHeight: 'calc(100vh - 120px)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                }}
+              >
+                {/* Header */}
+                <div
+                  style={{
+                    padding: '16px 24px',
+                    borderBottom: '1px solid #e5e7eb',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    background: '#ffffff',
+                    flexShrink: 0,
+                    gap: '12px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                    <CheckCircle2 size={20} color="#16a34a" />
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#111827', margin: 0, fontFamily: MONO_FONT }}>
+                          {activeCompleted?.id || 'DISP-RECORD'}
+                        </h3>
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#15803d', background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '2px 8px', borderRadius: '6px' }}>
+                          Fulfilled &amp; Released
                         </span>
                       </div>
-                    </div>
-                    <div style={{ padding: '16px 20px', borderTop: '1px solid #e5e7eb' }}>
-                      <button
-                        onClick={() => {
-                          setTab('returns');
-                          setNewReturnOpen(true);
-                          setNewReturnSearch(selectedCompId);
-                        }}
-                        style={{ width: '100%', height: '40px', borderRadius: '10px', background: '#fff', color: '#111827', border: '1px solid #d1d5db', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
-                      >
-                        Initiate return for this dispense
-                      </button>
+                      <p style={{ fontSize: '12px', color: '#64748b', margin: '2px 0 0' }}>
+                        Dispense record · Patient counselled and medications released
+                      </p>
                     </div>
                   </div>
-                )}
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button
+                      onClick={() => showNotice(`Printed dispense slip for ${activeCompleted?.id}`)}
+                      style={{
+                        height: '36px',
+                        padding: '0 14px',
+                        borderRadius: '8px',
+                        border: '1px solid #d1d5db',
+                        background: '#ffffff',
+                        color: '#374151',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <Printer size={15} />
+                      Print Slip
+                    </button>
+                    <button
+                      onClick={() => {
+                        setTab('returns');
+                        setNewReturnOpen(true);
+                        setNewReturnSearch(activeCompleted?.id || '');
+                      }}
+                      style={{
+                        height: '36px',
+                        padding: '0 16px',
+                        borderRadius: '8px',
+                        border: '1px solid #bfdbfe',
+                        background: '#eff6ff',
+                        color: '#1d4ed8',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <RotateCcw size={15} />
+                      Initiate Return
+                    </button>
+                  </div>
+                </div>
+
+                {/* 4-Box Overview Strip */}
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                    gap: '12px',
+                    padding: '16px 24px',
+                    background: '#f8fafc',
+                    borderBottom: '1px solid #e5e7eb',
+                    flexShrink: 0,
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                      Patient
+                    </div>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827', marginTop: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {activeCompleted?.patient || 'Patient'}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '1px' }}>
+                      UHID: {activeCompleted?.uhid || '202610-0012'}
+                    </div>
+                  </div>
+
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                      Prescriber
+                    </div>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827', marginTop: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {activeCompleted?.doctor || 'Consulting Physician'}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '1px' }}>
+                      Outpatient Clinic
+                    </div>
+                  </div>
+
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                      Payment Status
+                    </div>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827', marginTop: '3px' }}>
+                      {activeCompleted?.mode || 'Direct Cash'}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#15803d', fontWeight: 600, marginTop: '1px' }}>
+                      Cleared &amp; Invoiced
+                    </div>
+                  </div>
+
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                      Dispense Time
+                    </div>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827', marginTop: '3px' }}>
+                      {activeCompleted?.time || '10:31 AM'}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '1px' }}>
+                      Morning Shift · Desk 2
+                    </div>
+                  </div>
+                </div>
+
+                {/* Content Body: Dispensed Medication Lines & Counseling */}
+                <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#475569', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: '8px' }}>
+                      Fulfilled Prescription Lines
+                    </div>
+                    <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', overflow: 'hidden' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 2fr) 110px 80px 100px 100px', background: '#f8fafc', padding: '10px 14px', fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', borderBottom: '1px solid #e5e7eb' }}>
+                        <div>MEDICINE</div>
+                        <div>BATCH DISPENSED</div>
+                        <div style={{ textAlign: 'center' }}>QTY</div>
+                        <div style={{ textAlign: 'right' }}>UNIT PRICE</div>
+                        <div style={{ textAlign: 'right' }}>TOTAL</div>
+                      </div>
+
+                      {activeCompleted?.lines && activeCompleted.lines.length > 0 ? (
+                        activeCompleted.lines.map((l: any, li: number) => (
+                          <div key={li} style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 2fr) 110px 80px 100px 100px', padding: '12px 14px', borderBottom: li < (activeCompleted.lines.length - 1) ? '1px solid #f1f5f9' : 'none', alignItems: 'center', fontSize: '13px' }}>
+                            <div>
+                              <div style={{ fontWeight: 600, color: '#111827' }}>{l.name}</div>
+                              <div style={{ fontSize: '11px', color: '#64748b' }}>
+                                {l.is_cold ? 'Cold Chain 2°C–8°C · ' : ''}
+                                {l.is_cd ? 'Schedule X Narcotic · ' : ''}
+                                Verified
+                              </div>
+                            </div>
+                            <div style={{ fontFamily: MONO_FONT, fontSize: '12px', color: '#475569' }}>
+                              {l.batch}
+                            </div>
+                            <div style={{ textAlign: 'center', fontWeight: 600, color: '#111827' }}>
+                              {l.qty}
+                            </div>
+                            <div style={{ textAlign: 'right', color: '#475569' }}>
+                              {formatINR(Number(l.unit_price))}
+                            </div>
+                            <div style={{ textAlign: 'right', fontWeight: 600, color: '#111827' }}>
+                              {formatINR(Number(l.amt))}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div style={{ padding: '16px 14px', fontSize: '13px', color: '#374151' }}>
+                          <div style={{ fontWeight: 600 }}>{activeCompleted?.items}</div>
+                          <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>{activeCompleted?.items_sub}</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Clinical Clearance & Patient Counseling Audit */}
+                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#475569', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                      Clinical Verification &amp; Counseling Checklist
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#15803d', background: '#f0fdf4', padding: '8px 12px', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+                        <ShieldCheck size={16} />
+                        <span>Patient Identity (UHID &amp; Name) Confirmed</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#15803d', background: '#f0fdf4', padding: '8px 12px', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+                        <ShieldCheck size={16} />
+                        <span>Allergy Cross-Reactivity Screen: Negative</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#15803d', background: '#f0fdf4', padding: '8px 12px', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+                        <ShieldCheck size={16} />
+                        <span>Drug Interactions Scanned: None Critical</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#15803d', background: '#f0fdf4', padding: '8px 12px', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+                        <ShieldCheck size={16} />
+                        <span>Verbal Counseling on Food &amp; Dose Given</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sticky Action Footer */}
+                <div
+                  style={{
+                    padding: '14px 24px',
+                    background: '#ffffff',
+                    borderTop: '1px solid #e5e7eb',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexShrink: 0,
+                  }}
+                >
+                  <span style={{ fontSize: '12px', color: '#64748b' }}>
+                    Record permanently logged to patient pharmacy MAR profile
+                  </span>
+                  <button
+                    onClick={() => {
+                      setTab('returns');
+                      setNewReturnOpen(true);
+                      setNewReturnSearch(activeCompleted?.id || '');
+                    }}
+                    style={{
+                      height: '36px',
+                      padding: '0 16px',
+                      borderRadius: '8px',
+                      background: '#ffffff',
+                      color: '#111827',
+                      border: '1px solid #d1d5db',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                  >
+                    <RotateCcw size={15} />
+                    Initiate Return for this Dispense
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -3744,117 +4851,149 @@ export const OPDPharmacistWorkspace: React.FC = () => {
               TAB 4: RETURNS & REFUNDS
           ========================================== */}
           {currentTab === 'returns' && (
-            <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-              <div style={{ flex: '1 1 620px', minWidth: 0, background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', overflow: 'hidden' }}>
-                <div style={{ padding: '20px 20px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
-                  <div>
-                    <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#111827' }}>Returns &amp; refunds</h2>
-                    <p style={{ fontSize: '13px', color: '#4b5563', marginTop: '2px' }}>
-                      Inspect, restock or quarantine, then refund back through the original payment source
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setNewReturnOpen(true)}
-                    style={{ height: '40px', padding: '0 14px', borderRadius: '10px', background: '#fff', color: '#111827', border: '1px solid #d1d5db', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
-                  >
-                    New return
-                  </button>
-                </div>
-
-                <div style={{ padding: '0 20px 16px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  {['all', 'Requested', 'Inspected', 'Refunded', 'Rejected'].map((p) => (
-                    <button
-                      key={p}
-                      onClick={() => setReturnPill(p)}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                gap: '16px',
+                alignItems: 'start',
+                width: '100%',
+                minWidth: 0,
+                boxSizing: 'border-box',
+              }}
+            >
+              {/* Left Panel: 1 Column */}
+              <div
+                style={{
+                  gridColumn: 'span 1',
+                  width: '100%',
+                  minWidth: 0,
+                  maxWidth: '100%',
+                  boxSizing: 'border-box',
+                  background: '#ffffff',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '12px',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                }}
+              >
+                <div style={{ padding: '16px 16px 14px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                    <h2 style={{ fontSize: '15px', fontWeight: 600, color: '#111827', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      Returns &amp; Refunds
+                    </h2>
+                    <span
                       style={{
-                        height: '32px',
-                        padding: '0 12px',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        color: '#b45309',
+                        background: '#fffbeb',
+                        border: '1px solid #fde68a',
+                        padding: '1px 8px',
                         borderRadius: '9999px',
-                        fontSize: '13px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        background: returnPill === p ? '#2563eb' : '#fff',
-                        color: returnPill === p ? '#fff' : '#374151',
-                        border: `1px solid ${returnPill === p ? '#2563eb' : '#e5e7eb'}`,
+                        whiteSpace: 'nowrap',
+                        flexShrink: 0,
                       }}
                     >
-                      {p === 'all' ? 'All' : p}
-                    </button>
-                  ))}
+                      {returnsList.length} Requests
+                    </span>
+                  </div>
+                  <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>
+                    Inspect, restock or quarantine, then execute refund
+                  </p>
+
+                  <div style={{ position: 'relative', width: '100%' }}>
+                    <Search size={15} style={{ position: 'absolute', left: '11px', top: '11px', color: '#9ca3af' }} />
+                    <input
+                      value={returnSearch}
+                      onChange={(e) => setReturnSearch(e.target.value)}
+                      placeholder="Search patient or return ID..."
+                      style={{
+                        width: '100%',
+                        height: '36px',
+                        padding: '0 12px 0 34px',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '8px',
+                        fontSize: '13px',
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+
+                  {/* Status Pills */}
+                  <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px', scrollbarWidth: 'none' }}>
+                    {['all', 'Requested', 'Inspected', 'Refunded', 'Rejected'].map((p) => (
+                      <button
+                        key={p}
+                        onClick={() => setReturnPill(p)}
+                        style={getPillStyle(returnPill === p)}
+                      >
+                        {p === 'all' ? 'All Returns' : p}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
-                <div style={{ overflowX: 'auto' }}>
-                  <div style={{ minWidth: '860px' }}>
-                    <div
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'minmax(160px, 1.1fr) minmax(190px, 1.4fr) 64px minmax(170px, 1.3fr) minmax(150px, 1fr) 108px 96px',
-                        alignItems: 'center',
-                        height: '44px',
-                        background: '#f9fafb',
-                        borderTop: '1px solid #e5e7eb',
-                        borderBottom: '1px solid #e5e7eb',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        letterSpacing: '0.04em',
-                        color: '#4b5563',
-                      }}
-                    >
-                      <div style={{ padding: '0 16px' }}>RETURN · PATIENT</div>
-                      <div style={{ padding: '0 16px' }}>ITEM · ORIGINAL</div>
-                      <div style={{ padding: '0 16px' }}>QTY</div>
-                      <div style={{ padding: '0 16px' }}>REASON</div>
-                      <div style={{ padding: '0 16px' }}>REFUND ROUTE</div>
-                      <div style={{ padding: '0 16px' }}>STATUS</div>
-                      <div style={{ padding: '0 16px', textAlign: 'right' }}>ACTION</div>
+                {/* Returns List */}
+                <div
+                  style={{
+                    maxHeight: 'calc(100vh - 290px)',
+                    overflowY: 'auto',
+                    borderTop: '1px solid #f3f4f6',
+                    display: 'flex',
+                    flexDirection: 'column',
+                  }}
+                >
+                  {returnsList.length === 0 ? (
+                    <div style={{ padding: '36px 16px', textAlign: 'center', color: '#6b7280', fontSize: '13px' }}>
+                      No returns match the selected filter.
                     </div>
-
-                    {returnsList.map((r) => {
+                  ) : (
+                    returnsList.map((r) => {
                       const isSel = selectedReturnId === r.id;
                       return (
                         <div
                           key={r.id}
                           onClick={() => setSelectedReturnId(r.id)}
                           style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'minmax(160px, 1.1fr) minmax(190px, 1.4fr) 64px minmax(170px, 1.3fr) minmax(150px, 1fr) 108px 96px',
-                            alignItems: 'center',
-                            minHeight: '56px',
-                            borderBottom: '1px solid #f3f4f6',
-                            background: isSel ? '#eff6ff' : '#fff',
+                            padding: '12px 14px',
+                            borderBottom: '1px solid #f1f5f9',
+                            borderLeft: isSel ? '3px solid #2563eb' : '3px solid transparent',
+                            background: isSel ? '#eff6ff' : '#ffffff',
                             cursor: 'pointer',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '5px',
+                            transition: 'all 0.12s ease',
                           }}
                         >
-                          <div style={{ padding: '10px 16px', minWidth: 0 }}>
-                            <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>{r.patient_name}</div>
-                            <div style={{ fontSize: '12px', color: '#6b7280', fontFamily: MONO_FONT, marginTop: '2px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '13px', fontWeight: 700, color: isSel ? '#1d4ed8' : '#111827', fontFamily: MONO_FONT }}>
                               {r.return_number}
-                            </div>
+                            </span>
+                            <span style={{ fontSize: '13px', fontWeight: 700, color: '#111827' }}>
+                              {formatINR(Number(r.total_refund_amount))}
+                            </span>
                           </div>
-                          <div style={{ padding: '10px 16px', minWidth: 0 }}>
-                            <div style={{ fontSize: '14px', color: '#111827' }}>{r.items[0]?.medicine_name}</div>
-                            <div style={{ fontSize: '12px', color: '#6b7280', fontFamily: MONO_FONT, marginTop: '2px' }}>
-                              {r.original_reference}
-                            </div>
+                          <div style={{ fontSize: '13px', fontWeight: 600, color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {r.patient_name}
                           </div>
-                          <div style={{ padding: '10px 16px', fontSize: '14px', fontWeight: 600, color: '#111827' }}>
-                            {r.items[0]?.quantity_returned || 1}
+                          <div style={{ fontSize: '12px', color: '#6b7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {r.items[0]?.medicine_name} × {r.items[0]?.quantity_returned || 1}
                           </div>
-                          <div style={{ padding: '10px 16px', fontSize: '13px', color: '#4b5563' }}>{r.reason}</div>
-                          <div style={{ padding: '10px 16px' }}>
-                            <div style={{ fontSize: '13px', color: '#111827' }}>{r.refund_route}</div>
-                            <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>{formatINR(Number(r.total_refund_amount))}</div>
-                          </div>
-                          <div style={{ padding: '10px 16px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '3px' }}>
+                            <span style={{ fontSize: '11px', color: '#475569' }}>
+                              {r.refund_route}
+                            </span>
                             <span
                               style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                height: '24px',
-                                padding: '0 8px',
-                                borderRadius: '6px',
-                                fontSize: '12px',
+                                fontSize: '11px',
                                 fontWeight: 600,
+                                padding: '1px 6px',
+                                borderRadius: '4px',
                                 background:
                                   r.status === 'Refunded'
                                     ? '#f0fdf4'
@@ -3885,145 +5024,355 @@ export const OPDPharmacistWorkspace: React.FC = () => {
                               {r.status}
                             </span>
                           </div>
-                          <div style={{ padding: '10px 16px', display: 'flex', justifyContent: 'flex-end' }}>
-                            <button
-                              onClick={() => setSelectedReturnId(r.id)}
-                              style={{ height: '36px', padding: '0 14px', borderRadius: '10px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', background: isSel ? '#2563eb' : '#fff', color: isSel ? '#fff' : '#1d4ed8', border: `1px solid ${isSel ? '#2563eb' : '#bfdbfe'}` }}
-                            >
-                              Inspect
-                            </button>
-                          </div>
                         </div>
                       );
-                    })}
-                  </div>
+                    })
+                  )}
                 </div>
               </div>
 
-              {/* Right Panel: 3-step Return Inspection & Refund */}
-              <div style={{ flex: '0 1 400px', minWidth: '340px', display: 'flex', flexDirection: 'column', gap: '8px', position: 'sticky', top: '76px' }}>
-                <div style={{ padding: '0 4px', fontSize: '12px', fontWeight: 600, letterSpacing: '0.06em', color: '#6b7280' }}>
-                  RETURN INSPECTION &amp; REFUND
+              {/* Right Panel */}
+              <div
+                style={{
+                  gridColumn: 'span 3',
+                  width: '100%',
+                  minWidth: 0,
+                  maxWidth: '100%',
+                  boxSizing: 'border-box',
+                  background: '#ffffff',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '12px',
+                  position: 'sticky',
+                  top: '70px',
+                  maxHeight: 'calc(100vh - 120px)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                }}
+              >
+                {/* Header */}
+                <div
+                  style={{
+                    padding: '16px 24px',
+                    borderBottom: '1px solid #e5e7eb',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    background: '#ffffff',
+                    flexShrink: 0,
+                    gap: '12px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                    <RotateCcw size={20} color="#b45309" />
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#111827', margin: 0, fontFamily: MONO_FONT }}>
+                          {activeReturn?.return_number || 'RETURN INTAKE'}
+                        </h3>
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#1d4ed8', background: '#eff6ff', border: '1px solid #bfdbfe', padding: '2px 8px', borderRadius: '6px' }}>
+                          {activeReturn?.status || 'Requested'}
+                        </span>
+                        <span style={{ fontSize: '11px', fontWeight: 600, color: '#0f766e', background: '#f0fdfa', border: '1px solid #ccfbf1', padding: '2px 8px', borderRadius: '6px' }}>
+                          Posts to Billing
+                        </span>
+                      </div>
+                      <p style={{ fontSize: '12px', color: '#64748b', margin: '2px 0 0' }}>
+                        Medicine return intake &amp; multi-gate quality audit
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button
+                      onClick={() => setNewReturnOpen(true)}
+                      style={{
+                        height: '36px',
+                        padding: '0 16px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        background: '#2563eb',
+                        color: '#ffffff',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <Plus size={15} />
+                      New Return Intake
+                    </button>
+                  </div>
                 </div>
-                {activeReturn && (
-                  <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', overflow: 'hidden' }}>
-                    <div style={{ padding: '20px', borderBottom: '1px solid #f3f4f6', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <h3 style={{ fontSize: '20px', fontWeight: 600, color: '#111827' }}>{activeReturn.return_number}</h3>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', height: '24px', padding: '0 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>
-                          {activeReturn.status}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: '13px', color: '#6b7280' }}>
-                        Original: {activeReturn.original_reference} · {activeReturn.patient_name}
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                        <span style={{ color: '#4b5563' }}>Item</span>
-                        <span style={{ fontWeight: 600, color: '#111827' }}>
-                          {activeReturn.items[0]?.medicine_name} × {activeReturn.items[0]?.quantity_returned}
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                        <span style={{ color: '#4b5563' }}>Refund route</span>
-                        <span style={{ color: '#111827' }}>{activeReturn.refund_route}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', paddingTop: '6px', borderTop: '1px solid #f3f4f6' }}>
-                        <span style={{ fontWeight: 600, color: '#111827' }}>Refund amount</span>
-                        <span style={{ fontWeight: 700, color: '#111827' }}>{formatINR(Number(activeReturn.total_refund_amount))}</span>
+
+                {/* 4-Box Overview Strip */}
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                    gap: '12px',
+                    padding: '16px 24px',
+                    background: '#f8fafc',
+                    borderBottom: '1px solid #e5e7eb',
+                    flexShrink: 0,
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                      Patient Name
+                    </div>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827', marginTop: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {activeReturn?.patient_name || 'Patient'}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '1px' }}>
+                      Ref: {activeReturn?.original_reference || 'DISP-ORIGINAL'}
+                    </div>
+                  </div>
+
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                      Return Reason
+                    </div>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827', marginTop: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {activeReturn?.reason || 'Unused medication'}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '1px' }}>
+                      Route: {activeReturn?.refund_route || 'Original Card'}
+                    </div>
+                  </div>
+
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                      Item Count
+                    </div>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827', marginTop: '3px' }}>
+                      {activeReturn?.items?.length || 1} line item(s)
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '1px' }}>
+                      {activeReturn?.items[0]?.quantity_returned || 1} units returned
+                    </div>
+                  </div>
+
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                      Refund Due
+                    </div>
+                    <div style={{ fontSize: '16px', fontWeight: 700, color: '#b45309', marginTop: '2px' }}>
+                      {formatINR(Number(activeReturn?.total_refund_amount || 0))}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '1px' }}>
+                      Pending Pharmacist Clearance
+                    </div>
+                  </div>
+                </div>
+
+                {/* Content Body: Inspection, Checks & Disposition */}
+                <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {activeReturn?.non_returnable_note && (
+                    <div style={{ display: 'flex', gap: '10px', padding: '12px 16px', borderRadius: '10px', background: '#fef2f2', border: '1px solid #fecaca' }}>
+                      <CircleX size={18} color="#dc2626" style={{ flexShrink: 0, marginTop: '2px' }} />
+                      <div>
+                        <div style={{ fontSize: '14px', fontWeight: 600, color: '#dc2626' }}>Non-Returnable Clinical Item</div>
+                        <div style={{ fontSize: '13px', color: '#4b5563', marginTop: '2px' }}>{activeReturn.non_returnable_note}</div>
                       </div>
                     </div>
+                  )}
 
-                    {/* Non-returnable notice */}
-                    {activeReturn.non_returnable_note && (
-                      <div style={{ margin: '16px 20px 0', display: 'flex', gap: '10px', padding: '12px', borderRadius: '10px', background: '#fef2f2', border: '1px solid #fecaca' }}>
-                        <CircleX size={18} color="#dc2626" />
+                  {/* Return Line Item Detail */}
+                  <div>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#475569', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: '8px' }}>
+                      Returned Medication Information
+                    </div>
+                    <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', overflow: 'hidden' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 2fr) 120px 80px 100px 100px', background: '#f8fafc', padding: '10px 14px', fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', borderBottom: '1px solid #e5e7eb' }}>
+                        <div>MEDICINE</div>
+                        <div>ORIGINAL BATCH</div>
+                        <div style={{ textAlign: 'center' }}>QTY</div>
+                        <div style={{ textAlign: 'right' }}>UNIT REFUND</div>
+                        <div style={{ textAlign: 'right' }}>LINE TOTAL</div>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 2fr) 120px 80px 100px 100px', padding: '12px 14px', alignItems: 'center', fontSize: '13px' }}>
                         <div>
-                          <div style={{ fontSize: '14px', fontWeight: 600, color: '#dc2626' }}>Not returnable</div>
-                          <div style={{ fontSize: '12px', color: '#4b5563', marginTop: '2px' }}>{activeReturn.non_returnable_note}</div>
+                          <div style={{ fontWeight: 600, color: '#111827' }}>{activeReturn?.items[0]?.medicine_name}</div>
+                          <div style={{ fontSize: '11px', color: '#64748b' }}>Dispense Ref: {activeReturn?.original_reference}</div>
+                        </div>
+                        <div style={{ fontFamily: MONO_FONT, fontSize: '12px', color: '#475569' }}>
+                          {activeReturn?.items[0]?.batch_number || 'BAT-MATCHED'}
+                        </div>
+                        <div style={{ textAlign: 'center', fontWeight: 600, color: '#111827' }}>
+                          {activeReturn?.items[0]?.quantity_returned || 1}
+                        </div>
+                        <div style={{ textAlign: 'right', color: '#475569' }}>
+                          {formatINR(Number(activeReturn?.items[0]?.refund_unit_price || 0))}
+                        </div>
+                        <div style={{ textAlign: 'right', fontWeight: 600, color: '#b45309' }}>
+                          {formatINR(Number(activeReturn?.total_refund_amount || 0))}
                         </div>
                       </div>
-                    )}
+                    </div>
+                  </div>
 
-                    {/* Inspection Checklist */}
-                    {activeReturn.status === 'Requested' && !activeReturn.non_returnable_note && (
-                      <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                        <div style={{ fontSize: '12px', fontWeight: 600, letterSpacing: '0.06em', color: '#6b7280' }}>
-                          INSPECTION
-                        </div>
+                  {/* Physical Quality Checklist */}
+                  {activeReturn?.status === 'Requested' && !activeReturn?.non_returnable_note && (
+                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#475569', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                        Physical Quality Inspection Protocol
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px' }}>
                         {[
-                          { key: 'sealed', label: 'Pack sealed and unopened' },
-                          { key: 'batch_matches', label: 'Batch matches dispense record' },
-                          { key: 'expiry_ok', label: 'Expiry beyond 3 months' },
-                          { key: 'storage_ok', label: 'Stored correctly · no damage' },
+                          { key: 'sealed', label: 'Pack sealed & unopened' },
+                          { key: 'batch_matches', label: 'Batch number matches dispense record' },
+                          { key: 'expiry_ok', label: 'Expiry date is beyond 3 months' },
+                          { key: 'storage_ok', label: 'Storage temperature integrity maintained' },
                         ].map((c) => (
                           <div
                             key={c.key}
                             onClick={() => setRetInspectChecks({ ...retInspectChecks, [c.key]: !retInspectChecks[c.key] })}
-                            style={{ display: 'flex', gap: '10px', alignItems: 'center', padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: '10px', cursor: 'pointer' }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '10px',
+                              padding: '10px 12px',
+                              border: '1px solid #e2e8f0',
+                              borderRadius: '8px',
+                              background: '#ffffff',
+                              cursor: 'pointer',
+                              userSelect: 'none',
+                            }}
                           >
-                            <span style={{ width: '18px', height: '18px', flexShrink: 0, borderRadius: '5px', border: `1.5px solid ${retInspectChecks[c.key] ? '#2563eb' : '#d1d5db'}`, background: retInspectChecks[c.key] ? '#2563eb' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              {retInspectChecks[c.key] && <Check size={12} color="#fff" strokeWidth={3} />}
+                            <span
+                              style={{
+                                width: '18px',
+                                height: '18px',
+                                flexShrink: 0,
+                                borderRadius: '4px',
+                                border: `1.5px solid ${retInspectChecks[c.key] ? '#2563eb' : '#d1d5db'}`,
+                                background: retInspectChecks[c.key] ? '#2563eb' : '#ffffff',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              {retInspectChecks[c.key] && <Check size={12} color="#ffffff" strokeWidth={3} />}
                             </span>
-                            <span style={{ fontSize: '13px', color: '#111827' }}>{c.label}</span>
+                            <span style={{ fontSize: '13px', color: '#1e293b' }}>{c.label}</span>
                           </div>
                         ))}
+                      </div>
+                    </div>
+                  )}
 
-                        <div style={{ fontSize: '12px', fontWeight: 600, letterSpacing: '0.06em', color: '#6b7280', marginTop: '6px' }}>
-                          DISPOSITION
+                  {/* Ready for Refund Status Box */}
+                  {activeReturn?.status === 'Inspected' && (
+                    <div style={{ display: 'flex', gap: '12px', padding: '16px', borderRadius: '10px', background: '#f0f9ff', border: '1px solid #bae6fd' }}>
+                      <Receipt size={22} color="#0369a1" style={{ flexShrink: 0 }} />
+                      <div>
+                        <div style={{ fontSize: '14px', fontWeight: 600, color: '#0369a1' }}>
+                          Physical Inspection Passed ({activeReturn.disposition || 'Restocked'})
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                          <button
-                            onClick={() => handleInspectReturnConfirm('restock')}
-                            style={{ height: '40px', borderRadius: '10px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', background: '#2563eb', color: '#fff', border: '1px solid #2563eb' }}
-                          >
-                            Restock to shelf
-                          </button>
-                          <button
-                            onClick={() => handleInspectReturnConfirm('quarantine')}
-                            style={{ height: '40px', borderRadius: '10px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', background: '#fff', color: '#b45309', border: '1px solid #fde68a' }}
-                          >
-                            Quarantine / Dispose
-                          </button>
+                        <div style={{ fontSize: '13px', color: '#334155', marginTop: '2px' }}>
+                          Quality checks verified. Executing refund will post a reversal transaction to Billing via {activeReturn.refund_route}.
                         </div>
                       </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Sticky Action Footer */}
+                <div
+                  style={{
+                    padding: '14px 24px',
+                    background: '#ffffff',
+                    borderTop: '1px solid #e5e7eb',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexShrink: 0,
+                  }}
+                >
+                  <span style={{ fontSize: '12px', color: '#64748b' }}>
+                    Refund reversal strictly audits against cashier drawer and admission ledger
+                  </span>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    {activeReturn?.status === 'Requested' && !activeReturn?.non_returnable_note && (
+                      <>
+                        <button
+                          onClick={() => handleInspectReturnConfirm('quarantine')}
+                          style={{
+                            height: '36px',
+                            padding: '0 14px',
+                            borderRadius: '8px',
+                            background: '#ffffff',
+                            color: '#b45309',
+                            border: '1px solid #fde68a',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Quarantine / Dispose
+                        </button>
+                        <button
+                          onClick={() => handleInspectReturnConfirm('restock')}
+                          style={{
+                            height: '36px',
+                            padding: '0 18px',
+                            borderRadius: '8px',
+                            background: '#2563eb',
+                            color: '#ffffff',
+                            border: 'none',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Pass Quality &amp; Restock
+                        </button>
+                      </>
                     )}
 
-                    {/* Inspected - ready for refund */}
-                    {activeReturn.status === 'Inspected' && (
-                      <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                        <div style={{ display: 'flex', gap: '10px', padding: '12px', borderRadius: '10px', background: '#f0f9ff', border: '1px solid #bae6fd' }}>
-                          <Receipt size={18} color="#0369a1" />
-                          <div>
-                            <div style={{ fontSize: '14px', fontWeight: 600, color: '#0369a1' }}>
-                              Ready for refund ({activeReturn.disposition})
-                            </div>
-                            <div style={{ fontSize: '12px', color: '#4b5563', marginTop: '2px' }}>
-                              Refund posts to Billing as a reversal to {activeReturn.refund_route}.
-                            </div>
-                          </div>
-                        </div>
-                        <button
-                          onClick={handleProcessRefundConfirm}
-                          style={{ height: '40px', borderRadius: '10px', background: '#2563eb', color: '#fff', border: '1px solid #2563eb', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
-                        >
-                          Execute refund
-                        </button>
-                      </div>
+                    {activeReturn?.status === 'Inspected' && (
+                      <button
+                        onClick={handleProcessRefundConfirm}
+                        style={{
+                          height: '36px',
+                          padding: '0 20px',
+                          borderRadius: '8px',
+                          background: '#16a34a',
+                          color: '#ffffff',
+                          border: 'none',
+                          fontSize: '13px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Execute Refund ({formatINR(Number(activeReturn.total_refund_amount))})
+                      </button>
                     )}
 
-                    {/* Footer for non-returnable reject */}
-                    {activeReturn.non_returnable_note && activeReturn.status !== 'Rejected' && (
-                      <div style={{ padding: '16px 20px', borderTop: '1px solid #e5e7eb' }}>
-                        <button
-                          onClick={handleRejectReturnConfirm}
-                          style={{ width: '100%', height: '40px', borderRadius: '10px', background: '#fff', color: '#dc2626', border: '1px solid #fecaca', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
-                        >
-                          Reject return (Non-returnable item)
-                        </button>
-                      </div>
+                    {activeReturn?.non_returnable_note && activeReturn.status !== 'Rejected' && (
+                      <button
+                        onClick={handleRejectReturnConfirm}
+                        style={{
+                          height: '36px',
+                          padding: '0 16px',
+                          borderRadius: '8px',
+                          background: '#dc2626',
+                          color: '#ffffff',
+                          border: 'none',
+                          fontSize: '13px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Reject Return
+                      </button>
                     )}
                   </div>
-                )}
+                </div>
               </div>
             </div>
           )}
@@ -4032,134 +5381,643 @@ export const OPDPharmacistWorkspace: React.FC = () => {
               TAB 5: STOCK LOOKUP (READ-ONLY)
           ========================================== */}
           {currentTab === 'stock' && (
-            <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-              <div style={{ flex: '1 1 620px', minWidth: 0, background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', overflow: 'hidden' }}>
-                <div style={{ padding: '20px 20px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
-                  <div>
-                    <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#111827' }}>Stock lookup</h2>
-                    <p style={{ fontSize: '13px', color: '#4b5563', marginTop: '2px' }}>
-                      Live read from the pharmacy ledger · adjustments are made by the Inventory Manager
-                    </p>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                gap: '16px',
+                alignItems: 'start',
+                width: '100%',
+                minWidth: 0,
+                boxSizing: 'border-box',
+              }}
+            >
+              {/* Left Panel: 1 Column */}
+              <div
+                style={{
+                  gridColumn: 'span 1',
+                  width: '100%',
+                  minWidth: 0,
+                  maxWidth: '100%',
+                  boxSizing: 'border-box',
+                  background: '#ffffff',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '12px',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                }}
+              >
+                <div style={{ padding: '16px 16px 14px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                    <h2 style={{ fontSize: '15px', fontWeight: 600, color: '#111827', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      Counter Stock Lookup
+                    </h2>
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        color: '#2563eb',
+                        background: '#eff6ff',
+                        border: '1px solid #bfdbfe',
+                        padding: '1px 8px',
+                        borderRadius: '9999px',
+                        whiteSpace: 'nowrap',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {filteredStockItems.length} Items
+                    </span>
                   </div>
-                  <input
-                    value={stockSearch}
-                    onChange={(e) => setStockSearch(e.target.value)}
-                    placeholder="Search item, generic or code"
-                    style={{ height: '40px', width: '260px', padding: '0 12px', border: '1px solid #e5e7eb', borderRadius: '10px', fontSize: '13px', outline: 'none' }}
-                  />
+                  <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>
+                    Live read from pharmacy inventory ledger
+                  </p>
+
+                  {/* Big & Highlighted Stock Search Bar */}
+                  <div style={{ position: 'relative', width: '100%' }}>
+                    <Search
+                      size={18}
+                      style={{
+                        position: 'absolute',
+                        left: '14px',
+                        top: '14px',
+                        color: '#2563eb',
+                        pointerEvents: 'none',
+                      }}
+                    />
+                    <input
+                      id="pharmacy-stock-search-input"
+                      value={stockSearch}
+                      onChange={(e) => setStockSearch(e.target.value)}
+                      onKeyDown={(e) => handleStockListKey(e, true)}
+                      aria-controls="pharmacy-stock-listbox"
+                      aria-activedescendant={activeStockItem ? `stock-row-${activeStockItem.id}` : undefined}
+                      placeholder="Search medicine, generic or code..."
+                      autoFocus
+                      style={{
+                        width: '100%',
+                        height: '46px',
+                        padding: '0 38px 0 42px',
+                        border: '2px solid #2563eb',
+                        borderRadius: '10px',
+                        fontSize: '14px',
+                        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+                        fontWeight: 500,
+                        color: '#111827',
+                        background: '#ffffff',
+                        boxShadow: '0 0 0 3px rgba(37, 99, 235, 0.12), 0 1px 3px rgba(0, 0, 0, 0.05)',
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                        transition: 'all 0.15s ease',
+                      }}
+                    />
+                    {stockSearch && (
+                      <button
+                        onClick={() => setStockSearch('')}
+                        title="Clear search"
+                        style={{
+                          position: 'absolute',
+                          right: '12px',
+                          top: '13px',
+                          background: '#f1f5f9',
+                          border: 'none',
+                          borderRadius: '50%',
+                          width: '20px',
+                          height: '20px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          color: '#64748b',
+                          padding: 0,
+                        }}
+                      >
+                        <X size={13} />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Stock Pills with HMS Design Bible Typography & Colors */}
+                  <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px', scrollbarWidth: 'none' }}>
+                    {[
+                      { k: 'all', l: 'All Items', count: stockItems.length, color: 'blue' },
+                      { k: 'low', l: 'Low Stock', count: stockItems.filter((s) => s.in_stock > 0 && s.in_stock < s.reorder_level).length, color: 'amber' },
+                      { k: 'out', l: 'Out of Stock', count: stockItems.filter((s) => s.in_stock === 0).length, color: 'red' },
+                      { k: 'exp', l: 'Near Expiry', count: stockItems.filter((s) => s.status?.toLowerCase().includes('expir')).length, color: 'orange' },
+                    ].map((p) => {
+                      const isActive = stockPill === p.k;
+                      let bg = '#ffffff';
+                      let fg = '#4b5563';
+                      let bd = '#e5e7eb';
+                      let shadow = 'none';
+
+                      if (isActive) {
+                        if (p.color === 'blue') {
+                          bg = '#2563eb';
+                          fg = '#ffffff';
+                          bd = '#2563eb';
+                          shadow = '0 1px 3px rgba(37, 99, 235, 0.25)';
+                        } else if (p.color === 'amber') {
+                          bg = '#fffbeb';
+                          fg = '#b45309';
+                          bd = '#fde68a';
+                          shadow = '0 1px 3px rgba(245, 158, 11, 0.15)';
+                        } else if (p.color === 'red') {
+                          bg = '#fef2f2';
+                          fg = '#dc2626';
+                          bd = '#fecaca';
+                          shadow = '0 1px 3px rgba(220, 38, 38, 0.15)';
+                        } else if (p.color === 'orange') {
+                          bg = '#fff7ed';
+                          fg = '#c2410c';
+                          bd = '#fed7aa';
+                          shadow = '0 1px 3px rgba(194, 65, 12, 0.15)';
+                        }
+                      }
+
+                      return (
+                        <button
+                          key={p.k}
+                          onClick={() => setStockPill(p.k)}
+                          style={{
+                            height: '32px',
+                            padding: '0 12px',
+                            borderRadius: '9999px',
+                            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            letterSpacing: '-0.01em',
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                            background: bg,
+                            color: fg,
+                            border: `1px solid ${bd}`,
+                            boxShadow: shadow,
+                            outline: 'none',
+                            transition: 'all 0.15s ease',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            flexShrink: 0,
+                          }}
+                        >
+                          <span>{p.l}</span>
+                          <span
+                            style={{
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              opacity: isActive && p.color === 'blue' ? 0.9 : 0.85,
+                              padding: '1px 5px',
+                              borderRadius: '4px',
+                              background: isActive && p.color === 'blue' ? 'rgba(255,255,255,0.22)' : '#f1f5f9',
+                              color: isActive && p.color === 'blue' ? '#ffffff' : '#64748b',
+                            }}
+                          >
+                            {p.count}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
-                <div style={{ padding: '0 20px 16px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  {[
-                    { k: 'all', l: 'All' },
-                    { k: 'low', l: 'Low stock' },
-                    { k: 'out', l: 'Out of stock' },
-                    { k: 'exp', l: 'Near expiry' },
-                  ].map((p) => (
+                {/* Stock Items List — listbox: arrows / Home / End move the selection, which drives the right panel */}
+                <div
+                  id="pharmacy-stock-listbox"
+                  role="listbox"
+                  aria-label="Counter stock items"
+                  tabIndex={-1}
+                  onKeyDown={(e) => handleStockListKey(e)}
+                  style={{
+                    maxHeight: 'calc(100vh - 290px)',
+                    overflowY: 'auto',
+                    borderTop: '1px solid #f3f4f6',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    outline: 'none',
+                  }}
+                >
+                  {filteredStockItems.length === 0 ? (
+                    <div style={{ padding: '36px 16px', textAlign: 'center', color: '#6b7280', fontSize: '13px' }}>
+                      No formulary stock matches your search.
+                    </div>
+                  ) : (
+                    filteredStockItems.map((s) => {
+                      const isSel = activeStockItem?.id === s.id;
+                      const isOutOfStock = s.in_stock === 0;
+                      const isLowStock = !isOutOfStock && s.in_stock < s.reorder_level;
+                      const showNameTip = stockNameTip === s.id;
+                      const openNameTip = () => {
+                        const el = document.getElementById(`stock-name-${s.id}`);
+                        if (el && el.scrollWidth > el.clientWidth) setStockNameTip(s.id);
+                      };
+
+                      return (
+                        <div
+                          key={s.id}
+                          id={`stock-row-${s.id}`}
+                          role="option"
+                          aria-selected={isSel}
+                          aria-label={`${s.name}, ${s.in_stock} units total, ${s.counter_stock ?? 0} on counter, ${s.status}`}
+                          aria-describedby={showNameTip ? `stock-name-tip-${s.id}` : undefined}
+                          tabIndex={isSel ? 0 : -1}
+                          onClick={() => setSelectedStockId(s.id)}
+                          onFocus={() => { setSelectedStockId(s.id); openNameTip(); }}
+                          onBlur={() => setStockNameTip(null)}
+                          onMouseEnter={openNameTip}
+                          onMouseLeave={() => setStockNameTip(null)}
+                          style={{
+                            position: 'relative',
+                            padding: '12px 14px',
+                            borderBottom: '1px solid #f1f5f9',
+                            borderLeft: isSel ? '3px solid #2563eb' : '3px solid transparent',
+                            background: isSel ? '#eff6ff' : '#ffffff',
+                            boxShadow: isSel ? 'inset 0 0 0 1px #bfdbfe' : 'none',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '5px',
+                            outline: 'none',
+                            transition: 'all 0.12s ease',
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                            <span
+                              id={`stock-name-${s.id}`}
+                              title={s.name}
+                              style={{ flex: '1 1 auto', minWidth: 0, fontSize: '14px', fontWeight: 600, color: isSel ? '#1d4ed8' : '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                            >
+                              {highlightMatch(s.name, stockSearch)}
+                            </span>
+                            <span
+                              title="Total sellable: counter shelf + central store"
+                              style={{ flexShrink: 0, whiteSpace: 'nowrap', fontSize: '13px', fontWeight: 700, color: isOutOfStock ? '#dc2626' : isLowStock ? '#b45309' : '#111827' }}
+                            >
+                              {s.in_stock} <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748b' }}>total</span>
+                            </span>
+                          </div>
+                          {showNameTip && (
+                            <div
+                              id={`stock-name-tip-${s.id}`}
+                              role="tooltip"
+                              style={{
+                                position: 'absolute',
+                                top: '34px',
+                                left: '12px',
+                                right: '12px',
+                                zIndex: 5,
+                                background: '#111827',
+                                color: '#ffffff',
+                                fontSize: '12px',
+                                fontWeight: 500,
+                                lineHeight: 1.4,
+                                padding: '6px 8px',
+                                borderRadius: '6px',
+                                boxShadow: '0 4px 12px rgba(17,24,39,0.18)',
+                                pointerEvents: 'none',
+                              }}
+                            >
+                              {s.name}
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#64748b' }}>
+                            <span style={{ fontFamily: MONO_FONT, fontSize: '11px', color: '#475569', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {highlightMatch(s.code, stockSearch)}
+                            </span>
+                            <span style={{ fontSize: '11px', color: '#64748b', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                              Counter {s.counter_stock ?? 0} · Reorder {s.reorder_level}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '3px' }}>
+                            <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 5px', borderRadius: '4px', background: s.is_narcotic ? '#111827' : '#eff6ff', color: s.is_narcotic ? '#ffffff' : '#1d4ed8' }}>
+                              {s.is_narcotic ? 'Narcotic · CD' : `Sch. ${s.schedule || 'H'}`}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                padding: '1px 6px',
+                                borderRadius: '4px',
+                                background: isOutOfStock ? '#fef2f2' : isLowStock ? '#fffbeb' : '#f0fdf4',
+                                color: isOutOfStock ? '#dc2626' : isLowStock ? '#b45309' : '#15803d',
+                                border: `1px solid ${isOutOfStock ? '#fecaca' : isLowStock ? '#fde68a' : '#bbf7d0'}`,
+                              }}
+                            >
+                              {s.status}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              {/* Right Panel */}
+              <div
+                style={{
+                  gridColumn: 'span 3',
+                  width: '100%',
+                  minWidth: 0,
+                  maxWidth: '100%',
+                  boxSizing: 'border-box',
+                  background: '#ffffff',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '12px',
+                  position: 'sticky',
+                  top: '70px',
+                  maxHeight: 'calc(100vh - 120px)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                }}
+              >
+                {!activeStockItem || !stockView ? (
+                  <div style={{ padding: '48px 24px', textAlign: 'center', color: '#6b7280', fontSize: '13px' }}>
+                    {stockLoading ? 'Loading stock…' : 'Select a medicine to see its counter and central-store stock.'}
+                  </div>
+                ) : (
+                <>
+                {/* Header */}
+                <div
+                  style={{
+                    padding: '16px 24px',
+                    borderBottom: '1px solid #e5e7eb',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    background: '#ffffff',
+                    flexShrink: 0,
+                    gap: '12px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                    <Search size={20} color="#2563eb" />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <h3 aria-live="polite" style={{ fontSize: '18px', fontWeight: 700, color: '#111827', margin: 0 }}>
+                          {highlightMatch(activeStockItem.name, stockSearch)}
+                        </h3>
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#1d4ed8', background: '#eff6ff', border: '1px solid #bfdbfe', padding: '2px 8px', borderRadius: '6px', fontFamily: MONO_FONT }}>
+                          {highlightMatch(activeStockItem.code, stockSearch)}
+                        </span>
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#ffffff', background: '#111827', padding: '2px 8px', borderRadius: '6px' }}>
+                          {activeStockItem.is_narcotic ? 'Schedule X' : `Schedule ${activeStockItem.schedule || 'H'}`}
+                        </span>
+                      </div>
+                      <p style={{ fontSize: '12px', color: '#64748b', margin: '2px 0 0' }}>
+                        {activeStockItem.generic ? `${activeStockItem.generic} · ` : ''}Counter shelf and central store balances from the inventory ledger
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
                     <button
-                      key={p.k}
-                      onClick={() => setStockPill(p.k)}
+                      title="Ask the central store to move stock to OPD Counter 2"
+                      onClick={async () => {
+                        try {
+                          const res = await pharmacyInventoryService.createTransfer({
+                            medicine_id: activeStockItem.id,
+                            quantity: activeStockItem.reorder_level || 50,
+                            destination: 'OPD Counter 2',
+                            priority: stockView.counter === 0 ? 'STAT' : 'ROUTINE',
+                            notes: `OPD counter replenishment for ${activeStockItem.name}`
+                          });
+                          showNotice(`Transfer request ${res.transfer_number || ''} sent to the central store for ${activeStockItem.name}.`);
+                        } catch (err: any) {
+                          showNotice(`Transfer request for ${activeStockItem.name} failed: ${err?.response?.data?.error || err?.response?.data?.detail || 'please retry'}.`);
+                        }
+                      }}
                       style={{
-                        height: '32px',
-                        padding: '0 12px',
-                        borderRadius: '9999px',
+                        height: '36px',
+                        padding: '0 14px',
+                        borderRadius: '8px',
+                        border: '1px solid #d1d5db',
+                        background: '#ffffff',
+                        color: '#374151',
                         fontSize: '13px',
                         fontWeight: 600,
                         cursor: 'pointer',
-                        background: stockPill === p.k ? '#2563eb' : '#fff',
-                        color: stockPill === p.k ? '#fff' : '#374151',
-                        border: `1px solid ${stockPill === p.k ? '#2563eb' : '#e5e7eb'}`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
                       }}
                     >
-                      {p.l}
+                      <Boxes size={15} />
+                      Request Transfer to Counter
                     </button>
+                    <button
+                      title="Start a walk-in sale without a prescription"
+                      onClick={() => {
+                        setIsCreatingOtcSale(true);
+                      }}
+                      style={{
+                        height: '36px',
+                        padding: '0 16px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        background: '#2563eb',
+                        color: '#ffffff',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <Plus size={15} />
+                      New OTC Sale
+                    </button>
+                  </div>
+                </div>
+
+                {/* Stock overview: counter shelf + central store = total sellable */}
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+                    gap: '12px',
+                    padding: '16px 24px',
+                    background: '#f8fafc',
+                    borderBottom: '1px solid #e5e7eb',
+                    flexShrink: 0,
+                  }}
+                >
+                  {[
+                    {
+                      label: 'On Counter Shelf',
+                      value: `${stockView.counter} units`,
+                      color: stockView.counter === 0 ? '#dc2626' : '#111827',
+                      note: 'Ready to dispense here',
+                    },
+                    {
+                      label: 'Central Store',
+                      value: `${stockView.central} units`,
+                      color: '#111827',
+                      note: stockView.central > 0 ? 'Transfer to counter to sell' : 'Nothing to transfer',
+                    },
+                    {
+                      label: 'Total Sellable',
+                      value: `${stockView.total} units`,
+                      color: stockView.total === 0 ? '#dc2626' : stockView.total < activeStockItem.reorder_level ? '#b45309' : '#16a34a',
+                      note: 'Counter + central · excl. expired',
+                    },
+                    {
+                      label: 'Reorder Threshold',
+                      value: `${activeStockItem.reorder_level} units`,
+                      color: '#111827',
+                      note: 'Flags when total falls below',
+                    },
+                    {
+                      label: 'Nearest Expiry',
+                      value: stockView.nearestExpiry || '—',
+                      color: '#111827',
+                      note: activeStockItem.is_cold_chain ? 'Cold chain (2°C–8°C)' : 'Room temp (<25°C)',
+                    },
+                  ].map((box) => (
+                    <div key={box.label} style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                        {box.label}
+                      </div>
+                      <div style={{ fontSize: '18px', fontWeight: 700, color: box.color, marginTop: '2px' }}>
+                        {box.value}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#64748b', marginTop: '1px' }}>
+                        {box.note}
+                      </div>
+                    </div>
                   ))}
                 </div>
 
-                <div style={{ overflowX: 'auto' }}>
-                  <div style={{ minWidth: '820px' }}>
-                    <div
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'minmax(220px, 1.8fr) 110px 90px 90px minmax(140px, 1fr) 120px 96px',
-                        alignItems: 'center',
-                        height: '44px',
-                        background: '#f9fafb',
-                        borderTop: '1px solid #e5e7eb',
-                        borderBottom: '1px solid #e5e7eb',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        letterSpacing: '0.04em',
-                        color: '#4b5563',
-                      }}
-                    >
-                      <div style={{ padding: '0 16px' }}>ITEM · CODE</div>
-                      <div style={{ padding: '0 16px' }}>SCHEDULE</div>
-                      <div style={{ padding: '0 16px' }}>IN STOCK</div>
-                      <div style={{ padding: '0 16px' }}>REORDER</div>
-                      <div style={{ padding: '0 16px' }}>NEAREST EXPIRY</div>
-                      <div style={{ padding: '0 16px' }}>STATUS</div>
-                      <div style={{ padding: '0 16px', textAlign: 'right' }}>ACTION</div>
+                {/* Content Body: Batches by location & same-generic alternatives */}
+                <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#475569', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: '8px' }}>
+                      Batches by Location (FEFO order)
                     </div>
-
-                    {stockItems.map((s) => (
-                      <div
-                        key={s.id}
-                        onClick={() => setSelectedStockCode(s.code)}
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'minmax(220px, 1.8fr) 110px 90px 90px minmax(140px, 1fr) 120px 96px',
-                          alignItems: 'center',
-                          minHeight: '56px',
-                          borderBottom: '1px solid #f3f4f6',
-                          background: selectedStockCode === s.code ? '#eff6ff' : '#fff',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <div style={{ padding: '10px 16px', minWidth: 0 }}>
-                          <div style={{ fontSize: '14px', fontWeight: 500, color: '#111827' }}>{s.name}</div>
-                          <div style={{ fontSize: '12px', color: '#6b7280', fontFamily: MONO_FONT, marginTop: '2px' }}>{s.code}</div>
-                        </div>
-                        <div style={{ padding: '10px 16px' }}>
-                          <span style={{ fontSize: '11px', fontWeight: 700, borderRadius: '4px', padding: '2px 6px', background: s.is_narcotic ? '#111827' : '#eff6ff', color: s.is_narcotic ? '#fff' : '#1d4ed8' }}>
-                            {s.is_narcotic ? 'CD · H1' : `Sch. ${s.schedule}`}
-                          </span>
-                        </div>
-                        <div style={{ padding: '10px 16px', fontSize: '14px', fontWeight: 600, color: s.in_stock === 0 ? '#dc2626' : s.in_stock < s.reorder_level ? '#b45309' : '#111827' }}>
-                          {s.in_stock}
-                        </div>
-                        <div style={{ padding: '10px 16px', fontSize: '13px', color: '#4b5563' }}>{s.reorder_level}</div>
-                        <div style={{ padding: '10px 16px', fontSize: '13px', color: '#4b5563' }}>2027-08</div>
-                        <div style={{ padding: '10px 16px' }}>
-                          <span
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              height: '24px',
-                              padding: '0 8px',
-                              borderRadius: '6px',
-                              fontSize: '12px',
-                              fontWeight: 600,
-                              background: s.in_stock === 0 ? '#fef2f2' : s.in_stock < s.reorder_level ? '#fffbeb' : '#f0fdf4',
-                              color: s.in_stock === 0 ? '#dc2626' : s.in_stock < s.reorder_level ? '#b45309' : '#15803d',
-                              border: `1px solid ${s.in_stock === 0 ? '#fecaca' : s.in_stock < s.reorder_level ? '#fde68a' : '#bbf7d0'}`,
-                            }}
-                          >
-                            {s.status}
-                          </span>
-                        </div>
-                        <div style={{ padding: '10px 16px', display: 'flex', justifyContent: 'flex-end' }}>
-                          <button
-                            onClick={() => setSelectedStockCode(s.code)}
-                            style={{ height: '36px', padding: '0 14px', borderRadius: '10px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', background: '#fff', color: '#2563eb', border: '1px solid #bfdbfe' }}
-                          >
-                            Batches
-                          </button>
-                        </div>
+                    <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', overflow: 'hidden' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(130px, 1.1fr) minmax(150px, 1.3fr) 100px 110px 100px 130px', background: '#f8fafc', padding: '10px 14px', fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', borderBottom: '1px solid #e5e7eb' }}>
+                        <div>BATCH NUMBER</div>
+                        <div>LOCATION</div>
+                        <div>EXPIRY DATE</div>
+                        <div style={{ textAlign: 'center' }}>BATCH QTY</div>
+                        <div style={{ textAlign: 'right' }}>MRP / UNIT</div>
+                        <div style={{ textAlign: 'right' }}>STATUS</div>
                       </div>
-                    ))}
+
+                      {stockView.batches.length > 0 ? (
+                        stockView.batches.map((batch: any, bIdx: number) => {
+                          const qty = batch.available_quantity ?? 0;
+                          const status = batch.id === stockView.dispenseNextId
+                            ? { label: 'Dispense next', fg: '#15803d', bg: '#f0fdf4', bd: '#bbf7d0' }
+                            : qty === 0
+                              ? { label: 'Depleted', fg: '#dc2626', bg: '#fef2f2', bd: '#fecaca' }
+                              : batch.is_counter_stock
+                                ? { label: 'On counter', fg: '#1d4ed8', bg: '#eff6ff', bd: '#bfdbfe' }
+                                : { label: 'Central store', fg: '#64748b', bg: '#f1f5f9', bd: '#e2e8f0' };
+                          return (
+                            <div
+                              key={batch.id || bIdx}
+                              style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'minmax(130px, 1.1fr) minmax(150px, 1.3fr) 100px 110px 100px 130px',
+                                padding: '12px 14px',
+                                alignItems: 'center',
+                                fontSize: '13px',
+                                borderBottom: '1px solid #f1f5f9',
+                              }}
+                            >
+                              <div style={{ fontFamily: MONO_FONT, fontWeight: 600, color: '#1e40af' }}>{batch.batch_number}</div>
+                              <div style={{ color: '#475569', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={batch.storage_location}>
+                                <span style={{ fontWeight: 600, color: batch.is_counter_stock ? '#1d4ed8' : '#475569' }}>
+                                  {batch.is_counter_stock ? 'Counter' : 'Central'}
+                                </span>
+                                {batch.storage_location ? ` · ${batch.storage_location}` : ''}
+                              </div>
+                              <div style={{ color: '#475569' }}>{batch.expiry_date}</div>
+                              <div style={{ textAlign: 'center', fontWeight: 700, color: qty === 0 ? '#dc2626' : '#111827' }}>{qty}</div>
+                              <div style={{ textAlign: 'right', color: '#475569' }}>
+                                ₹{Number(batch.mrp_price ?? activeStockItem.unit_price ?? 0).toFixed(2)}
+                              </div>
+                              <div style={{ textAlign: 'right' }}>
+                                <span style={{ fontSize: '11px', fontWeight: 600, color: status.fg, background: status.bg, border: `1px solid ${status.bd}`, padding: '1px 6px', borderRadius: '4px', whiteSpace: 'nowrap' }}>
+                                  {status.label}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div style={{ padding: '16px 14px', fontSize: '13px', color: '#64748b', borderBottom: '1px solid #f1f5f9' }}>
+                          No sellable batches — every batch is expired, quarantined or depleted.
+                        </div>
+                      )}
+
+                      {/* Reconciliation line: batch quantities add up to the totals above */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', padding: '10px 14px', background: '#f8fafc', fontSize: '12px', color: '#475569' }}>
+                        <span>
+                          Counter <strong style={{ color: '#111827' }}>{stockView.counter}</strong> + Central store <strong style={{ color: '#111827' }}>{stockView.central}</strong> = Total sellable <strong style={{ color: '#111827' }}>{stockView.total}</strong> units
+                        </span>
+                        {stockView.batchTotal !== stockView.total && (
+                          <span style={{ color: '#b45309', fontWeight: 600 }}>
+                            Batch rows sum to {stockView.batchTotal} — ledger mismatch, refresh or report to inventory
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Same-generic alternatives (live rows from this stock list) */}
+                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#475569', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                      Same-Generic Alternatives
+                    </div>
+                    {stockView.sameGeneric.length > 0 ? (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px' }}>
+                        {stockView.sameGeneric.slice(0, 4).map((alt: any) => (
+                          <button
+                            key={alt.id}
+                            onClick={() => setSelectedStockId(alt.id)}
+                            disabled={!filteredStockItems.some((x) => x.id === alt.id)}
+                            title={filteredStockItems.some((x) => x.id === alt.id) ? 'Show this medicine' : 'Hidden by the current search or filter'}
+                            style={{ textAlign: 'left', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 12px', cursor: 'pointer', fontFamily: 'inherit' }}
+                          >
+                            <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827' }}>{alt.name}</div>
+                            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px', fontFamily: MONO_FONT }}>{alt.code}</div>
+                            <div style={{ fontSize: '11px', fontWeight: 600, marginTop: '4px', color: (alt.counter_stock ?? 0) > 0 ? '#15803d' : '#b45309' }}>
+                              Counter {alt.counter_stock ?? 0} · Total {alt.in_stock} units
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '12px', color: '#64748b' }}>
+                        {activeStockItem.generic
+                          ? `No other ${activeStockItem.generic} products in this stock list.`
+                          : 'Generic name not recorded for this medicine.'}
+                      </div>
+                    )}
                   </div>
                 </div>
+
+                {/* Footer note (actions live in the header only) */}
+                <div
+                  style={{
+                    padding: '12px 24px',
+                    background: '#ffffff',
+                    borderTop: '1px solid #e5e7eb',
+                    flexShrink: 0,
+                  }}
+                >
+                  <span style={{ fontSize: '12px', color: '#64748b' }}>
+                    Quantities exclude expired and quarantined batches · balances update on checkout and GRN intake
+                  </span>
+                </div>
+                </>
+                )}
               </div>
             </div>
           )}
