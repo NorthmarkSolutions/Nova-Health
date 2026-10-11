@@ -1,0 +1,94 @@
+/*
+ * HMS workspace standard — tokens, focus, keyboard chips and motion.
+ * HMS design bible Sections 19.1 and 19.10. Scoped to a workspace root with
+ * `className="hms-root hms-motion"`. Opacity/transform only, 60–200ms ease-out,
+ * one-shot animations, everything off under prefers-reduced-motion.
+ */
+
+/* 19.1 Fonts, focus and keyboard chips */
+.hms-root, .hms-root button, .hms-root input, .hms-root select, .hms-root textarea { font-family: 'Inter', sans-serif; }
+.hms-root button:focus-visible, .hms-root [role="button"]:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+.hms-row:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }
+.hms-kbd { font-size: 11px; font-weight: 600; line-height: 1; padding: 3px 5px; border-radius: 4px; border: 1px solid #e2e8f0; background: #f8fafc; color: #64748b; white-space: nowrap; }
+
+@keyframes hms-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes hms-pop { from { opacity: 0; transform: scale(0.97) translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes hms-backdrop { from { opacity: 0; } to { opacity: 1; } }
+@keyframes hms-toast-in { from { opacity: 0; translate: 0 -10px; } to { opacity: 1; translate: 0 0; } }
+@keyframes hms-shake { 0%, 100% { translate: 0 0; } 20%, 60% { translate: -4px 0; } 40%, 80% { translate: 4px 0; } }
+@keyframes hms-tick { 0% { opacity: 0; transform: scale(0.4); } 70% { opacity: 1; transform: scale(1.15); } 100% { transform: scale(1); } }
+@keyframes hms-row-in { 0% { opacity: 0; transform: translateY(-4px); background-color: #dcfce7; } 40% { opacity: 1; transform: none; background-color: #dcfce7; } 100% { background-color: #ffffff; } }
+@keyframes hms-flash-up { 0%, 35% { background-color: #dcfce7; } 100% { background-color: #ffffff; } }
+@keyframes hms-bump { 0% { opacity: 0.4; transform: translateY(3px); } 100% { opacity: 1; transform: none; } }
+@keyframes hms-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes hms-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+/* Buttons: hover lift, press, focus, icon nudges */
+.hms-motion button { transition: transform 120ms ease-out, box-shadow 150ms ease-out, filter 150ms ease-out, background-color 150ms ease-out, border-color 150ms ease-out, color 150ms ease-out; }
+.hms-motion button:not(:disabled):not(.pharmacy-nav-item):not(.pharmacy-group-header):not(.hms-nav-item):not(.hms-group-header):not(.hms-switch):not([role="option"]):not([role="tab"]):not([role="menuitem"]):hover { transform: translateY(-1px); box-shadow: 0 4px 10px -4px rgba(15, 23, 42, 0.18); filter: brightness(0.97); }
+.hms-motion button:not(:disabled):active { transform: translateY(0) scale(0.97) !important; box-shadow: none; filter: brightness(0.92); transition-duration: 60ms; }
+.hms-motion button:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+.hms-motion button:disabled { cursor: not-allowed; }
+.hms-motion button svg { transition: transform 200ms ease-out; }
+.hms-motion button:not(:disabled):hover svg.lucide-plus { transform: rotate(90deg); }
+.hms-motion button:not(:disabled):hover svg.lucide-refresh-cw,
+.hms-motion button:not(:disabled):hover svg.lucide-rotate-cw { transform: rotate(180deg); }
+.hms-motion button:not(:disabled):hover svg.lucide-download,
+.hms-motion button:not(:disabled):hover svg.lucide-printer { transform: translateY(2px); }
+.hms-motion button:not(:disabled):hover svg.lucide-arrow-right,
+.hms-motion button:not(:disabled):hover svg.lucide-chevron-right,
+.hms-motion button:not(:disabled):hover svg.lucide-send { transform: translateX(2px); }
+.hms-motion button:not(:disabled):hover svg.lucide-trash-2,
+.hms-motion button:not(:disabled):hover svg.lucide-x { transform: scale(1.12); }
+.hms-motion button.pharmacy-nav-item:not(:disabled):hover svg,
+.hms-motion button.hms-nav-item:not(:disabled):hover svg { transform: scale(1.08); }
+
+/* Sidebar items and group headers (19.2) */
+.hms-nav-item:not([aria-current="page"]):hover { background: #f8fafc !important; }
+.hms-group-header:hover { background: #f8fafc; }
+.hms-chev { transition: transform 150ms ease-out; }
+.hms-menu-item:hover, .hms-menu-item:focus-visible { background: #f1f5f9; }
+.hms-menu-item.hms-danger:hover, .hms-menu-item.hms-danger:focus-visible { background: #fef2f2; }
+.hms-logout:hover { background: #fef2f2 !important; color: #dc2626 !important; }
+
+/* Collapsible sections: animate height with grid rows (0fr <-> 1fr) */
+.hms-collapse { display: grid; grid-template-rows: 1fr; opacity: 1; transition: grid-template-rows 200ms ease-out, opacity 200ms ease-out; }
+.hms-collapse[data-open="false"] { grid-template-rows: 0fr; opacity: 0; }
+
+/* Lists, menus and selection */
+.hms-motion [role="option"], .hms-motion [role="tab"] { transition: background-color 120ms ease-out, border-color 120ms ease-out, color 120ms ease-out; }
+.hms-row:not([aria-selected="true"]):hover { background: #f8fafc !important; }
+.hms-motion [role="menu"] { animation: hms-pop 150ms ease-out both; transform-origin: top right; }
+
+/* Completion bars and loading */
+.hms-bar { transform-origin: left center; animation: hms-grow 500ms ease-out both; transition: width 300ms ease-out; }
+.hms-skel { display: inline-block; border-radius: 6px; background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 37%, #f1f5f9 63%); background-size: 400% 100%; animation: hms-shimmer 1.4s ease infinite; }
+
+/* Dialogs, toasts, feedback */
+.hms-backdrop { animation: hms-backdrop 150ms ease-out both; }
+.hms-backdrop > * { animation: hms-pop 160ms ease-out both; }
+.hms-toast { animation: hms-toast-in 180ms ease-out both; }
+.hms-toast.hms-shake { animation: hms-toast-in 180ms ease-out both, hms-shake 220ms ease-out 180ms 1; }
+.hms-tick { animation: hms-tick 220ms ease-out both; }
+.hms-row-in { animation: hms-row-in 1.1s ease-out both; }
+.hms-flash-up { animation: hms-flash-up 0.9s ease-out; }
+.hms-bump { display: inline-block; animation: hms-bump 180ms ease-out both; }
+.hms-fade-in { animation: hms-fade-in 160ms ease-out both; }
+
+/* KPI cards: clickable, lift on hover/focus (overrides inline styles) */
+.hms-kpi { transition: transform 150ms ease-out, box-shadow 150ms ease-out, border-color 150ms ease-out !important; }
+.hms-kpi:hover, .hms-kpi:focus-visible { transform: translateY(-1px); box-shadow: 0 6px 16px -6px rgba(15, 23, 42, 0.14) !important; border-color: #bfdbfe !important; }
+.hms-kpi:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+.hms-kpi:active { transform: scale(0.99); }
+
+@media (prefers-reduced-motion: reduce) {
+  .hms-motion *, .hms-motion *::before, .hms-motion *::after,
+  .hms-backdrop, .hms-backdrop > *, .hms-toast {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+  }
+  .hms-motion button:hover, .hms-motion button:active, .hms-motion button svg { transform: none !important; }
+  .hms-kpi:hover, .hms-kpi:focus-visible, .hms-kpi:active { transform: none; }
+}

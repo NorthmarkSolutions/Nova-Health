@@ -1,727 +1,232 @@
-import React, { useState } from 'react';
-import { PageHeader } from '../../../components/shared';
-import { CheckCircle2 } from 'lucide-react';
+// Lab Admin · Duty scheduling — the weekly roster, one day at a time.
+// Coverage rules are checked against the roster itself; gaps and suggestions are calculated, not typed in.
+import React, { useMemo, useState } from 'react';
+import { CalendarDays, Send, CalendarPlus, UserPlus } from 'lucide-react';
+import {
+  HmsMasterDetail,
+  HmsListRow,
+  HmsBadge,
+  HmsButton,
+  HmsDetailHeader,
+  HmsStatStrip,
+  HmsDetailBody,
+  HmsSection,
+  HmsRow,
+  HmsNotice,
+  HmsEmpty,
+  INPUT,
+  HMS,
+} from '../../../components/hms';
+import {
+  LabAdminStore,
+  ShiftCode,
+  SHIFT_INFO,
+  DAY_NAMES,
+  COVERAGE_RULES,
+  MAX_CONSECUTIVE_DAYS,
+  rosterGaps,
+  gapCandidates,
+  weeklyHours,
+  consecutiveWorkDays,
+  addDays,
+  fmtShort,
+  fmtStamp,
+  todayIndex,
+  LabStaffCategory,
+} from '../data/labAdminStore';
+import { LabAdminViewProps } from './labAdminUi';
 
-interface Props {
-  onNavigateTab: (tab: string) => void;
-}
+const CODES: ShiftCode[] = ['M', 'D', 'E', 'N', 'OC', 'L', 'O'];
+const CATEGORY_ORDER: LabStaffCategory[] = ['Pathologist', 'Technologist', 'Phlebotomist'];
 
-interface RosterShiftCell {
-  code: 'D' | 'M' | 'E' | 'N' | 'Leave' | 'Off' | 'On call' | 'Gap';
-  hours?: string;
-}
+export const LabAdminSchedulingView: React.FC<LabAdminViewProps> = ({ data, by, notify, initialFilter }) => {
+  const { state } = data;
+  const { roster } = state;
+  const [search, setSearch] = useState('');
+  const [pill, setPill] = useState(initialFilter || 'all');
+  const [selected, setSelected] = useState<string | null>(String(todayIndex()));
 
-interface StaffScheduleRow {
-  name: string;
-  role: string;
-  shifts: RosterShiftCell[];
-}
+  const gaps = useMemo(() => rosterGaps(state), [state]);
+  const active = state.staff.filter((s) => !s.suspended);
+  const pendingRequests = state.requests.filter((r) => r.status === 'Pending').length;
 
-export const LabAdminSchedulingView: React.FC<Props> = ({ onNavigateTab }) => {
-  const [notification, setNotification] = useState<string | null>(null);
-  const [coveragePercent, setCoveragePercent] = useState(96);
-  const [unfilledGapsCount, setUnfilledGapsCount] = useState(2);
-  const [isPublished, setIsPublished] = useState(false);
+  const days = DAY_NAMES.map((name, i) => {
+    const date = addDays(roster.weekStart, i);
+    const dayGaps = gaps.filter((g) => g.day === i);
+    const rulesMet = COVERAGE_RULES.length - new Set(dayGaps.map((g) => g.rule)).size;
+    const count = (codes: ShiftCode[]) => active.filter((s) => codes.includes(roster.cells[s.id]?.[i] ?? 'O')).length;
+    return { i, name, date, dayGaps, rulesMet, onDuty: count(['M', 'D', 'E', 'N']), onCall: count(['OC']), onLeave: count(['L']) };
+  });
 
-  const [rosterRows, setRosterRows] = useState<StaffScheduleRow[]>([
-    {
-      name: 'Dr. Kavitha Menon',
-      role: 'Pathologist',
-      shifts: [
-        { code: 'D', hours: '08–16' },
-        { code: 'D', hours: '08–16' },
-        { code: 'D', hours: '08–16' },
-        { code: 'D', hours: '08–16' },
-        { code: 'D', hours: '08–16' },
-        { code: 'Off' },
-        { code: 'On call' },
-      ],
-    },
-    {
-      name: 'Dr. Sanjay Rao',
-      role: 'Pathologist',
-      shifts: [
-        { code: 'On call' },
-        { code: 'On call' },
-        { code: 'Off' },
-        { code: 'Off' },
-        { code: 'D', hours: '08–16' },
-        { code: 'D', hours: '08–16' },
-        { code: 'D', hours: '08–16' },
-      ],
-    },
-    {
-      name: 'Anjali Verma',
-      role: 'Technologist',
-      shifts: [
-        { code: 'M', hours: '07–15' },
-        { code: 'M', hours: '07–15' },
-        { code: 'M', hours: '07–15' },
-        { code: 'M', hours: '07–15' },
-        { code: 'M', hours: '07–15' },
-        { code: 'Off' },
-        { code: 'Off' },
-      ],
-    },
-    {
-      name: 'Vikram Rao',
-      role: 'Technologist',
-      shifts: [
-        { code: 'M', hours: '07–15' },
-        { code: 'M', hours: '07–15' },
-        { code: 'M', hours: '07–15' },
-        { code: 'Leave' },
-        { code: 'Leave' },
-        { code: 'Off' },
-        { code: 'M', hours: '07–15' },
-      ],
-    },
-    {
-      name: 'Pooja Sharma',
-      role: 'Technologist',
-      shifts: [
-        { code: 'E', hours: '15–23' },
-        { code: 'E', hours: '15–23' },
-        { code: 'E', hours: '15–23' },
-        { code: 'E', hours: '15–23' },
-        { code: 'M', hours: '07–15' },
-        { code: 'Off' },
-        { code: 'E', hours: '15–23' },
-      ],
-    },
-    {
-      name: 'Imran Shaikh',
-      role: 'Technologist',
-      shifts: [
-        { code: 'N', hours: '23–07' },
-        { code: 'N', hours: '23–07' },
-        { code: 'N', hours: '23–07' },
-        { code: 'E', hours: '15–23' },
-        { code: 'N', hours: '23–07' },
-        { code: 'Off' },
-        { code: 'Off' },
-      ],
-    },
-    {
-      name: 'Ritu Das',
-      role: 'Technologist',
-      shifts: [
-        { code: 'Leave' },
-        { code: 'Leave' },
-        { code: 'Leave' },
-        { code: 'Leave' },
-        { code: 'Off' },
-        { code: 'M', hours: '07–15' },
-        { code: 'M', hours: '07–15' },
-      ],
-    },
-    {
-      name: 'Neha Pillai',
-      role: 'Phlebotomist',
-      shifts: [
-        { code: 'M', hours: '07–15' },
-        { code: 'M', hours: '07–15' },
-        { code: 'M', hours: '07–15' },
-        { code: 'M', hours: '07–15' },
-        { code: 'M', hours: '07–15' },
-        { code: 'M', hours: '07–15' },
-        { code: 'Off' },
-      ],
-    },
-    {
-      name: 'Arjun Kapoor',
-      role: 'Phlebotomist',
-      shifts: [
-        { code: 'M', hours: '07–15' },
-        { code: 'M', hours: '07–15' },
-        { code: 'Off' },
-        { code: 'M', hours: '07–15' },
-        { code: 'M', hours: '07–15' },
-        { code: 'E', hours: '15–23' },
-        { code: 'E', hours: '15–23' },
-      ],
-    },
-    {
-      name: 'Night cover',
-      role: 'Unassigned',
-      shifts: [
-        { code: 'Off' },
-        { code: 'Off' },
-        { code: 'Off' },
-        { code: 'Off' },
-        { code: 'Gap' },
-        { code: 'Gap' },
-        { code: 'Off' },
-      ],
-    },
-  ]);
+  const q = search.trim().toLowerCase();
+  const visible = days.filter((d) => {
+    if (pill === 'gaps' && !d.dayGaps.length) return false;
+    if (pill === 'today' && d.i !== todayIndex()) return false;
+    if (!q) return true;
+    return `${d.name} ${fmtShort(d.date)}`.toLowerCase().includes(q) || active.some((s) => s.name.toLowerCase().includes(q) && SHIFT_INFO[roster.cells[s.id]?.[d.i] ?? 'O'].working);
+  });
 
-  const showNotice = (msg: string) => {
-    setNotification(msg);
-    setTimeout(() => setNotification(null), 4000);
-  };
+  const rows: HmsListRow[] = visible.map((d) => ({
+    key: String(d.i),
+    title: `${d.name} · ${fmtShort(d.date)}${d.i === todayIndex() ? ' · Today' : ''}`,
+    badge: d.dayGaps.length ? <HmsBadge tone="red">{d.dayGaps.length} gap{d.dayGaps.length === 1 ? '' : 's'}</HmsBadge> : <HmsBadge tone="green">Covered</HmsBadge>,
+    sub: `${d.onDuty} on duty · ${d.onCall} on call · ${d.onLeave} on leave`,
+    metaLeft: `M ${active.filter((s) => (roster.cells[s.id]?.[d.i] ?? 'O') === 'M' || (roster.cells[s.id]?.[d.i] ?? 'O') === 'D').length} · E ${active.filter((s) => roster.cells[s.id]?.[d.i] === 'E').length} · N ${active.filter((s) => roster.cells[s.id]?.[d.i] === 'N').length}`,
+    metaRight: `${d.rulesMet} of ${COVERAGE_RULES.length} rules met`,
+    progress: { pct: (d.rulesMet / COVERAGE_RULES.length) * 100, doneLabel: 'Fully covered', tone: d.dayGaps.length ? 'amber' : 'blue' },
+  }));
 
-  const handleAssignGap = (dayIdx: number, staffName: string) => {
-    setRosterRows((prev) =>
-      prev.map((row) => {
-        if (row.name === 'Night cover') {
-          const nextShifts = [...row.shifts];
-          nextShifts[dayIdx] = { code: 'N', hours: '23–07' };
-          return { ...row, shifts: nextShifts };
-        }
-        return row;
-      })
-    );
-    setUnfilledGapsCount((c) => Math.max(0, c - 1));
-    setCoveragePercent(98);
-    showNotice(`Assigned ${staffName} to Night shift on ${dayIdx === 4 ? 'Fri 3' : 'Sat 4'}. Gap filled.`);
-  };
+  const pills = [
+    { key: 'all', label: 'Whole week', count: 7 },
+    { key: 'gaps', label: 'Days with gaps', count: days.filter((d) => d.dayGaps.length).length, tone: 'red' as const },
+    { key: 'today', label: 'Today', count: 1 },
+  ];
 
-  const handlePublishRoster = () => {
-    setIsPublished(true);
-    showNotice('Weekly duty roster published! Shift alerts sent to 14 lab personnel.');
-  };
-
-  const renderCellBadge = (shift: RosterShiftCell) => {
-    switch (shift.code) {
-      case 'D':
-      case 'M':
-        return (
-          <div style={{ height: '44px', borderRadius: '8px', backgroundColor: '#EFF6FF', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ fontSize: '12px', fontWeight: 600, color: '#1D4ED8' }}>{shift.code}</span>
-            <span style={{ fontSize: '11px', color: '#1D4ED8', opacity: 0.8 }}>{shift.hours}</span>
-          </div>
-        );
-      case 'E':
-        return (
-          <div style={{ height: '44px', borderRadius: '8px', backgroundColor: '#E0F2FE', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ fontSize: '12px', fontWeight: 600, color: '#0369A1' }}>E</span>
-            <span style={{ fontSize: '11px', color: '#0369A1', opacity: 0.8 }}>{shift.hours}</span>
-          </div>
-        );
-      case 'N':
-        return (
-          <div style={{ height: '44px', borderRadius: '8px', backgroundColor: '#1F2937', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ fontSize: '12px', fontWeight: 600, color: '#FFFFFF' }}>N</span>
-            <span style={{ fontSize: '11px', color: '#FFFFFF', opacity: 0.8 }}>{shift.hours}</span>
-          </div>
-        );
-      case 'Leave':
-        return (
-          <div style={{ height: '44px', borderRadius: '8px', backgroundColor: '#FFFBEB', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ fontSize: '12px', fontWeight: 600, color: '#B45309' }}>Leave</span>
-          </div>
-        );
-      case 'On call':
-        return (
-          <div style={{ height: '44px', borderRadius: '8px', backgroundColor: '#FFFFFF', border: '1px dashed #D1D5DB', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ fontSize: '12px', fontWeight: 600, color: '#374151' }}>On call</span>
-          </div>
-        );
-      case 'Gap':
-        return (
-          <div style={{ height: '44px', borderRadius: '8px', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ fontSize: '12px', fontWeight: 600, color: '#B91C1C' }}>Gap</span>
-          </div>
-        );
-      default:
-        return (
-          <div style={{ height: '44px', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ fontSize: '12px', fontWeight: 600, color: '#9CA3AF' }}>Off</span>
-          </div>
-        );
+  const publish = () => {
+    LabAdminStore.publishRoster(by);
+    if (gaps.length) {
+      notify(`Roster published to ${active.length} staff with ${gaps.length} coverage gap${gaps.length === 1 ? '' : 's'} still open.`, 'error');
+    } else {
+      notify(`Roster for week of ${fmtShort(roster.weekStart)} published to ${active.length} staff.`);
     }
   };
 
+  const setShift = (staffId: string, day: number, code: ShiftCode) => {
+    LabAdminStore.setShift(staffId, day, code, by);
+  };
+
+  const renderDetail = (key: string | null) => {
+    const d = days.find((x) => String(x.i) === key);
+    if (!d) return <HmsEmpty>Select a day to see who is rostered.</HmsEmpty>;
+    const overLimit = active.filter((s) => consecutiveWorkDays(roster.cells[s.id]) > MAX_CONSECUTIVE_DAYS);
+    return (
+      <>
+        <HmsDetailHeader
+          icon={CalendarDays}
+          title={`${d.name} · ${fmtShort(d.date)}`}
+          badge={d.dayGaps.length ? <HmsBadge tone="red">{d.dayGaps.length} gap{d.dayGaps.length === 1 ? '' : 's'}</HmsBadge> : <HmsBadge tone="green">Covered</HmsBadge>}
+          subtitle={`Week of ${fmtShort(roster.weekStart)} · ${roster.published ? `Published ${fmtStamp(roster.publishedAt)}` : roster.editedAt ? `Draft · edited ${fmtStamp(roster.editedAt)}` : 'Draft'}`}
+          actions={
+            <>
+              <HmsButton icon={CalendarPlus} onClick={() => { LabAdminStore.copyPreviousWeekPattern(by); notify('Next week started from this week’s pattern. Review and publish.'); }}>
+                Start next week
+              </HmsButton>
+              <HmsButton variant="primary" icon={Send} onClick={publish} disabled={roster.published}>
+                {roster.published ? 'Published' : 'Publish roster'}
+              </HmsButton>
+            </>
+          }
+        />
+        <HmsStatStrip
+          items={[
+            { label: 'On duty', value: d.onDuty, note: 'Across all shifts' },
+            { label: 'On call', value: d.onCall },
+            { label: 'On leave', value: d.onLeave, tone: d.onLeave ? 'amber' : 'default' },
+            { label: 'Coverage', value: `${d.rulesMet}/${COVERAGE_RULES.length}`, note: 'Rules met', tone: d.dayGaps.length ? 'red' : 'green' },
+          ]}
+        />
+        <HmsDetailBody>
+          {pendingRequests > 0 && <HmsNotice tone="amber">{pendingRequests} leave / swap request{pendingRequests === 1 ? '' : 's'} waiting in Staff & credentials. Decide before publishing.</HmsNotice>}
+
+          <HmsSection title="Gaps & suggestions">
+            {d.dayGaps.length === 0 ? (
+              <div style={{ padding: '12px 14px', fontSize: '13px', color: '#15803d', fontWeight: 600 }}>Every coverage rule is met on this day.</div>
+            ) : (
+              d.dayGaps.map((g, idx) => {
+                const best = gapCandidates(state, g)[0];
+                return (
+                  <HmsRow
+                    key={g.key}
+                    last={idx === d.dayGaps.length - 1}
+                    label={`${SHIFT_INFO[g.shift].label} ${SHIFT_INFO[g.shift].hours} · ${g.category.toLowerCase()} short by ${g.needed - g.have}`}
+                    hint={best ? `Suggested: ${best.staff.name} (off, ${best.hours} h this week)` : `${g.rule} — no ${g.category.toLowerCase()} is free on this day`}
+                    value={
+                      best ? (
+                        <HmsButton size="sm" variant="primary" icon={UserPlus} onClick={() => { setShift(best.staff.id, g.day, g.shift); notify(`${best.staff.name} assigned to ${SHIFT_INFO[g.shift].label.toLowerCase()} on ${d.name}.`); }}>
+                          Assign
+                        </HmsButton>
+                      ) : (
+                        <HmsBadge tone="red">No cover</HmsBadge>
+                      )
+                    }
+                  />
+                );
+              })
+            )}
+          </HmsSection>
+
+          <HmsSection title="Coverage rules">
+            {COVERAGE_RULES.map((r, idx) => {
+              const have = active.filter((s) => s.category === r.category && r.shifts.includes(roster.cells[s.id]?.[d.i] ?? 'O')).length;
+              return (
+                <HmsRow key={r.id} last={idx === COVERAGE_RULES.length - 1} label={r.label} hint={`${have} rostered · need ${r.min}`} value={<HmsBadge tone={have >= r.min ? 'green' : 'red'}>{have >= r.min ? 'Met' : 'Short'}</HmsBadge>} />
+              );
+            })}
+          </HmsSection>
+
+          {overLimit.length > 0 && <HmsNotice tone="amber">Over {MAX_CONSECUTIVE_DAYS} consecutive working days: {overLimit.map((s) => s.name).join(', ')}.</HmsNotice>}
+
+          {CATEGORY_ORDER.map((cat) => {
+            const people = active.filter((s) => s.category === cat);
+            if (!people.length) return null;
+            return (
+              <HmsSection key={cat} title={`${cat}s · ${d.name}`}>
+                {people.map((s, idx) => {
+                  const cells = roster.cells[s.id] || (Array(7).fill('O') as ShiftCode[]);
+                  const hrs = weeklyHours(cells);
+                  const run = consecutiveWorkDays(cells);
+                  return (
+                    <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '10px 14px', borderBottom: idx < people.length - 1 ? `1px solid ${HMS.divider}` : 'none' }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: '14px', fontWeight: 500, color: HMS.text }}>{s.name}</div>
+                        <div style={{ fontSize: '12px', color: hrs > 48 || run > MAX_CONSECUTIVE_DAYS ? '#b45309' : HMS.textSecondary }}>
+                          {s.role} · {hrs} h this week{hrs > 48 ? ' · overtime' : ''}{run > MAX_CONSECUTIVE_DAYS ? ` · ${run} days in a row` : ''}
+                        </div>
+                      </div>
+                      <select
+                        aria-label={`${s.name} shift on ${d.name}`}
+                        value={cells[d.i]}
+                        onChange={(e) => setShift(s.id, d.i, e.target.value as ShiftCode)}
+                        style={{ ...INPUT, width: '190px', flexShrink: 0 }}
+                      >
+                        {CODES.map((c) => (
+                          <option key={c} value={c}>
+                            {SHIFT_INFO[c].label}
+                            {SHIFT_INFO[c].hours && c !== 'OC' ? ` ${SHIFT_INFO[c].hours}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                })}
+              </HmsSection>
+            );
+          })}
+        </HmsDetailBody>
+      </>
+    );
+  };
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Toast Notification */}
-      {notification && (
-        <div
-          style={{
-            position: 'fixed',
-            bottom: '24px',
-            right: '24px',
-            zIndex: 9999,
-            backgroundColor: '#1E293B',
-            color: '#FFFFFF',
-            padding: '12px 20px',
-            borderRadius: '10px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            fontSize: '14px',
-            fontWeight: 500,
-          }}
-        >
-          <CheckCircle2 size={18} color="#10B981" />
-          <span>{notification}</span>
-        </div>
-      )}
-
-      {/* Page Header */}
-      <PageHeader
-        title="Duty Scheduling"
-        description="Weekly roster for the lab. Publishing notifies each staff member and updates their shift on the workspace."
-      >
-        <button
-          type="button"
-          onClick={() => showNotice('Copied previous week schedule template.')}
-          style={{
-            whiteSpace: 'nowrap',
-            height: '40px',
-            padding: '0 16px',
-            borderRadius: '10px',
-            border: '1px solid #E5E7EB',
-            backgroundColor: '#FFFFFF',
-            fontSize: '14px',
-            fontWeight: 500,
-            color: '#111827',
-            cursor: 'pointer',
-          }}
-        >
-          Copy last week
-        </button>
-        <button
-          type="button"
-          onClick={() => showNotice('Schedule draft saved to local storage.')}
-          style={{
-            whiteSpace: 'nowrap',
-            height: '40px',
-            padding: '0 16px',
-            borderRadius: '10px',
-            border: '1px solid #E5E7EB',
-            backgroundColor: '#FFFFFF',
-            fontSize: '14px',
-            fontWeight: 500,
-            color: '#111827',
-            cursor: 'pointer',
-          }}
-        >
-          Save draft
-        </button>
-        <button
-          type="button"
-          onClick={handlePublishRoster}
-          style={{
-            whiteSpace: 'nowrap',
-            height: '40px',
-            padding: '0 16px',
-            borderRadius: '10px',
-            border: '1px solid #2563EB',
-            backgroundColor: '#2563EB',
-            fontSize: '14px',
-            fontWeight: 600,
-            color: '#FFFFFF',
-            cursor: 'pointer',
-          }}
-        >
-          {isPublished ? 'Roster Published ✓' : 'Publish roster'}
-        </button>
-      </PageHeader>
-
-      {/* 4 KPI Cards */}
-      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '16px' }}>
-        <div
-          style={{
-            backgroundColor: '#FFFFFF',
-            border: '1px solid #E5E7EB',
-            borderRadius: '12px',
-            padding: '20px',
-            minHeight: '120px',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            gap: '12px',
-            boxShadow: '0 1px 2px rgba(17,24,39,0.04)',
-          }}
-        >
-          <span style={{ fontSize: '13px', color: '#6B7280', fontWeight: 500 }}>Shift coverage</span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            <span style={{ fontSize: '30px', fontWeight: 700, letterSpacing: '-0.02em', color: '#111827' }}>
-              {coveragePercent}%
-            </span>
-            <span style={{ fontSize: '12px', color: '#6B7280' }}>this week · 68 of 71 slots</span>
-          </div>
-        </div>
-
-        <div
-          style={{
-            backgroundColor: '#FFFFFF',
-            border: '1px solid #FECACA',
-            borderRadius: '12px',
-            padding: '20px',
-            minHeight: '120px',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            gap: '12px',
-            boxShadow: '0 1px 2px rgba(17,24,39,0.04)',
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'flex-start' }}>
-            <span style={{ fontSize: '13px', color: '#6B7280', fontWeight: 500 }}>Unfilled shifts</span>
-            <span style={{ fontSize: '12px', fontWeight: 600, padding: '3px 8px', borderRadius: '999px', backgroundColor: '#FEF2F2', color: '#B91C1C' }}>
-              Fix
-            </span>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            <span style={{ fontSize: '30px', fontWeight: 700, letterSpacing: '-0.02em', color: '#B91C1C' }}>
-              {unfilledGapsCount}
-            </span>
-            <span style={{ fontSize: '12px', color: '#6B7280' }}>Night · Fri 3, Sat 4</span>
-          </div>
-        </div>
-
-        <div
-          style={{
-            backgroundColor: '#FFFFFF',
-            border: '1px solid #FDE68A',
-            borderRadius: '12px',
-            padding: '20px',
-            minHeight: '120px',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            gap: '12px',
-            boxShadow: '0 1px 2px rgba(17,24,39,0.04)',
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'flex-start' }}>
-            <span style={{ fontSize: '13px', color: '#6B7280', fontWeight: 500 }}>Pending changes</span>
-            <span style={{ fontSize: '12px', fontWeight: 600, padding: '3px 8px', borderRadius: '999px', backgroundColor: '#FFFBEB', color: '#B45309' }}>
-              Review
-            </span>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            <span style={{ fontSize: '30px', fontWeight: 700, letterSpacing: '-0.02em', color: '#B45309' }}>2</span>
-            <span style={{ fontSize: '12px', color: '#6B7280' }}>leave + shift swap</span>
-          </div>
-        </div>
-
-        <div
-          style={{
-            backgroundColor: '#FFFFFF',
-            border: '1px solid #E5E7EB',
-            borderRadius: '12px',
-            padding: '20px',
-            minHeight: '120px',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            gap: '12px',
-            boxShadow: '0 1px 2px rgba(17,24,39,0.04)',
-          }}
-        >
-          <span style={{ fontSize: '13px', color: '#6B7280', fontWeight: 500 }}>Overtime</span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            <span style={{ fontSize: '30px', fontWeight: 700, letterSpacing: '-0.02em', color: '#111827' }}>14 h</span>
-            <span style={{ fontSize: '12px', color: '#6B7280' }}>across 3 staff</span>
-          </div>
-        </div>
-      </section>
-
-      {/* Main Split Layout: Roster Matrix (left) + Side Rules (right) */}
-      <section style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'flex-start' }}>
-        {/* Left Roster Card */}
-        <div
-          style={{
-            flex: '999 1 700px',
-            minWidth: 0,
-            backgroundColor: '#FFFFFF',
-            border: '1px solid #E5E7EB',
-            borderRadius: '12px',
-            boxShadow: '0 1px 2px rgba(17,24,39,0.04)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '14px',
-            overflow: 'hidden',
-          }}
-        >
-          <div style={{ padding: '20px 20px 0', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>Week of 29 Sep – 5 Oct 2026</h2>
-                <span style={{ fontSize: '13px', color: '#6B7280' }}>
-                  {isPublished ? 'Published · live for department' : 'Draft · last edited 09:40 by you'}
-                </span>
-              </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  type="button"
-                  style={{
-                    whiteSpace: 'nowrap',
-                    height: '32px',
-                    padding: '0 10px',
-                    borderRadius: '8px',
-                    border: '1px solid #E5E7EB',
-                    backgroundColor: '#FFFFFF',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    color: '#111827',
-                    cursor: 'pointer',
-                  }}
-                >
-                  ‹ Prev
-                </button>
-                <button
-                  type="button"
-                  style={{
-                    whiteSpace: 'nowrap',
-                    height: '32px',
-                    padding: '0 10px',
-                    borderRadius: '8px',
-                    border: '1px solid #E5E7EB',
-                    backgroundColor: '#FFFFFF',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    color: '#111827',
-                    cursor: 'pointer',
-                  }}
-                >
-                  This week
-                </button>
-                <button
-                  type="button"
-                  style={{
-                    whiteSpace: 'nowrap',
-                    height: '32px',
-                    padding: '0 10px',
-                    borderRadius: '8px',
-                    border: '1px solid #E5E7EB',
-                    backgroundColor: '#FFFFFF',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    color: '#111827',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Next ›
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Matrix Grid */}
-          <div style={{ overflowX: 'auto' }}>
-            <div style={{ minWidth: '760px', display: 'flex', flexDirection: 'column' }}>
-              {/* Header */}
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'minmax(170px,1.4fr) repeat(7, minmax(64px,1fr))',
-                  gap: '6px',
-                  alignItems: 'center',
-                  height: '44px',
-                  padding: '0 20px',
-                  backgroundColor: '#F9FAFB',
-                  borderTop: '1px solid #E5E7EB',
-                  borderBottom: '1px solid #E5E7EB',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  color: '#6B7280',
-                }}
-              >
-                <span>STAFF</span>
-                <span style={{ textAlign: 'center' }}>MON 29</span>
-                <span style={{ textAlign: 'center', color: '#1D4ED8' }}>TUE 30</span>
-                <span style={{ textAlign: 'center' }}>WED 1</span>
-                <span style={{ textAlign: 'center' }}>THU 2</span>
-                <span style={{ textAlign: 'center' }}>FRI 3</span>
-                <span style={{ textAlign: 'center' }}>SAT 4</span>
-                <span style={{ textAlign: 'center' }}>SUN 5</span>
-              </div>
-
-              {/* Rows */}
-              {rosterRows.map((row) => (
-                <div
-                  key={row.name}
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'minmax(170px,1.4fr) repeat(7, minmax(64px,1fr))',
-                    gap: '6px',
-                    alignItems: 'center',
-                    minHeight: '60px',
-                    padding: '8px 20px',
-                    borderBottom: '1px solid #F3F4F6',
-                  }}
-                >
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                    <span style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>{row.name}</span>
-                    <span style={{ fontSize: '12px', color: '#6B7280' }}>{row.role}</span>
-                  </div>
-
-                  {row.shifts.map((s, idx) => (
-                    <div key={idx}>{renderCellBadge(s)}</div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Legend */}
-          <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', fontSize: '12px', color: '#374151', padding: '0 20px 16px' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ width: '10px', height: '10px', borderRadius: '3px', backgroundColor: '#EFF6FF', border: '1px solid #E5E7EB' }} />
-              Morning 07–15
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ width: '10px', height: '10px', borderRadius: '3px', backgroundColor: '#EFF6FF', border: '1px solid #E5E7EB' }} />
-              Day 08–16
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ width: '10px', height: '10px', borderRadius: '3px', backgroundColor: '#E0F2FE', border: '1px solid #E5E7EB' }} />
-              Evening 15–23
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ width: '10px', height: '10px', borderRadius: '3px', backgroundColor: '#1F2937', border: '1px solid #E5E7EB' }} />
-              Night 23–07
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ width: '10px', height: '10px', borderRadius: '3px', backgroundColor: '#FFFBEB', border: '1px solid #E5E7EB' }} />
-              Leave
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ width: '10px', height: '10px', borderRadius: '3px', backgroundColor: '#FEF2F2', border: '1px solid #FECACA' }} />
-              Unfilled
-            </span>
-          </div>
-        </div>
-
-        {/* Right Stack: Coverage Rules + Fill Gaps */}
-        <div style={{ flex: '1 1 320px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* Coverage Rules */}
-          <div
-            style={{
-              backgroundColor: '#FFFFFF',
-              border: '1px solid #E5E7EB',
-              borderRadius: '12px',
-              boxShadow: '0 1px 2px rgba(17,24,39,0.04)',
-              padding: '20px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '14px',
-            }}
-          >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Coverage rules</h3>
-              <span style={{ fontSize: '13px', color: '#6B7280' }}>Checked against the draft</span>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', minHeight: '52px', borderBottom: '1px solid #F3F4F6' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                <span style={{ fontSize: '14px', fontWeight: 500 }}>Pathologist on call 24×7</span>
-                <span style={{ fontSize: '12px', color: '#6B7280' }}>Met every day</span>
-              </div>
-              <span style={{ whiteSpace: 'nowrap', fontSize: '12px', fontWeight: 600, padding: '3px 8px', borderRadius: '6px', backgroundColor: '#F0FDF4', color: '#15803D' }}>
-                Met
-              </span>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', minHeight: '52px', borderBottom: '1px solid #F3F4F6' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                <span style={{ fontSize: '14px', fontWeight: 500 }}>Min. 2 technologists per shift</span>
-                <span style={{ fontSize: '12px', color: '#6B7280' }}>Night Fri 3 and Sat 4 short by 1</span>
-              </div>
-              <span style={{ whiteSpace: 'nowrap', fontSize: '12px', fontWeight: 600, padding: '3px 8px', borderRadius: '6px', backgroundColor: '#FEF2F2', color: '#B91C1C' }}>
-                {unfilledGapsCount > 0 ? `${unfilledGapsCount} gaps` : 'Met'}
-              </span>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', minHeight: '52px', borderBottom: '1px solid #F3F4F6' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                <span style={{ fontSize: '14px', fontWeight: 500 }}>1 phlebotomist per ward round</span>
-                <span style={{ fontSize: '12px', color: '#6B7280' }}>Met every day</span>
-              </div>
-              <span style={{ whiteSpace: 'nowrap', fontSize: '12px', fontWeight: 600, padding: '3px 8px', borderRadius: '6px', backgroundColor: '#F0FDF4', color: '#15803D' }}>
-                Met
-              </span>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', minHeight: '52px', borderBottom: '1px solid #F3F4F6' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                <span style={{ fontSize: '14px', fontWeight: 500 }}>Max 6 consecutive shifts</span>
-                <span style={{ fontSize: '12px', color: '#6B7280' }}>Neha Pillai at 6 · Sun off</span>
-              </div>
-              <span style={{ whiteSpace: 'nowrap', fontSize: '12px', fontWeight: 600, padding: '3px 8px', borderRadius: '6px', backgroundColor: '#FFFBEB', color: '#B45309' }}>
-                At limit
-              </span>
-            </div>
-          </div>
-
-          {/* Fill Gaps */}
-          <div
-            style={{
-              backgroundColor: '#FFFFFF',
-              border: '1px solid #E5E7EB',
-              borderRadius: '12px',
-              boxShadow: '0 1px 2px rgba(17,24,39,0.04)',
-              padding: '20px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '14px',
-            }}
-          >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Fill gaps</h3>
-              <span style={{ fontSize: '13px', color: '#6B7280' }}>Suggested by availability and hours</span>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', padding: '12px', border: '1px solid #FECACA', borderRadius: '10px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                <span style={{ fontSize: '14px', fontWeight: 600 }}>Fri 3 · Night 23–07</span>
-                <span style={{ fontSize: '12px', color: '#6B7280' }}>Imran Shaikh (off) · 38 h this week</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleAssignGap(4, 'Imran Shaikh')}
-                style={{
-                  whiteSpace: 'nowrap',
-                  flexShrink: 0,
-                  height: '32px',
-                  padding: '0 10px',
-                  borderRadius: '8px',
-                  border: '1px solid #2563EB',
-                  backgroundColor: '#2563EB',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  color: '#FFFFFF',
-                  cursor: 'pointer',
-                }}
-              >
-                Assign
-              </button>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', padding: '12px', border: '1px solid #FECACA', borderRadius: '10px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                <span style={{ fontSize: '14px', fontWeight: 600 }}>Sat 4 · Night 23–07</span>
-                <span style={{ fontSize: '12px', color: '#6B7280' }}>Pooja Sharma (off) · 36 h this week</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleAssignGap(5, 'Pooja Sharma')}
-                style={{
-                  whiteSpace: 'nowrap',
-                  flexShrink: 0,
-                  height: '32px',
-                  padding: '0 10px',
-                  borderRadius: '8px',
-                  border: '1px solid #2563EB',
-                  backgroundColor: '#2563EB',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  color: '#FFFFFF',
-                  cursor: 'pointer',
-                }}
-              >
-                Assign
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-    </div>
+    <HmsMasterDetail
+      listId="lab-roster"
+      title="Duty scheduling"
+      description={`Week of ${fmtShort(roster.weekStart)} · ${roster.published ? 'published' : 'draft — publish to notify staff'}. Pick a day to change shifts and fill gaps.`}
+      total={7}
+      rows={rows}
+      search={search}
+      onSearch={setSearch}
+      searchPlaceholder="Search day or staff name"
+      pills={pills}
+      activePill={pill}
+      onPill={setPill}
+      selectedKey={selected}
+      onSelect={setSelected}
+      primaryLabel="edit shifts"
+      detailLabel="Day roster"
+      renderDetail={renderDetail}
+    />
   );
 };
+
+export default LabAdminSchedulingView;
