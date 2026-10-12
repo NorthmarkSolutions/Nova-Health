@@ -452,14 +452,13 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
   const labTechNavItems: NavItem[] = [
     {
       label: '1. Test Queue & Entry',
-      path: '/lab?tab=queue',
-      badge: '24',
+      path: '/lab/technician',
       icon: <FlaskConical size={18} strokeWidth={1.75} />,
       allowedRoles: [RoleType.LAB_TECH],
     },
     {
       label: '2. Equipment Status',
-      path: '/lab?tab=equipment',
+      path: '/lab/technician?tab=analyzers',
       icon: <Activity size={18} strokeWidth={1.75} />,
       allowedRoles: [RoleType.LAB_TECH],
     },
@@ -468,20 +467,19 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
   const pathologistNavItems: NavItem[] = [
     {
       label: '1. Review Queue',
-      path: '/lab?tab=review',
-      badge: '14',
+      path: '/lab/pathologist',
       icon: <ClipboardCheck size={18} strokeWidth={1.75} />,
       allowedRoles: [RoleType.PATHOLOGIST],
     },
     {
       label: '2. Signed Reports',
-      path: '/lab?tab=signed-reports',
+      path: '/lab/pathologist?tab=signed-reports',
       icon: <FileText size={18} strokeWidth={1.75} />,
       allowedRoles: [RoleType.PATHOLOGIST],
     },
     {
       label: '3. Test Catalog & Ranges',
-      path: '/lab?tab=catalog',
+      path: '/lab/pathologist?tab=catalog',
       icon: <ClipboardList size={18} strokeWidth={1.75} />,
       allowedRoles: [RoleType.PATHOLOGIST],
     },

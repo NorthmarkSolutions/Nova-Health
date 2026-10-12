@@ -69,6 +69,7 @@
 .hms-backdrop > * { animation: hms-pop 160ms ease-out both; }
 .hms-toast { animation: hms-toast-in 180ms ease-out both; }
 .hms-toast.hms-shake { animation: hms-toast-in 180ms ease-out both, hms-shake 220ms ease-out 180ms 1; }
+.hms-invalid { border-color: #fca5a5 !important; animation: hms-shake 220ms ease-out 1; }
 .hms-tick { animation: hms-tick 220ms ease-out both; }
 .hms-row-in { animation: hms-row-in 1.1s ease-out both; }
 .hms-flash-up { animation: hms-flash-up 0.9s ease-out; }

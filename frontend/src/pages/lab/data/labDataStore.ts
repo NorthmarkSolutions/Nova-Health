@@ -63,6 +63,8 @@ export interface LabQueueOrder {
   billingStatus?: 'PAID' | 'UNPAID' | 'EXEMPT';
   billingAmount?: number;
   technicianNote?: string;
+  /** Set when the lab rejects a sample (haemolysed, clotted…); a new sample must be collected. */
+  sampleRejectedReason?: string;
   pathologistInterpretation?: string;
   relevantHistory?: string[];
   parameters: TestParameterResult[];
@@ -83,6 +85,18 @@ export interface AnalyzerItem {
   alertBody?: string;
   serviceTicket?: string;
   engineerEta?: string;
+  /** QC runs logged at the bench, newest first. */
+  qcLog?: AnalyzerQcEntry[];
+}
+
+export interface AnalyzerQcEntry {
+  id: string;
+  time: string;
+  level: string;
+  lot: string;
+  pass: boolean;
+  by: string;
+  note?: string;
 }
 
 export interface LabActivityItem {
@@ -149,6 +163,9 @@ export interface CatalogTestItem {
   version: number;
   lastPublished: string;
   ranges: Record<'adultMale' | 'adultFemale' | 'child', CatalogRangeItem[]>;
+  /** Range edits saved by the pathologist; not used for reporting until published. */
+  draftRanges?: Record<'adultMale' | 'adultFemale' | 'child', CatalogRangeItem[]>;
+  draftSavedBy?: string;
   recentQc: { level: string; meta: string; time: string; result: string; pass: boolean }[];
 }
 
@@ -1108,7 +1125,7 @@ export function convertSharedToWorkbench(shared: SharedLabOrder): LabQueueOrder 
     priority: priorityMapped,
     stage: mapSharedStageToWorkbench(shared.stage),
     orderedAt: shared.collectedAt || 'Today',
-    collectedAt: shared.stage !== 'ORDERED' ? shared.collectedAt || '09:30' : undefined,
+    collectedAt: shared.stage !== 'ORDERED' ? shared.collectedAt : undefined,
     isCritical: Boolean(shared.isFlaggedCritical),
     parameters: params,
     technicianNote: shared.technicianNote || '',
@@ -1287,6 +1304,122 @@ export class LabDataStore {
     this.saveOrders(updatedOrders);
   }
 
+  // Technician bench actions
+  private static now() {
+    const d = new Date();
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  }
+
+  /** Returns false when collection is blocked (bill not settled). */
+  static collectSample(orderId: string, by: string): boolean {
+    const o = this.getOrderById(orderId);
+    if (!o || o.billingStatus === 'UNPAID' || o.isPaid === false) return false;
+    this.updateOrder(o.id, { stage: 'COLLECTED', collectedAt: this.now(), sampleRejectedReason: undefined });
+    this.addActivity(`Sample collected · ${o.patientName} (${o.testName})`, by);
+    return true;
+  }
+
+  static receiveSample(orderId: string, by: string) {
+    const o = this.getOrderById(orderId);
+    if (!o) return;
+    this.updateOrder(o.id, { stage: 'RECEIVED', receivedAt: this.now() });
+    this.addActivity(`Sample received in lab · ${o.specimenNumber} (${o.patientName})`, by);
+  }
+
+  static rejectSample(orderId: string, reason: string, by: string) {
+    const o = this.getOrderById(orderId);
+    if (!o) return;
+    this.updateOrder(o.id, { stage: 'ORDERED', collectedAt: undefined, receivedAt: undefined, sampleRejectedReason: reason });
+    this.addActivity(`Sample rejected · ${o.patientName} (${o.testName}): ${reason}. Recollection needed`, by, '#B45309');
+  }
+
+  private static bumpQueue(analyzerId: string | undefined, delta: number) {
+    if (!analyzerId) return;
+    const analyzers = this.getAnalyzers();
+    const a = analyzers.find((x) => x.id === analyzerId);
+    if (!a) return;
+    a.queuedCount = Math.max(0, a.queuedCount + delta);
+    this.saveAnalyzers(analyzers);
+  }
+
+  static loadOnAnalyzer(orderId: string, analyzerId: string, by: string) {
+    const o = this.getOrderById(orderId);
+    const a = this.getAnalyzers().find((x) => x.id === analyzerId);
+    if (!o || !a) return;
+    if (o.stage === 'PROCESSING' && o.analyzerId && o.analyzerId !== analyzerId) this.bumpQueue(o.analyzerId, -1);
+    this.updateOrder(o.id, {
+      stage: 'PROCESSING',
+      processingAt: this.now(),
+      analyzerId: a.id,
+      analyzerName: a.name,
+      assignedTechnician: by,
+      isBlockedByDowntime: false,
+      blockedReason: undefined,
+    });
+    this.bumpQueue(a.id, 1);
+    this.addActivity(`${o.testName} for ${o.patientName} loaded on ${a.name}`, by);
+  }
+
+  static saveResultDraft(orderId: string, parameters: TestParameterResult[], technicianNote: string) {
+    this.updateOrder(orderId, { parameters, technicianNote });
+  }
+
+  static submitResults(orderId: string, parameters: TestParameterResult[], technicianNote: string, by: string) {
+    const o = this.getOrderById(orderId);
+    if (!o) return;
+    const isCrit = parameters.some((p) => {
+      const v = p.observedValue;
+      return v !== null && ((p.criticalLow !== undefined && v < p.criticalLow) || (p.criticalHigh !== undefined && v > p.criticalHigh));
+    });
+    this.updateOrder(o.id, { stage: 'PENDING_REVIEW', enteredAt: this.now(), parameters, technicianNote, isCritical: isCrit, assignedTechnician: by });
+    this.bumpQueue(o.analyzerId, -1);
+    this.addActivity(`${o.testName} for ${o.patientName} sent for pathologist review${isCrit ? ' · CRITICAL' : ''}`, by, isCrit ? '#DC2626' : '#2563EB');
+  }
+
+  static logQc(analyzerId: string, entry: Omit<AnalyzerQcEntry, 'id' | 'time'>) {
+    const analyzers = this.getAnalyzers();
+    const a = analyzers.find((x) => x.id === analyzerId);
+    if (!a) return;
+    const time = this.now();
+    a.qcLog = [{ ...entry, id: `qc-${Date.now()}`, time }, ...(a.qcLog || [])].slice(0, 20);
+    a.lastQc = `${time} ${entry.pass ? '✓' : '✗'}`;
+    a.isQcDue = !entry.pass;
+    if (!entry.pass) {
+      a.alertTitle = `QC failed · ${entry.level}`;
+      a.alertBody = entry.note || 'Hold patient results on this analyzer until QC passes.';
+    } else if (a.alertTitle?.startsWith('QC failed')) {
+      a.alertTitle = undefined;
+      a.alertBody = undefined;
+    }
+    this.saveAnalyzers(analyzers);
+    this.addActivity(`${a.name} QC ${entry.pass ? 'passed' : 'FAILED'} · ${entry.level}`, entry.by, entry.pass ? '#16A34A' : '#DC2626');
+  }
+
+  static reportFault(analyzerId: string, description: string, by: string) {
+    const analyzers = this.getAnalyzers();
+    const a = analyzers.find((x) => x.id === analyzerId);
+    if (!a) return;
+    a.alertTitle = 'Fault reported at the bench';
+    a.alertBody = `${description} · ${by}, ${this.now()}`;
+    this.saveAnalyzers(analyzers);
+    this.updateAnalyzerStatus(analyzerId, 'Offline');
+    this.addActivity(`Fault reported on ${a.name}: ${description}`, by, '#DC2626');
+  }
+
+  /** Back in service after a fault; QC must pass before patient samples run again. */
+  static returnToService(analyzerId: string, by: string) {
+    const analyzers = this.getAnalyzers();
+    const a = analyzers.find((x) => x.id === analyzerId);
+    if (!a) return;
+    a.isQcDue = true;
+    a.lastQc = 'Due now';
+    a.alertTitle = undefined;
+    a.alertBody = undefined;
+    this.saveAnalyzers(analyzers);
+    this.updateAnalyzerStatus(analyzerId, 'Ready');
+    this.addActivity(`${a.name} returned to service · QC required`, by, '#F59E0B');
+  }
+
   // Activity Log
   static getActivity(): LabActivityItem[] {
     try {
@@ -1336,7 +1469,7 @@ export class LabDataStore {
 
     const now = new Date();
     const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    const reportNo = `RPT-2609-${Math.floor(1000 + Math.random() * 9000)}`;
+    const reportNo = `RPT-${String(now.getFullYear()).slice(2)}${String(now.getMonth() + 1).padStart(2, '0')}-${Math.floor(1000 + Math.random() * 9000)}`;
 
     const isCrit = order.isCritical || order.parameters.some((p) => {
       const v = p.observedValue;
@@ -1386,10 +1519,11 @@ export class LabDataStore {
       keyFindings,
       interpretation,
       auditTrail: [
-        { id: '1', time: order.orderedAt || '09:18', title: 'Ordered', by: `${order.doctorName} · ${order.location}`, dot: '#9CA3AF' },
-        { id: '2', time: order.collectedAt || '09:40', title: `Sample collected · ${order.specimenNumber}`, by: 'Phlebotomy team', dot: '#9CA3AF' },
+        { id: '1', time: order.orderedAt || '—', title: 'Ordered', by: `${order.doctorName} · ${order.location}`, dot: '#9CA3AF' },
+        { id: '2', time: order.collectedAt || '—', title: `Sample collected · ${order.specimenNumber}`, by: 'Phlebotomy team', dot: '#9CA3AF' },
         { id: '3', time: order.enteredAt || timeStr, title: 'Result entered', by: `${order.assignedTechnician || 'Technician'} · ${order.analyzerName || 'Analyzer'}`, dot: '#9CA3AF' },
         { id: '4', time: timeStr, title: 'Approved & signed off', by: `${signedBy} · digital signature`, dot: '#2563EB' },
+        ...(isCrit ? [{ id: '4b', time: timeStr, title: `Critical alert sent to ${order.doctorName}`, by: `${signedBy} · awaiting read-back`, dot: '#DC2626' }] : []),
         { id: '5', time: timeStr, title: 'Billing line item', by: 'Auto · Hospital tariff master', dot: '#9CA3AF' },
       ],
     };
@@ -1479,24 +1613,23 @@ export class LabDataStore {
     } catch {}
   }
 
-  static publishRangeChanges(code: string) {
+  static publishRangeChanges(code: string, by: string = 'Pathologist') {
     const catalog = this.getCatalog();
     const idx = catalog.findIndex((t) => t.code === code);
     if (idx === -1) return;
 
     const test = catalog[idx];
     const now = new Date();
-    const dateStr = `${now.getDate()} ${now.toLocaleString('default', { month: 'short' })} ${now.getFullYear()}`;
+    const dateStr = `${String(now.getDate()).padStart(2, '0')} ${now.toLocaleString('en-GB', { month: 'short' })} ${now.getFullYear()}`;
 
-    // Apply any draft changes to published
-    const updatedRanges = { ...test.ranges };
-    Object.keys(updatedRanges).forEach((key) => {
-      const list = (updatedRanges as any)[key] as CatalogRangeItem[];
-      (updatedRanges as any)[key] = list.map((r) => {
-        if (r.draftHigh !== undefined) {
-          return { ...r, high: r.draftHigh, draftHigh: undefined, isDraftChanged: false };
-        }
-        return r;
+    // Apply saved draft ranges (or legacy per-row draftHigh edits) to the published ranges
+    const source = test.draftRanges || test.ranges;
+    const updatedRanges = { ...source };
+    (Object.keys(updatedRanges) as (keyof CatalogTestItem['ranges'])[]).forEach((key) => {
+      updatedRanges[key] = updatedRanges[key].map((r) => {
+        const { draftHigh, isDraftChanged, ...rest } = r;
+        void isDraftChanged;
+        return draftHigh !== undefined ? { ...rest, high: draftHigh } : rest;
       });
     });
 
@@ -1506,10 +1639,89 @@ export class LabDataStore {
       version: test.version + 1,
       lastPublished: dateStr,
       ranges: updatedRanges,
+      paramsCount: Math.max(test.paramsCount, updatedRanges.adultMale.length),
+      draftRanges: undefined,
+      draftSavedBy: undefined,
     };
 
     this.saveCatalog(catalog);
-    this.addActivity(`${test.name} clinical ranges published (v${test.version + 1})`, 'Dr. Kavitha Menon', '#2563EB');
+    this.addActivity(`${test.name} reference ranges published (v${test.version + 1})`, by, '#2563EB');
+  }
+
+  static saveRangeDraft(code: string, ranges: CatalogTestItem['ranges'], by: string) {
+    const catalog = this.getCatalog();
+    const idx = catalog.findIndex((t) => t.code === code);
+    if (idx === -1) return;
+    catalog[idx] = { ...catalog[idx], draftRanges: ranges, draftSavedBy: by, status: 'Draft' };
+    this.saveCatalog(catalog);
+    this.addActivity(`${catalog[idx].name} range changes saved as draft`, by, '#F59E0B');
+  }
+
+  static discardRangeDraft(code: string, by: string) {
+    const catalog = this.getCatalog();
+    const idx = catalog.findIndex((t) => t.code === code);
+    if (idx === -1) return;
+    const test = catalog[idx];
+    const clean = { ...test.ranges };
+    (Object.keys(clean) as (keyof CatalogTestItem['ranges'])[]).forEach((key) => {
+      clean[key] = clean[key].map((r) => {
+        const rest = { ...r };
+        delete rest.draftHigh;
+        delete rest.isDraftChanged;
+        return rest;
+      });
+    });
+    catalog[idx] = { ...test, ranges: clean, draftRanges: undefined, draftSavedBy: undefined, status: test.version > 0 ? 'Active' : 'Draft' };
+    this.saveCatalog(catalog);
+    this.addActivity(`${test.name} draft range changes discarded`, by, '#9CA3AF');
+  }
+
+  static addCatalogTest(test: CatalogTestItem, by: string): boolean {
+    const catalog = this.getCatalog();
+    if (catalog.some((t) => t.code.toUpperCase() === test.code.toUpperCase())) return false;
+    this.saveCatalog([test, ...catalog]);
+    this.addActivity(`${test.name} (${test.code}) added to the test catalog as a draft`, by, '#2563EB');
+    return true;
+  }
+
+  // Critical result call-back (read-back acknowledgement by the receiving clinician)
+  static acknowledgeCritical(reportId: string, receivedBy: string, receiverRole: string, by: string): SignedReportItem | undefined {
+    const reports = this.getSignedReports();
+    const idx = reports.findIndex((r) => r.id === reportId);
+    if (idx === -1) return undefined;
+    const now = new Date();
+    const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const original = reports[idx];
+    const updated: SignedReportItem = {
+      ...original,
+      deliveryStatus: 'acknowledged',
+      deliveryText: `Acknowledged ${timeStr} · ${receivedBy}`,
+      auditTrail: [
+        ...original.auditTrail,
+        { id: `ack-${Date.now()}`, time: timeStr, title: 'Critical acknowledged · read-back confirmed', by: `${receivedBy} (${receiverRole}) · recorded by ${by}`, dot: '#16A34A' },
+      ],
+    };
+    reports[idx] = updated;
+    this.saveSignedReports(reports);
+
+    const order = this.getOrders().find((o) => o.orderNumber === original.orderNumber);
+    if (order) this.updateOrder(order.id, { criticalAcknowledgedAt: timeStr, criticalAcknowledgedBy: receivedBy });
+
+    this.addActivity(`Critical ${original.testName} for ${original.patientName} acknowledged by ${receivedBy}`, by, '#16A34A');
+    return updated;
+  }
+
+  static logCallAttempt(reportId: string, note: string, by: string) {
+    const reports = this.getSignedReports();
+    const idx = reports.findIndex((r) => r.id === reportId);
+    if (idx === -1) return;
+    const now = new Date();
+    const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    reports[idx] = {
+      ...reports[idx],
+      auditTrail: [...reports[idx].auditTrail, { id: `call-${Date.now()}`, time: timeStr, title: `Call attempt · ${note}`, by, dot: '#F59E0B' }],
+    };
+    this.saveSignedReports(reports);
   }
 }
 

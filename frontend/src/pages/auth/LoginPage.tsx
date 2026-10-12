@@ -338,7 +338,7 @@ export const LoginPage: React.FC = () => {
           resolvedStaff?.targetRoute ||
           roleDestinationMap[enrichedUser.role] ||
           (enrichedUser.role === RoleType.PATHOLOGIST
-            ? '/lab?tab=review'
+            ? '/lab/pathologist'
             : enrichedUser.role === RoleType.DEPARTMENT_ADMIN && isLabAccount
             ? '/department/lab'
             : activeDepartment.defaultRoute);
