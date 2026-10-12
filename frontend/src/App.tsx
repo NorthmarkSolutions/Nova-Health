@@ -21,6 +21,8 @@ import { ControlledDrugRegisterWorkspace } from './pages/pharmacy/controlled/Con
 import { PharmacyAdminWorkspace } from './pages/pharmacy/admin/PharmacyAdminWorkspace';
 import { NewOTCSalePage } from './pages/pharmacy/pharmacist/NewOTCSalePage';
 import { LabDashboard } from './pages/lab/LabDashboard';
+import { PathologistWorkspace } from './pages/lab/pathologist/PathologistWorkspace';
+import { TechnicianWorkspace } from './pages/lab/technician/TechnicianWorkspace';
 import { OtDashboard } from './pages/ot/OtDashboard';
 import { IpdDashboard } from './pages/ipd/IpdDashboard';
 import { BillingDepartmentContainer } from './pages/billing/BillingDepartmentContainer';
@@ -114,8 +116,8 @@ const RoleHomeRedirect: React.FC = () => {
     [RoleType.OT_MANAGER]: '/ot',
     [RoleType.WARD_MANAGER]: '/ipd',
     [RoleType.NURSE]: '/nurse',
-    [RoleType.PATHOLOGIST]: '/lab',
-    [RoleType.LAB_TECH]: '/lab',
+    [RoleType.PATHOLOGIST]: '/lab/pathologist',
+    [RoleType.LAB_TECH]: '/lab/technician',
     [RoleType.PHARMACIST]: '/pharmacy',
     [RoleType.INVENTORY_MANAGER]: '/pharmacy/inventory',
     [RoleType.FINANCE_MANAGER]: '/accounts',
@@ -177,6 +179,14 @@ export function App() {
             >
               <Route path="/department/:deptId/*" element={<DepartmentWorkspaceContainer />} />
               <Route path="/department/*" element={<DepartmentWorkspaceContainer />} />
+            </Route>
+
+            {/* Lab Pathologist & Technician Workspaces: HMS shell (design bible Section 19) */}
+            <Route element={<ProtectedRoute allowedRoles={[RoleType.PATHOLOGIST, RoleType.SUPER_ADMIN, RoleType.HOSPITAL_ADMIN]} />}>
+              <Route path="/lab/pathologist" element={<PathologistWorkspace />} />
+            </Route>
+            <Route element={<ProtectedRoute allowedRoles={[RoleType.LAB_TECH, RoleType.SUPER_ADMIN, RoleType.HOSPITAL_ADMIN]} />}>
+              <Route path="/lab/technician" element={<TechnicianWorkspace />} />
             </Route>
 
             {/* Pharmacy Workspaces: Unified Single Dashboard with Nested Navigation */}
