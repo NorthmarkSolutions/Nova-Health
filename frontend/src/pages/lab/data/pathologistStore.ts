@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { patientJourneyService, LabTariffItem } from '../../../services/patientJourneyService';
 import { LabDataStore, LabQueueOrder, SignedReportItem, CatalogTestItem, AnalyzerItem, TestParameterResult } from './labDataStore';
 import { LabAdminStore, LAB_ADMIN_SYNC_EVENT, minutesOf, parseTatTarget } from './labAdminStore';
+import { LabApi, labApiMode } from '../../../services/labService';
 
 export interface PathologistSnapshot {
   orders: LabQueueOrder[];
@@ -18,14 +19,16 @@ export interface PathologistSnapshot {
 
 const readSnapshot = (): PathologistSnapshot => {
   const settings = LabAdminStore.get().settings;
+  // Signed in against the server, the read-back window is the one stored on each call-back
+  const serverWindow = labApiMode() ? LabApi.ackWindowMinutes() : null;
   return {
     orders: LabDataStore.getOrders(),
     reports: LabDataStore.getSignedReports(),
     catalog: LabDataStore.getCatalog(),
     analyzers: LabDataStore.getAnalyzers(),
     tariffs: patientJourneyService.getLabTariffs(),
-    ackWindowMin: parseTatTarget(settings.criticalAckWindow),
-    ackWindowLabel: settings.criticalAckWindow,
+    ackWindowMin: serverWindow ?? parseTatTarget(settings.criticalAckWindow),
+    ackWindowLabel: serverWindow !== null ? `${serverWindow} minutes` : settings.criticalAckWindow,
   };
 };
 

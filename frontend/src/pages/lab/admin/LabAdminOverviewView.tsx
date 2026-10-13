@@ -17,6 +17,7 @@ import {
 } from '../../../components/hms';
 import { STAGE_ORDER, STAGE_LABEL, stageGroup, tatMinutes, minutesOf, fmtMinutes, parseTatTarget } from '../data/labAdminStore';
 import type { LabQueueOrder } from '../data/labDataStore';
+import { ageSex } from '../data/labDataStore';
 import { LabAdminViewProps, StageBadge, PriorityBadge } from './labAdminUi';
 
 const STAGE_TIME: Partial<Record<LabQueueOrder['stage'], keyof LabQueueOrder>> = {
@@ -113,7 +114,7 @@ export const LabAdminOverviewView: React.FC<LabAdminViewProps> = ({ data, initia
           icon={FlaskConical}
           title={o.patientName}
           badge={<PriorityBadge priority={o.priority} />}
-          subtitle={`${o.orderNumber} · ${o.uhid} · ${o.age} y / ${o.gender}`}
+          subtitle={`${o.orderNumber} · ${o.uhid} · ${ageSex(o.age, o.gender)}`}
           actions={<HmsBadge tone="gray">Read-only</HmsBadge>}
         />
         <HmsStatStrip

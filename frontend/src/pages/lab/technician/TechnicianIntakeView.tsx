@@ -20,7 +20,7 @@ import {
   TEXTAREA,
   HMS,
 } from '../../../components/hms';
-import { LabDataStore, LabQueueOrder } from '../data/labDataStore';
+import { LabDataStore, LabQueueOrder, ageSex } from '../data/labDataStore';
 import { fmtMinutes } from '../data/labAdminStore';
 import { minutesSince } from '../data/pathologistStore';
 import { isIntake, intakeSort, isUnpaid, analyzersFor, analyzerBlock } from '../data/technicianStore';
@@ -134,7 +134,7 @@ export const TechnicianIntakeView: React.FC<TechnicianViewProps> = ({ data, by, 
           icon={TestTube2}
           title={o.patientName}
           badge={<StageBadge stage={o.stage} />}
-          subtitle={`${o.uhid} · ${o.age}y ${o.gender} · ${o.location}`}
+          subtitle={`${o.uhid} · ${ageSex(o.age, o.gender)} · ${o.location}`}
           actions={
             <>
               <HmsButton icon={Printer} onClick={() => (printSpecimenLabel(o) ? undefined : notify('The print dialog could not open in this browser.', 'error'))}>

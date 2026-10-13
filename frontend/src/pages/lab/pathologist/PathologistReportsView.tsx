@@ -1,6 +1,6 @@
 // Pathologist · Signed reports — released reports, delivery status, print and addenda.
 import React, { useState } from 'react';
-import { FileText, Printer, FilePlus2, Download } from 'lucide-react';
+import { FileText, Printer, FilePlus2, Download, ShieldCheck } from 'lucide-react';
 import {
   HmsMasterDetail,
   HmsListRow,
@@ -18,12 +18,13 @@ import {
   TEXTAREA,
   HMS,
 } from '../../../components/hms';
-import { LabDataStore, SignedReportItem } from '../data/labDataStore';
+import { LabDataStore, SignedReportItem, ageSex } from '../data/labDataStore';
 import { fmtMinutes } from '../data/labAdminStore';
 import { signedToday, signerOf, reviewMinutes, awaitingAck, paramFlag } from '../data/pathologistStore';
 import { PathologistViewProps, FlagBadge } from './pathologistUi';
 import { FLAG_COLOR, printReport, fmtRange } from './pathologistFormat';
 import { downloadCsv } from '../admin/labAdminUi';
+import { LabApi } from '../../../services/labService';
 
 const DELIVERY: Record<SignedReportItem['deliveryStatus'], { label: string; tone: 'green' | 'amber' | 'blue' }> = {
   acknowledged: { label: 'Acknowledged', tone: 'green' },
@@ -82,6 +83,16 @@ export const PathologistReportsView: React.FC<PathologistViewProps> = ({ data, b
     notify(`${visible.length} report${visible.length === 1 ? '' : 's'} exported to CSV.`);
   };
 
+  const [verifying, setVerifying] = useState<string | null>(null);
+  const verify = async (r: SignedReportItem) => {
+    setVerifying(r.id);
+    const v = await LabApi.verifyReport(r.id);
+    setVerifying(null);
+    if (!v) return;
+    const addenda = v.amendments.length ? ` Addenda: ${v.amendments.map((a) => `#${a.number} ${a.status.toLowerCase()}`).join(', ')}.` : '';
+    notify(`${r.reportNumber}: ${v.message}${addenda}`, v.status === 'VALID' ? 'success' : 'error');
+  };
+
   const saveAddendum = () => {
     if (!amendFor) return;
     if (amendNote.trim().length < 10) return setError('Describe the correction or addition (at least 10 characters).');
@@ -104,7 +115,7 @@ export const PathologistReportsView: React.FC<PathologistViewProps> = ({ data, b
           icon={FileText}
           title={r.patientName}
           badge={<FlagBadge flag={r.flag} />}
-          subtitle={`${r.reportNumber} · ${r.uhid} · ${r.age}y ${r.gender} · ${r.location}`}
+          subtitle={`${r.reportNumber} · ${r.uhid} · ${ageSex(r.age, r.gender)} · ${r.location}`}
           actions={
             <>
               <HmsButton icon={Printer} onClick={() => (printReport(r, order) ? undefined : notify('The print dialog could not open in this browser.', 'error'))}>
@@ -154,6 +165,38 @@ export const PathologistReportsView: React.FC<PathologistViewProps> = ({ data, b
                   />
                 );
               })}
+            </HmsSection>
+          )}
+
+          {r.signature && (
+            <HmsSection
+              title={`Digital signature · version ${r.signature.version}`}
+              right={
+                <HmsButton size="sm" icon={ShieldCheck} onClick={() => verify(r)} disabled={verifying === r.id}>
+                  {verifying === r.id ? 'Checking…' : 'Verify signature'}
+                </HmsButton>
+              }
+            >
+              <HmsRow label="Signed by" hint={r.signature.designation || 'Designation not recorded'} value={signer || '—'} />
+              <HmsRow
+                label="Fingerprint"
+                hint="SHA-256 of the released results, interpretation, signer and time"
+                value={
+                  <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '12px', color: HMS.textSecondary }}>
+                    {r.signature.hash ? `${r.signature.hash.slice(0, 16)}…` : 'Signed before fingerprints were recorded'}
+                  </span>
+                }
+                last={r.signature.amendments.length === 0}
+              />
+              {r.signature.amendments.map((a, idx) => (
+                <HmsRow
+                  key={a.number}
+                  last={idx === r.signature!.amendments.length - 1}
+                  label={`Addendum ${a.number}`}
+                  hint={`${a.text} — ${a.signedByName || 'signer not recorded'}`}
+                  value={<span style={{ fontSize: '13px', color: HMS.textSecondary }}>{new Date(a.signedAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>}
+                />
+              ))}
             </HmsSection>
           )}
 

@@ -21,12 +21,13 @@ import {
   TEXTAREA,
   HMS,
 } from '../../../components/hms';
-import { LabDataStore, LabQueueOrder, TestParameterResult } from '../data/labDataStore';
+import { LabDataStore, LabQueueOrder, TestParameterResult, ageSex } from '../data/labDataStore';
 import { fmtMinutes } from '../data/labAdminStore';
 import { paramFlag, deltaPct, DELTA_LIMIT_PCT, minutesSince, tatTargetFor } from '../data/pathologistStore';
 import { isOnBench, benchSort, analyzersFor, analyzerBlock } from '../data/technicianStore';
 import { PriorityBadge, ANALYZER_TONE } from '../admin/labAdminUi';
 import { TechnicianViewProps } from './technicianUi';
+import { LabMachineReportSection } from '../LabMachineReportSection';
 
 type Values = Record<string, string>;
 const FLAG_TONE = { Critical: 'red', Abnormal: 'amber', Normal: 'green', Pending: 'gray' } as const;
@@ -146,7 +147,7 @@ export const TechnicianResultsView: React.FC<TechnicianViewProps> = ({ data, by,
 
     return (
       <>
-        <HmsDetailHeader icon={FlaskConical} title={o.patientName} badge={<PriorityBadge priority={o.priority} />} subtitle={`${o.uhid} · ${o.age}y ${o.gender} · ${o.specimenNumber} · ${o.testName}`} />
+        <HmsDetailHeader icon={FlaskConical} title={o.patientName} badge={<PriorityBadge priority={o.priority} />} subtitle={`${o.uhid} · ${ageSex(o.age, o.gender)} · ${o.specimenNumber} · ${o.testName}`} />
         <HmsStatStrip
           items={[
             { label: 'Analyzer', value: o.analyzerName || '—', note: a ? `${a.status} · QC ${a.lastQc}` : 'Not linked', tone: down || qcFailed(o) ? 'red' : 'default' },
@@ -230,6 +231,8 @@ export const TechnicianResultsView: React.FC<TechnicianViewProps> = ({ data, by,
               </HmsSection>
             );
           })}
+
+          <LabMachineReportSection canUpload />
 
           <HmsSection title="Run note" padded>
             <HmsField label="Note for the pathologist" hint="Sample quality, re-runs, dilutions, interferences">

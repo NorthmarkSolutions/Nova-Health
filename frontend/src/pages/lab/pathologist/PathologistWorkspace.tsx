@@ -1,6 +1,7 @@
 // Lab Pathologist workspace — HMS design bible Section 19 (reference: Lab Admin).
 // Validation first: review queue and critical call-backs, then released reports, then the test catalog.
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { onLabApiError } from '../../../services/labService';
 import { useSearchParams } from 'react-router-dom';
 import { ClipboardCheck, PhoneCall, FileText, BookOpen } from 'lucide-react';
 import { HmsShell, HmsNavGroup, HmsPageHeader, HmsKpiRow, HmsToast, useHmsToast, HmsBadge } from '../../../components/hms';
@@ -34,6 +35,8 @@ export const PathologistWorkspace: React.FC = () => {
   const data = usePathologistData();
   const { orders, reports, catalog, ackWindowMin, ackWindowLabel } = data;
   const { toast, show, clear } = useHmsToast();
+  // Steps the lab server refuses (wrong stage, role, unpaid bill…) are shown here and the data reloads
+  useEffect(() => onLabApiError((msg) => show(msg, 'error')), [show]);
   const [newSignal, setNewSignal] = useState(0);
 
   const goTo = (tab: string, filter?: string) => {

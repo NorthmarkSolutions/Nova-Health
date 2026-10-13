@@ -5866,14 +5866,14 @@ class TPACorporateBillingService:
         diagnostics = []
         try:
             from apps.lab.models import LabOrder
-            lab_orders = LabOrder.objects.filter(patient=pt).select_related('test').order_by('-order_date')[:10]
+            lab_orders = LabOrder.objects.filter(patient=pt).select_related('test').order_by('-ordered_at')[:10]
             diagnostics = [
                 {
                     'order_id': str(lo.id),
                     'order_number': lo.order_number,
                     'test_name': lo.test.name if lo.test else 'Clinical Diagnostic',
                     'status': lo.status,
-                    'order_date': lo.order_date.isoformat() if lo.order_date else None
+                    'order_date': lo.ordered_at.isoformat() if lo.ordered_at else None
                 }
                 for lo in lab_orders
             ]
@@ -6925,7 +6925,7 @@ class RevenueIntegrityScannerService:
         try:
             from apps.lab.models import LabOrder
             unbilled_lab_orders = LabOrder.objects.filter(
-                order_date__lte=cutoff_24h
+                ordered_at__lte=cutoff_24h
             ).exclude(
                 status='CANCELLED'
             ).select_related('patient', 'test')
@@ -6934,7 +6934,7 @@ class RevenueIntegrityScannerService:
                 ref_num = getattr(order, 'order_number', str(order.id))
                 if not RevenueLeakageAlert.objects.filter(source_event_reference=ref_num).exists():
                     has_invoice = InvoiceItem.objects.filter(description__icontains=ref_num).exists()
-                    has_charge = BillableChargeItem.objects.filter(source_reference_id=ref_num).exists()
+                    has_charge = BillableChargeItem.objects.filter(source_reference_id__in=[ref_num, str(order.id)]).exists()
                     if not has_invoice and not has_charge:
                         test_price = getattr(order.test, 'price', Decimal('450.00')) if hasattr(order, 'test') and order.test else Decimal('450.00')
                         score = min(100, max(30, int(test_price / Decimal('30.00')) + 25))

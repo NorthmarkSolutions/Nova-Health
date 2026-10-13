@@ -80,6 +80,14 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'north_hospital.sqlite3',
+        # Several screens write at once (doctor orders, lab steps, billing charges). SQLite allows one
+        # writer: take the write lock at the start of each transaction and wait for it (instead of
+        # failing with "database is locked"), and use WAL so reads never block on a write.
+        'OPTIONS': {
+            'timeout': 20,
+            'transaction_mode': 'IMMEDIATE',
+            'init_command': 'PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;',
+        },
     }
 }
 
@@ -142,3 +150,6 @@ SIMPLE_JWT = {
     'SIGNING_KEY': SECRET_KEY,
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
+
+# Critical lab result read-back window (minutes). Phase 4 moves this into Lab Admin settings.
+LAB_CRITICAL_ACK_MINUTES = 15

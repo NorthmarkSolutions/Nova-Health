@@ -40,6 +40,7 @@ import {
 } from '../data/labAdminStore';
 import { getHospitalStaff } from '../../admin/setup/organization/hospitalStaffStore';
 import { LabAdminViewProps, STAFF_STATUS_TONE } from './labAdminUi';
+import { LabApi, labApiMode, LabStaffCandidate } from '../../../services/labService';
 
 const ROLES: { role: string; category: LabStaffCategory }[] = [
   { role: 'Consultant Pathologist', category: 'Pathologist' },
@@ -91,12 +92,19 @@ export const LabAdminStaffView: React.FC<LabAdminViewProps> = ({ data, by, notif
   const [selected, setSelected] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ id: string | null; draft: Draft } | null>(null);
   const [formError, setFormError] = useState('');
+  // Signed in against the server: lab staff are existing user accounts (created by Hospital Admin)
+  const serverMode = labApiMode();
+  const [candidates, setCandidates] = useState<LabStaffCandidate[] | null>(null);
 
   const pendingFor = (id: string) => state.requests.filter((r) => r.status === 'Pending' && (r.staffId === id || r.withStaffId === id));
 
   const openAdd = () => {
     setFormError('');
     setEditing({ id: null, draft: emptyDraft() });
+    if (serverMode) {
+      setCandidates(null);
+      void LabApi.staffCandidates().then(setCandidates);
+    }
   };
 
   // Alt+N from the shell opens "Add staff"
@@ -296,6 +304,10 @@ export const LabAdminStaffView: React.FC<LabAdminViewProps> = ({ data, by, notif
   const saveDraft = () => {
     if (!editing) return;
     const d = editing.draft;
+    if (serverMode && !editing.id && !d.userId) {
+      setFormError('Choose the staff member\'s user account. Hospital Admin creates accounts for new joiners.');
+      return;
+    }
     if (!d.name.trim() || !d.code.trim()) {
       setFormError('Name and employee code are required.');
       return;
@@ -363,7 +375,27 @@ export const LabAdminStaffView: React.FC<LabAdminViewProps> = ({ data, by, notif
           }
         >
           {formError && <HmsNotice tone="red">{formError}</HmsNotice>}
-          {!editing.id && hospitalPool.length > 0 && (
+          {serverMode && !editing.id && (
+            <HmsField label="User account" required hint="Name, email and phone come from the account. Only lab, pathology and nursing accounts not already on the team are listed.">
+              <select
+                style={INPUT}
+                value={editing.draft.userId || ''}
+                disabled={candidates === null}
+                onChange={(e) => {
+                  const c = (candidates || []).find((x) => x.id === e.target.value);
+                  if (c) setDraft({ userId: c.id, name: c.name, email: c.email || '', phone: c.phone || '', code: editing.draft.code || c.username.toUpperCase() });
+                }}
+              >
+                <option value="">{candidates === null ? 'Loading accounts…' : candidates.length ? '— Choose an account —' : 'No accounts available — ask Hospital Admin to create one'}</option>
+                {(candidates || []).map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} · {c.username} · {c.roleLabel}
+                  </option>
+                ))}
+              </select>
+            </HmsField>
+          )}
+          {!serverMode && !editing.id && hospitalPool.length > 0 && (
             <HmsField label="Fill from the hospital staff directory" hint="Optional — copies name, code and contact details.">
               <select
                 style={INPUT}
@@ -384,7 +416,7 @@ export const LabAdminStaffView: React.FC<LabAdminViewProps> = ({ data, by, notif
           )}
           <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '12px' }}>
             <HmsField label="Full name" required>
-              <input style={INPUT} value={editing.draft.name} onChange={(e) => setDraft({ name: e.target.value })} placeholder="e.g. Suresh Nair" />
+              <input style={INPUT} value={editing.draft.name} readOnly={serverMode} onChange={(e) => setDraft({ name: e.target.value })} placeholder={serverMode ? 'From the user account' : 'e.g. Suresh Nair'} />
             </HmsField>
             <HmsField label="Employee code" required>
               <input style={INPUT} value={editing.draft.code} onChange={(e) => setDraft({ code: e.target.value.toUpperCase() })} placeholder="e.g. EMP-L-0420" />

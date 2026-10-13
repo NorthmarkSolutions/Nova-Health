@@ -1,6 +1,7 @@
 // Lab Technician workspace — HMS design bible Section 19 (reference: Lab Admin).
 // Bench order: sample intake → result entry → sent for review, then analyzers & QC.
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { onLabApiError } from '../../../services/labService';
 import { useSearchParams } from 'react-router-dom';
 import { TestTube2, FlaskConical, ClipboardList, Cpu, ScanLine } from 'lucide-react';
 import { HmsShell, HmsNavGroup, HmsPageHeader, HmsKpiRow, HmsToast, useHmsToast, HmsBadge, HmsModal, HmsButton, HmsField, HmsNotice, INPUT } from '../../../components/hms';
@@ -36,6 +37,8 @@ export const TechnicianWorkspace: React.FC = () => {
   const data = useTechnicianData();
   const { orders, analyzers } = data;
   const { toast, show, clear } = useHmsToast();
+  // Steps the lab server refuses (wrong stage, role, unpaid bill…) are shown here and the data reloads
+  useEffect(() => onLabApiError((msg) => show(msg, 'error')), [show]);
   const [newSignal, setNewSignal] = useState(0);
   const [scanning, setScanning] = useState(false);
   const [scan, setScan] = useState('');

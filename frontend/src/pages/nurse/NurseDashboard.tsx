@@ -9,6 +9,7 @@ import {
   NurseShiftRecord,
 } from '../../services/patientJourneyService';
 import { useAuth } from '../../context/AuthContext';
+import { onLabApiError } from '../../services/labService';
 import { resolveNurseTab, NurseTabKey } from './nurseTabs';
 import { NurseHeader } from './components/NurseHeader';
 import { TriageQueueView } from './components/TriageQueueView';
@@ -39,6 +40,8 @@ export const NurseDashboard: React.FC = () => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
   };
+
+  useEffect(() => onLabApiError((msg) => showToast(`Lab: ${msg}`)), []);
 
   // Audio Chime Synthesizer
   const playCallingChime = () => {
@@ -93,18 +96,9 @@ export const NurseDashboard: React.FC = () => {
 
   // Specimen Collection Action
   const handleConfirmCollection = async (orderId: string, collectorName: string) => {
+    // Signed in against the server this goes through Billing's collection gate; a refusal shows as a toast
     patientJourneyService.collectSample(orderId, collectorName);
     setLabOrders(patientJourneyService.getLabOrders());
-
-    try {
-      await fetch(`/api/v1/lab/orders/${orderId}/collect-sample/`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ collectorName }),
-      });
-    } catch {
-      // Offline fallback
-    }
 
     setSelectedOrderForCollection(null);
     showToast(`✓ Specimen collected & barcode label generated`);

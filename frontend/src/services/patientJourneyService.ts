@@ -1,5 +1,6 @@
 // Shared Patient Journey Store for cross-department persistence
 import api from './api';
+import { LabApi, labApiMode } from './labService';
 import { Gender, RoleType, AppointmentStatus } from '../types';
 import {
   getCampusBuildings,
@@ -1099,6 +1100,9 @@ export const patientJourneyService = {
 
   // --- Laboratory Orders & Tariffs ---
   getLabTariffs(): Record<string, LabTariffItem> {
+    // Signed in against the server: the live Billing price (once loaded)
+    const server = labApiMode() ? LabApi.pricing() : null;
+    if (server) return server.tariffs;
     const raw = localStorage.getItem('nh_lab_tariffs');
     if (!raw) {
       localStorage.setItem('nh_lab_tariffs', JSON.stringify(DEFAULT_LAB_TARIFFS));
@@ -1140,6 +1144,14 @@ export const patientJourneyService = {
   },
 
   getLabOrders(): SharedLabOrder[] {
+    if (labApiMode()) {
+      // Lab orders come from the server; radiology requests are not lab tests and stay local
+      return [...LabApi.sharedOrders(), ...this.getLocalLabOrders().filter((o) => o.category === 'Radiology')];
+    }
+    return this.getLocalLabOrders();
+  },
+
+  getLocalLabOrders(): SharedLabOrder[] {
     const raw = localStorage.getItem('nh_lab_orders');
     if (!raw) {
       localStorage.setItem('nh_lab_orders', JSON.stringify(DEFAULT_LAB_ORDERS));
@@ -1152,8 +1164,19 @@ export const patientJourneyService = {
     }
   },
 
-  addLabOrder(order: SharedLabOrder): SharedLabOrder {
-    const list = this.getLabOrders();
+  /** location / clinicalNotes are sent to the lab with the order (where to collect, why it was ordered). */
+  addLabOrder(order: SharedLabOrder, context: { location?: string; clinicalNotes?: string } = {}): SharedLabOrder {
+    if (labApiMode() && order.category !== 'Radiology') {
+      void LabApi.createOrder({
+        uhid: order.uhid,
+        testName: order.testName,
+        priority: order.priority || 'ROUTINE',
+        location: context.location,
+        clinicalNotes: context.clinicalNotes,
+      });
+      return order;
+    }
+    const list = this.getLocalLabOrders();
     const updated = [order, ...list.filter((o) => o.id !== order.id)];
     localStorage.setItem('nh_lab_orders', JSON.stringify(updated));
     window.dispatchEvent(new Event('nh_data_sync'));
@@ -1162,7 +1185,7 @@ export const patientJourneyService = {
   },
 
   updateLabOrder(orderId: string, updates: Partial<SharedLabOrder>): void {
-    const list = this.getLabOrders();
+    const list = this.getLocalLabOrders();
     const updated = list.map((o) => (o.id === orderId ? { ...o, ...updates } : o));
     localStorage.setItem('nh_lab_orders', JSON.stringify(updated));
     window.dispatchEvent(new Event('nh_data_sync'));
@@ -1170,7 +1193,12 @@ export const patientJourneyService = {
   },
 
   collectSample(orderId: string, collectorName: string = 'Nurse Clara Adams'): SharedLabOrder | null {
-    const list = this.getLabOrders();
+    if (labApiMode() && LabApi.raw(orderId)) {
+      // Billing clears collection on the server; a refusal comes back as a lab error message
+      void LabApi.collect(orderId);
+      return this.getLabOrders().find((o) => o.id === orderId) || null;
+    }
+    const list = this.getLocalLabOrders();
     const target = list.find((o) => o.id === orderId);
     if (!target) return null;
 
@@ -1190,7 +1218,11 @@ export const patientJourneyService = {
   },
 
   acknowledgeCriticalLabOrder(orderId: string, doctorName: string, ackNote?: string): SharedLabOrder | null {
-    const list = this.getLabOrders();
+    if (labApiMode() && LabApi.raw(orderId)) {
+      void LabApi.acknowledgeCritical(orderId, ackNote || `Acknowledged by ${doctorName}`);
+      return this.getLabOrders().find((o) => o.id === orderId) || null;
+    }
+    const list = this.getLocalLabOrders();
     const target = list.find((o) => o.id === orderId);
     if (!target) return null;
 

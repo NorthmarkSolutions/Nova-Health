@@ -21,6 +21,7 @@ import { paramFlag, orderFlag, minutesSince } from '../data/pathologistStore';
 import { isSubmitted } from '../data/technicianStore';
 import { StageBadge } from '../admin/labAdminUi';
 import { TechnicianViewProps } from './technicianUi';
+import { LabMachineReportSection } from '../LabMachineReportSection';
 
 const FLAG_TONE = { Critical: 'red', Abnormal: 'amber', Normal: 'green' } as const;
 const FLAG_COLOR = { Critical: '#dc2626', Abnormal: '#b45309', Normal: '#15803d', Pending: HMS.textMuted } as const;
@@ -96,6 +97,9 @@ export const TechnicianSubmittedView: React.FC<TechnicianViewProps> = ({ data, b
               );
             })}
           </HmsSection>
+          {/* Upload stays open until the pathologist signs; after that only an addendum can change it */}
+          <LabMachineReportSection canUpload={o.stage !== 'SIGNED_OFF'} />
+
           <HmsSection title="Run note" padded>
             <div style={{ fontSize: '14px', color: o.technicianNote ? HMS.text : HMS.textSecondary, lineHeight: 1.6 }}>{o.technicianNote || 'No note was added.'}</div>
           </HmsSection>
