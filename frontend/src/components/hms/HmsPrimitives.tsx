@@ -448,13 +448,23 @@ export const HmsSection: React.FC<{ title: string; right?: React.ReactNode; chil
   defaultOpen = true,
 }) => {
   const [open, setOpen] = useState(defaultOpen);
+  const ref = useRef<HTMLElement>(null);
+  const toggle = () => {
+    const opening = !open;
+    setOpen(opening);
+    // Once it has expanded, scroll just enough to bring the whole section into view (top first if it is taller)
+    if (opening) {
+      const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      window.setTimeout(() => ref.current?.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' }), reduce ? 0 : 220);
+    }
+  };
   return (
-    <section style={{ border: `1px solid ${HMS.border}`, borderRadius: '10px', overflow: 'hidden', flexShrink: 0 }}>
+    <section ref={ref} style={{ border: `1px solid ${HMS.border}`, borderRadius: '10px', overflow: 'hidden', flexShrink: 0, scrollMarginTop: '12px', scrollMarginBottom: '12px' }}>
       <div style={{ background: HMS.subtle, borderBottom: open ? `1px solid ${HMS.border}` : '1px solid transparent', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', paddingRight: right ? '10px' : 0, transition: 'border-color 200ms ease-out' }}>
         <button
           type="button"
           className="hms-group-header"
-          onClick={() => setOpen((v) => !v)}
+          onClick={toggle}
           aria-expanded={open}
           title={open ? `Collapse ${title.toLowerCase()}` : `Expand ${title.toLowerCase()}`}
           style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}

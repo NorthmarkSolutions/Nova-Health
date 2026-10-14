@@ -377,7 +377,7 @@ export const DEPARTMENT_LOGIN_NODES: DepartmentNode[] = [
       {
         id: 'demo-opd-ast',
         employeeId: 'EMP-AST-204',
-        name: 'Nurse Dev Sharma',
+        name: 'Dev Sharma',
         designation: 'Doctor Clinical Assistant (Chamber Desk)',
         role: RoleType.DOCTOR_ASSISTANT,
         cadre: 'assistant',
@@ -425,7 +425,7 @@ export const DEPARTMENT_LOGIN_NODES: DepartmentNode[] = [
       {
         id: 'demo-rec-01',
         employeeId: 'EMP-REC-001',
-        name: 'Rachel Adams',
+        name: 'Emma FrontDesk',
         designation: 'Lead Receptionist & Patient Intake',
         role: RoleType.RECEPTIONIST,
         cadre: 'receptionist',
@@ -435,7 +435,7 @@ export const DEPARTMENT_LOGIN_NODES: DepartmentNode[] = [
         departmentId: 'dept-reception',
         departmentCode: 'RECEPTION',
         departmentName: 'Front Desk & Reception',
-        avatarInitials: 'RA',
+        avatarInitials: 'EF',
       },
       {
         id: 'demo-rec-sup',
@@ -444,7 +444,7 @@ export const DEPARTMENT_LOGIN_NODES: DepartmentNode[] = [
         designation: 'Front Office Operations Supervisor',
         role: RoleType.RECEPTION_SUPERVISOR,
         cadre: 'receptionist',
-        email: 'reception@northhospital.com',
+        email: 'reception.supervisor@northhospital.com',
         targetRoute: '/reception',
         badge: 'Supervisor',
         departmentId: 'dept-reception',

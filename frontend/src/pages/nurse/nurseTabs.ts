@@ -1,10 +1,5 @@
-export type NurseTabKey =
-  | 'triage-queue'
-  | 'vitals'
-  | 'observation-beds'
-  | 'specimen-desk'
-  | 'shift-handover'
-  | 'reports';
+// Nurse workspace sections (HMS shell sidebar order) and the old ?tab= values that still resolve to them.
+export type NurseTabKey = 'queue' | 'vitals' | 'observation' | 'treatment' | 'specimens' | 'results' | 'handover' | 'register';
 
 export interface NurseTabConfig {
   key: NurseTabKey;
@@ -13,26 +8,19 @@ export interface NurseTabConfig {
 }
 
 export const NURSE_TABS: NurseTabConfig[] = [
-  { key: 'triage-queue', label: 'Triage Queue', legacy: ['triage'] },
-  { key: 'vitals', label: 'Vitals & Assessment', legacy: [] },
-  { key: 'observation-beds', label: 'Observation Beds', legacy: ['observation'] },
-  { key: 'specimen-desk', label: 'Specimen Desk', legacy: ['specimen', 'phlebotomy', 'lab-orders'] },
-  { key: 'shift-handover', label: 'Shift & Handover', legacy: ['handoff'] },
-  { key: 'reports', label: 'Reports & Audits', legacy: [] },
+  { key: 'queue', label: 'Triage queue', legacy: ['triage-queue', 'triage'] },
+  { key: 'vitals', label: 'Vitals & assessment', legacy: [] },
+  { key: 'observation', label: 'Day-care observation', legacy: ['observation-beds'] },
+  { key: 'treatment', label: 'Treatment room', legacy: ['tasks', 'injections'] },
+  { key: 'specimens', label: 'Specimen collection', legacy: ['specimen-desk', 'specimen', 'phlebotomy', 'lab-orders'] },
+  { key: 'results', label: 'Lab results', legacy: ['reports-lab'] },
+  { key: 'handover', label: 'Shift handover', legacy: ['shift-handover', 'handoff'] },
+  { key: 'register', label: 'Triage register', legacy: ['reports'] },
 ];
 
-/**
- * Resolves any tab query parameter (including legacy keys, empty/null, or unknown values)
- * to a valid NurseTabKey. Never returns null or blank.
- */
+/** Any ?tab= value (new, legacy, empty or unknown) resolves to a real section. */
 export function resolveNurseTab(param: string | null | undefined): NurseTabKey {
-  if (!param) return 'triage-queue';
-  const cleanParam = param.trim().toLowerCase();
-
-  for (const tab of NURSE_TABS) {
-    if (tab.key === cleanParam) return tab.key;
-    if (tab.legacy.includes(cleanParam)) return tab.key;
-  }
-
-  return 'triage-queue';
+  const clean = (param || '').trim().toLowerCase();
+  const hit = NURSE_TABS.find((t) => t.key === clean || t.legacy.includes(clean));
+  return hit ? hit.key : 'queue';
 }

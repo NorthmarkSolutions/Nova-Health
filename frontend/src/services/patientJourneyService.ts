@@ -72,6 +72,15 @@ export interface SharedQueueToken {
   paymentMode?: string;
   invoiceNo?: string;
   callingStatus?: 'IDLE' | 'CALLING' | 'ACCEPTED';
+  /** Where the patient is being called to when it is not the doctor's chamber (e.g. "Triage station"). */
+  callPoint?: string;
+  /** Chamber desk: when the assistant called the patient in, and when they were seated with the doctor (ISO) */
+  calledAt?: string;
+  seatedAt?: string;
+  /** Chamber desk hold (patient stepped out) — the reason; the token keeps its status */
+  chamberHold?: string;
+  /** Chamber desk checkout after the consultation: where the patient was sent next */
+  handoff?: { at: string; by: string; routes: string[]; note?: string };
   checkoutTime?: string;
   allergies?: string[];
   chronicConditions?: string[];
@@ -92,16 +101,26 @@ export interface SharedQueueToken {
     rbs?: number;
     painScale?: number;
     triageNotes?: string;
+    /** AVPU / new confusion: A alert, C new confusion, V voice, P pain, U unresponsive */
+    avpu?: 'A' | 'C' | 'V' | 'P' | 'U';
+    onOxygen?: boolean;
+    /** NEWS2 early warning score, only when every parameter was recorded */
+    news2?: number;
+    recordedAt?: string;
+    recordedBy?: string;
   };
   assessment?: {
     chiefComplaint: string;
-    painScale: number;
+    painScale?: number;
     allergies: string[];
     medicalHistory: string[];
     currentMedications: string[];
     triageCategory?: 'IMMEDIATE' | 'VERY_URGENT' | 'URGENT' | 'STANDARD' | 'NON_URGENT';
     triagedBy?: string;
     triagedAt?: string;
+    fallRisk?: 'LOW' | 'HIGH';
+    pregnancy?: 'NOT_PREGNANT' | 'PREGNANT' | 'UNKNOWN';
+    nurseNotes?: string;
   };
 }
 
@@ -176,6 +195,38 @@ export interface DailyCounterSession {
   status: 'OPEN' | 'CLOSED';
   openingFloat: number;
   notes?: string;
+  /** Shift close: cash counted in the drawer, what it should hold, the difference and who took over */
+  countedCash?: number;
+  expectedCash?: number;
+  variance?: number;
+  closedBy?: string;
+  handedTo?: string;
+  openedBy?: string;
+}
+
+/** Advance OPD appointment booked at the front desk; it becomes a queue token when the patient checks in. */
+export interface SharedAppointment {
+  id: string;
+  ref: string;
+  date: string; // YYYY-MM-DD
+  slot: string; // e.g. "10:15 AM"
+  uhid: string;
+  patient: string;
+  phone: string;
+  age?: number;
+  gender?: string;
+  doctor: string;
+  specialty: string;
+  room: string;
+  visitType: 'NEW' | 'FOLLOW_UP' | 'SECOND_OPINION';
+  fee: number;
+  status: 'BOOKED' | 'CHECKED_IN' | 'CANCELLED' | 'NO_SHOW';
+  token?: number;
+  followUpId?: string;
+  notes?: string;
+  bookedBy: string;
+  bookedAt: string;
+  cancelReason?: string;
 }
 
 export interface LabTariffItem {
@@ -286,6 +337,11 @@ export interface SharedPrescription {
   }[];
   followUpDate?: string;
   isDispensed?: boolean;
+  examination?: string;
+  advice?: string;
+  investigations?: string[];
+  referral?: string;
+  tokenId?: string;
 }
 
 export interface SharedDoctorFollowUp {
@@ -335,6 +391,144 @@ export interface SharedEmergencyAlert {
   triagePriority: 'RED_IMMEDIATE' | 'YELLOW_URGENT';
   presentingCondition: string;
   status: 'ACTIVE' | 'ATTENDED';
+}
+
+/** One entry on a day-care / observation bed's nursing chart (keyed to the bed and the stay). */
+export interface NurseChartEntry {
+  id: string;
+  /** `${bedId}|${admissionNo}` — one chart per stay */
+  chartKey: string;
+  bedId: string;
+  uhid: string;
+  patientName: string;
+  kind: 'READING' | 'ESCALATION' | 'NOTE';
+  at: string; // ISO
+  by: string;
+  bp?: string;
+  pulse?: number;
+  temp?: number;
+  spo2?: number;
+  respiratoryRate?: number;
+  avpu?: 'A' | 'C' | 'V' | 'P' | 'U';
+  onOxygen?: boolean;
+  pain?: number;
+  news2?: number;
+  escalatedTo?: string;
+  note?: string;
+}
+
+/** Treatment-room record: an injection, nebulisation, dressing, ECG… given or refused. */
+export interface NurseProcedure {
+  id: string;
+  uhid: string;
+  patientName: string;
+  token?: number;
+  kind: 'INJECTION' | 'IV_FLUID' | 'NEBULISATION' | 'DRESSING' | 'ECG' | 'OTHER';
+  detail: string;
+  orderedBy: string;
+  rxNo?: string;
+  rxItem?: number;
+  route?: string;
+  site?: string;
+  batchNo?: string;
+  status: 'GIVEN' | 'REFUSED';
+  note?: string;
+  at: string; // ISO
+  by: string;
+}
+
+/** Outside report / document attached to a patient's file by the chamber desk (optional scanned file as a data URL). */
+export interface PatientDocument {
+  id: string;
+  uhid: string;
+  patientName: string;
+  title: string;
+  category: 'LAB' | 'RADIOLOGY' | 'PRESCRIPTION' | 'DISCHARGE' | 'REFERRAL' | 'OTHER';
+  source: string;
+  reportDate: string; // YYYY-MM-DD
+  note?: string;
+  fileName?: string;
+  fileType?: string;
+  dataUrl?: string;
+  doctor?: string;
+  uploadedBy: string;
+  uploadedAt: string; // ISO
+  shownToDoctorAt?: string;
+}
+
+/** What the doctor is doing right now, set by the chamber desk; Reception reads it. */
+export interface DoctorSession {
+  doctor: string;
+  status: 'IN' | 'BREAK' | 'ROUNDS' | 'OT' | 'LATE' | 'OUT';
+  note?: string;
+  until?: string; // HH:MM expected back / arriving
+  since: string; // ISO
+  by: string;
+}
+
+/** Chamber desk activity: patient told a report is ready, reminder sent… */
+export interface AssistantLogEntry {
+  id: string;
+  kind: 'LAB_INFORMED' | 'FOLLOWUP_REMINDED' | 'APPT_REMINDED';
+  ref: string;
+  uhid: string;
+  at: string; // ISO
+  by: string;
+  note?: string;
+}
+
+/** Doctor's ward-round note for an admitted / day-care patient. */
+export interface RoundNote {
+  id: string;
+  bedId: string;
+  admissionNo: string;
+  uhid: string;
+  patientName: string;
+  doctor: string;
+  at: string; // ISO
+  note: string;
+  plan?: string;
+}
+
+/** Time the doctor is not available for OPD bookings (leave, OT, conference). */
+export interface DoctorBlock {
+  id: string;
+  doctor: string;
+  date: string; // YYYY-MM-DD
+  allDay: boolean;
+  from?: string; // slot label "10:00 AM"
+  to?: string; // slot label, inclusive
+  reason: string;
+  by: string;
+  at: string; // ISO
+}
+
+/** Change made from the OPD admin desk (fees, doctors, chambers, staff, roster, policies, live moves). */
+export interface OpdAdminLogEntry {
+  id: string;
+  at: string; // ISO
+  by: string;
+  kind: 'DOCTOR' | 'ROOM' | 'STAFF' | 'ROSTER' | 'TARIFF' | 'POLICY' | 'LIVE';
+  subject: string;
+  change: string;
+  before?: string;
+  after?: string;
+}
+
+/** Shift handover (SBAR) signed by the outgoing nurse to the incoming nurse. */
+export interface NurseHandover {
+  id: string;
+  at: string; // ISO
+  shift: 'MORNING' | 'EVENING' | 'NIGHT';
+  from: string;
+  to: string;
+  situation: string;
+  background: string;
+  assessment: string;
+  recommendation: string;
+  checklist: Record<string, boolean>;
+  exceptions?: string;
+  counts: { triaged: number; waiting: number; onBeds: number; specimensPending: number; criticalOpen: number };
 }
 
 const DEFAULT_PATIENTS: SharedPatient[] = [
@@ -1366,6 +1560,197 @@ export const patientJourneyService = {
     const list = this.getInvoices();
     const updated = list.map((i) => (i.id === invoiceId ? { ...i, ...updates } : i));
     localStorage.setItem('nh_invoices', JSON.stringify(updated));
+  },
+
+  // --- Advance appointments (front desk) ---
+  getAppointments(): SharedAppointment[] {
+    try {
+      return JSON.parse(localStorage.getItem('nh_appointments') || '[]');
+    } catch {
+      return [];
+    }
+  },
+
+  saveAppointment(appt: SharedAppointment): SharedAppointment {
+    const list = this.getAppointments();
+    localStorage.setItem('nh_appointments', JSON.stringify([appt, ...list.filter((a) => a.id !== appt.id)]));
+    window.dispatchEvent(new Event('nh_data_sync'));
+    return appt;
+  },
+
+  updateAppointment(id: string, updates: Partial<SharedAppointment>): SharedAppointment | null {
+    const list = this.getAppointments();
+    const hit = list.find((a) => a.id === id);
+    if (!hit) return null;
+    const next = { ...hit, ...updates };
+    localStorage.setItem('nh_appointments', JSON.stringify(list.map((a) => (a.id === id ? next : a))));
+    window.dispatchEvent(new Event('nh_data_sync'));
+    return next;
+  },
+
+  // --- Nurse station: bed charts, treatment room, handovers ---
+  getNurseChart(): NurseChartEntry[] {
+    try {
+      return JSON.parse(localStorage.getItem('nh_nurse_chart') || '[]');
+    } catch {
+      return [];
+    }
+  },
+
+  addNurseChartEntry(entry: NurseChartEntry): NurseChartEntry {
+    localStorage.setItem('nh_nurse_chart', JSON.stringify([entry, ...this.getNurseChart()]));
+    window.dispatchEvent(new Event('nh_data_sync'));
+    return entry;
+  },
+
+  getNurseProcedures(): NurseProcedure[] {
+    try {
+      return JSON.parse(localStorage.getItem('nh_nurse_procedures') || '[]');
+    } catch {
+      return [];
+    }
+  },
+
+  addNurseProcedure(proc: NurseProcedure): NurseProcedure {
+    localStorage.setItem('nh_nurse_procedures', JSON.stringify([proc, ...this.getNurseProcedures()]));
+    window.dispatchEvent(new Event('nh_data_sync'));
+    return proc;
+  },
+
+  getNurseHandovers(): NurseHandover[] {
+    try {
+      return JSON.parse(localStorage.getItem('nh_nurse_handovers') || '[]');
+    } catch {
+      return [];
+    }
+  },
+
+  addNurseHandover(h: NurseHandover): NurseHandover {
+    localStorage.setItem('nh_nurse_handovers', JSON.stringify([h, ...this.getNurseHandovers()]));
+    window.dispatchEvent(new Event('nh_data_sync'));
+    return h;
+  },
+
+  getPatientDocuments(): PatientDocument[] {
+    try {
+      return JSON.parse(localStorage.getItem('nh_patient_documents') || '[]');
+    } catch {
+      return [];
+    }
+  },
+
+  /** Throws when the browser store is full (large scans). */
+  addPatientDocument(doc: PatientDocument): PatientDocument {
+    localStorage.setItem('nh_patient_documents', JSON.stringify([doc, ...this.getPatientDocuments()]));
+    window.dispatchEvent(new Event('nh_data_sync'));
+    return doc;
+  },
+
+  updatePatientDocument(id: string, updates: Partial<PatientDocument>): void {
+    localStorage.setItem('nh_patient_documents', JSON.stringify(this.getPatientDocuments().map((d) => (d.id === id ? { ...d, ...updates } : d))));
+    window.dispatchEvent(new Event('nh_data_sync'));
+  },
+
+  getDoctorSessions(): Record<string, DoctorSession> {
+    try {
+      return JSON.parse(localStorage.getItem('nh_doctor_sessions') || '{}');
+    } catch {
+      return {};
+    }
+  },
+
+  setDoctorSession(session: DoctorSession): DoctorSession {
+    localStorage.setItem('nh_doctor_sessions', JSON.stringify({ ...this.getDoctorSessions(), [session.doctor]: session }));
+    window.dispatchEvent(new Event('nh_data_sync'));
+    return session;
+  },
+
+  getAssistantLog(): AssistantLogEntry[] {
+    try {
+      return JSON.parse(localStorage.getItem('nh_assistant_log') || '[]');
+    } catch {
+      return [];
+    }
+  },
+
+  addAssistantLog(entry: AssistantLogEntry): AssistantLogEntry {
+    localStorage.setItem('nh_assistant_log', JSON.stringify([entry, ...this.getAssistantLog()].slice(0, 2000)));
+    window.dispatchEvent(new Event('nh_data_sync'));
+    return entry;
+  },
+
+  getConsultDraft<T = unknown>(tokenId: string): T | null {
+    try {
+      return (JSON.parse(localStorage.getItem('nh_consult_drafts') || '{}') as Record<string, T>)[tokenId] ?? null;
+    } catch {
+      return null;
+    }
+  },
+
+  saveConsultDraft(tokenId: string, draft: unknown | null): void {
+    let all: Record<string, unknown> = {};
+    try {
+      all = JSON.parse(localStorage.getItem('nh_consult_drafts') || '{}');
+    } catch {
+      all = {};
+    }
+    if (draft === null) delete all[tokenId];
+    else all[tokenId] = draft;
+    localStorage.setItem('nh_consult_drafts', JSON.stringify(all));
+  },
+
+  getRoundNotes(): RoundNote[] {
+    try {
+      return JSON.parse(localStorage.getItem('nh_round_notes') || '[]');
+    } catch {
+      return [];
+    }
+  },
+
+  addRoundNote(n: RoundNote): RoundNote {
+    localStorage.setItem('nh_round_notes', JSON.stringify([n, ...this.getRoundNotes()]));
+    window.dispatchEvent(new Event('nh_data_sync'));
+    return n;
+  },
+
+  getDoctorBlocks(): DoctorBlock[] {
+    try {
+      return JSON.parse(localStorage.getItem('nh_doctor_blocks') || '[]');
+    } catch {
+      return [];
+    }
+  },
+
+  addDoctorBlock(b: DoctorBlock): DoctorBlock {
+    localStorage.setItem('nh_doctor_blocks', JSON.stringify([b, ...this.getDoctorBlocks()]));
+    window.dispatchEvent(new Event('nh_data_sync'));
+    return b;
+  },
+
+  removeDoctorBlock(id: string): void {
+    localStorage.setItem('nh_doctor_blocks', JSON.stringify(this.getDoctorBlocks().filter((b) => b.id !== id)));
+    window.dispatchEvent(new Event('nh_data_sync'));
+  },
+
+  getOpdAdminLog(): OpdAdminLogEntry[] {
+    try {
+      return JSON.parse(localStorage.getItem('nh_opd_admin_log') || '[]');
+    } catch {
+      return [];
+    }
+  },
+
+  addOpdAdminLog(e: OpdAdminLogEntry): OpdAdminLogEntry {
+    localStorage.setItem('nh_opd_admin_log', JSON.stringify([e, ...this.getOpdAdminLog()].slice(0, 3000)));
+    window.dispatchEvent(new Event('nh_data_sync'));
+    return e;
+  },
+
+  /** Emergency call (Code Blue / rapid response) shown on the doctor desks until attended. */
+  raiseEmergencyAlert(alert: SharedEmergencyAlert): SharedEmergencyAlert {
+    localStorage.setItem('nh_emergency_alerts', JSON.stringify([alert, ...this.getEmergencyAlerts()]));
+    window.dispatchEvent(new Event('nh_data_sync'));
+    return alert;
   },
 
   // --- Daily Counter Shift Session ---

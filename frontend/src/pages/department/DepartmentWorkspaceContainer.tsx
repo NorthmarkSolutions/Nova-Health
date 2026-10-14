@@ -14,6 +14,7 @@ import { DepartmentReports } from './DepartmentReports';
 import { DepartmentOpdOperations } from './DepartmentOpdOperations';
 import { LabAdminWorkspace } from '../lab/admin/LabAdminWorkspace';
 import { PharmacyAdminWorkspace } from '../pharmacy/admin/PharmacyAdminWorkspace';
+import { OpdAdminWorkspace } from '../opd-admin/OpdAdminWorkspace';
 
 export const DepartmentWorkspaceContainer: React.FC = () => {
   const { deptId } = useParams<{ deptId?: string }>();
@@ -163,6 +164,12 @@ export const DepartmentWorkspaceContainer: React.FC = () => {
   if (isBillingWorkspace) {
     // The billing admin desk lives at /billing/admin on its own HMS shell
     return <Navigate to="/billing/admin" replace />;
+  }
+
+  // OPD has its own HMS workspace; other clinical departments keep the generic workspace below
+  const isOpdWorkspace = isOpdDept(effectiveDeptId) || workspace?.id === 'ws-opd' || workspace?.departmentId === '1';
+  if (isOpdWorkspace) {
+    return <OpdAdminWorkspace />;
   }
 
   return (

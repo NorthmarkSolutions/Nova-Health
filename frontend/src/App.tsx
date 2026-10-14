@@ -9,10 +9,10 @@ import { ProtectedRoute } from './components/common/ProtectedRoute';
 import { LoginPage } from './pages/auth/LoginPage';
 import { LogoutPage } from './pages/auth/LogoutPage';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
-import { ReceptionDashboard } from './pages/reception/ReceptionDashboard';
-import { DoctorDashboard } from './pages/doctor/DoctorDashboard';
-import { DoctorAssistantDashboard } from './pages/doctor/DoctorAssistantDashboard';
-import { NurseDashboard } from './pages/nurse/NurseDashboard';
+import { ReceptionDeskWorkspace } from './pages/reception/ReceptionDeskWorkspace';
+import { DoctorWorkspace } from './pages/doctor/DoctorWorkspace';
+import { AssistantWorkspace } from './pages/assistant/AssistantWorkspace';
+import { NurseWorkspace } from './pages/nurse/NurseWorkspace';
 import { PharmacyDashboard } from './pages/pharmacy/PharmacyDashboard';
 import { InventoryManagerWorkspace } from './pages/pharmacy/inventory/InventoryManagerWorkspace';
 import { OPDPharmacistWorkspace } from './pages/pharmacy/pharmacist/OPDPharmacistWorkspace';
@@ -242,6 +242,26 @@ export function App() {
               <Route path="/accounts/*" element={<AccountsDepartmentContainer />} />
             </Route>
 
+            {/* Front Desk & Reception: own HMS shell (design bible §19), outside the generic layout */}
+            <Route element={<ProtectedRoute allowedRoles={[RoleType.RECEPTIONIST, RoleType.RECEPTION_SUPERVISOR, RoleType.SUPER_ADMIN, RoleType.HOSPITAL_ADMIN]} />}>
+              <Route path="/reception" element={<ReceptionDeskWorkspace />} />
+            </Route>
+
+            {/* OPD Nurse station: own HMS shell (design bible §19), outside the generic layout */}
+            <Route element={<ProtectedRoute allowedRoles={[RoleType.NURSE, RoleType.SUPER_ADMIN, RoleType.HOSPITAL_ADMIN]} />}>
+              <Route path="/nurse" element={<NurseWorkspace />} />
+            </Route>
+
+            {/* OPD Doctor Assistant (chamber desk): own HMS shell (design bible §19), outside the generic layout */}
+            <Route element={<ProtectedRoute allowedRoles={[RoleType.DOCTOR_ASSISTANT, RoleType.DOCTOR, RoleType.SUPER_ADMIN, RoleType.HOSPITAL_ADMIN]} />}>
+              <Route path="/assistant" element={<AssistantWorkspace />} />
+            </Route>
+
+            {/* OPD Doctor: own HMS shell (design bible §19), outside the generic layout */}
+            <Route element={<ProtectedRoute allowedRoles={[RoleType.DOCTOR, RoleType.SUPER_ADMIN, RoleType.HOSPITAL_ADMIN]} />}>
+              <Route path="/doctor" element={<DoctorWorkspace />} />
+            </Route>
+
             {/* Dedicated Staff Profile Page: Accessible to all authenticated HMS staff */}
             <Route element={<ProtectedRoute />}>
               <Route path="/profile" element={<MyProfilePage />} />
@@ -260,25 +280,8 @@ export function App() {
                       <Route path="/admin" element={<AdminDashboard />} />
                     </Route>
 
-                    {/* 2. Receptionist Workspace */}
-                    <Route element={<ProtectedRoute allowedRoles={[RoleType.RECEPTIONIST, RoleType.SUPER_ADMIN, RoleType.HOSPITAL_ADMIN]} />}>
-                      <Route path="/reception" element={<ReceptionDashboard />} />
-                    </Route>
 
-                    {/* 3. Doctor OPD Station */}
-                    <Route element={<ProtectedRoute allowedRoles={[RoleType.DOCTOR, RoleType.SUPER_ADMIN, RoleType.HOSPITAL_ADMIN]} />}>
-                      <Route path="/doctor" element={<DoctorDashboard />} />
-                    </Route>
 
-                    {/* 3b. Doctor Assistant Chamber Ante-Room Station */}
-                    <Route element={<ProtectedRoute allowedRoles={[RoleType.DOCTOR_ASSISTANT, RoleType.DOCTOR, RoleType.SUPER_ADMIN, RoleType.HOSPITAL_ADMIN]} />}>
-                      <Route path="/assistant" element={<DoctorAssistantDashboard />} />
-                    </Route>
-
-                    {/* 4. Nurse Triage Desk */}
-                    <Route element={<ProtectedRoute allowedRoles={[RoleType.NURSE, RoleType.SUPER_ADMIN, RoleType.HOSPITAL_ADMIN]} />}>
-                      <Route path="/nurse" element={<NurseDashboard />} />
-                    </Route>
 
 
                     {/* 6. Lab Technician & Pathologist Workstation */}

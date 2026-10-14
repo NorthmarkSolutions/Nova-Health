@@ -58,6 +58,13 @@ class Command(BaseCommand):
                 'is_staff': True,
             },
             {
+                'username': 'reception_supervisor',
+                'email': 'reception.supervisor@northhospital.com',
+                'first_name': 'Marcus',
+                'last_name': 'Brody',
+                'role': RoleType.RECEPTION_SUPERVISOR,
+            },
+            {
                 'username': 'dr.sarah',
                 'email': 'doctor@northhospital.com',
                 'first_name': 'Sarah',
@@ -147,6 +154,22 @@ class Command(BaseCommand):
                 'first_name': 'Arun',
                 'last_name': 'Mehta',
                 'role': RoleType.INTERNAL_AUDITOR,
+                'is_staff': True,
+            },
+            {
+                'username': 'opd_admin',
+                'email': 'opd.admin@northhospital.com',
+                'first_name': 'Sarah',
+                'last_name': 'Jenkins',
+                'role': RoleType.DEPARTMENT_ADMIN,
+                'is_staff': True,
+            },
+            {
+                'username': 'assistant',
+                'email': 'assistant@northhospital.com',
+                'first_name': 'Dev',
+                'last_name': 'Sharma',
+                'role': RoleType.DOCTOR_ASSISTANT,
                 'is_staff': True,
             },
             {
