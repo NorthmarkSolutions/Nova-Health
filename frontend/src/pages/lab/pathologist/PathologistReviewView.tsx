@@ -22,7 +22,7 @@ import {
   TEXTAREA,
   HMS,
 } from '../../../components/hms';
-import { LabDataStore, LabQueueOrder } from '../data/labDataStore';
+import { LabDataStore, LabQueueOrder, ageSex } from '../data/labDataStore';
 import { fmtMinutes } from '../data/labAdminStore';
 import {
   orderFlag,
@@ -37,6 +37,7 @@ import {
 } from '../data/pathologistStore';
 import { PathologistViewProps, FlagBadge, PriorityBadge } from './pathologistUi';
 import { FLAG_COLOR, fmtRange } from './pathologistFormat';
+import { LabMachineReportSection } from '../LabMachineReportSection';
 
 const RETEST_REASONS = [
   'Haemolysed sample',
@@ -177,7 +178,7 @@ export const PathologistReviewView: React.FC<PathologistViewProps> = ({ data, by
           icon={FlaskConical}
           title={o.patientName}
           badge={back ? <HmsBadge tone="gray">At bench for re-test</HmsBadge> : <FlagBadge flag={flag} />}
-          subtitle={`${o.uhid} · ${o.age}y ${o.gender} · ${o.location}`}
+          subtitle={`${o.uhid} · ${ageSex(o.age, o.gender)} · ${o.location}`}
         />
         <HmsStatStrip
           items={[
@@ -238,6 +239,9 @@ export const PathologistReviewView: React.FC<PathologistViewProps> = ({ data, by
               </HmsSection>
             );
           })}
+
+          {/* Pathologist reviews the analyzer printout beside the values; the technician uploads it */}
+          <LabMachineReportSection canUpload={false} />
 
           <HmsSection title="Specimen & run">
             <HmsRow label="Specimen" value={`${o.specimenNumber} · ${o.sampleType}`} />

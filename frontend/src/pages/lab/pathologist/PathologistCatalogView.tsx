@@ -314,6 +314,25 @@ export const PathologistCatalogView: React.FC<PathologistViewProps> = ({ data, b
             <HmsRow label="Billing price" hint="Managed by Lab Admin › Test pricing" value={price?.tariff ? inr(price.tariff.basePrice) : 'Not priced'} last />
           </HmsSection>
 
+          {t.versionHistory && t.versionHistory.length > 0 && (
+            <HmsSection title="Version history" defaultOpen={false}>
+              {t.versionHistory.map((v, idx) => (
+                <HmsRow
+                  key={v.version}
+                  last={idx === t.versionHistory!.length - 1}
+                  label={`v${v.version}`}
+                  hint={`${v.publishedByName || 'Publisher not recorded'}${v.notes ? ` · ${v.notes}` : ''}`}
+                  value={
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '13px', color: HMS.textSecondary }}>{v.publishedAt ? new Date(v.publishedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</span>
+                      <HmsBadge tone={v.status === 'PUBLISHED' ? 'green' : 'gray'}>{v.status === 'PUBLISHED' ? 'Live' : 'Retired'}</HmsBadge>
+                    </span>
+                  }
+                />
+              ))}
+            </HmsSection>
+          )}
+
           <HmsSection title="Recent QC">
             {t.recentQc.length === 0 ? (
               <div style={{ padding: '12px 14px', fontSize: '13px', color: HMS.textSecondary }}>No QC runs recorded for this test.</div>

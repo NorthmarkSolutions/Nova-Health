@@ -3,6 +3,7 @@ import type { HmsTone } from '../../../components/hms';
 import type { ResultFlag } from '../data/pathologistStore';
 import { paramFlag, signerOf } from '../data/pathologistStore';
 import type { LabQueueOrder, SignedReportItem } from '../data/labDataStore';
+import { ageSex } from '../data/labDataStore';
 
 export const FLAG_TONE: Record<ResultFlag | 'Pending', HmsTone> = { Critical: 'red', Abnormal: 'amber', Normal: 'green', Pending: 'gray' };
 
@@ -33,7 +34,7 @@ table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:6px 8px;
 </style></head><body>
 <h1>North Hospital · Diagnostic Laboratory</h1>
 <div class="meta">
-<div><b>Patient:</b> ${e(report.patientName)} (${report.age}y ${e(report.gender)})</div><div><b>Report:</b> ${e(report.reportNumber)}</div>
+<div><b>Patient:</b> ${e(report.patientName)} (${e(ageSex(report.age, report.gender))})</div><div><b>Report:</b> ${e(report.reportNumber)}</div>
 <div><b>UHID:</b> ${e(report.uhid)}</div><div><b>Order:</b> ${e(report.orderNumber)}</div>
 <div><b>Test:</b> ${e(report.testName)} (${e(report.testCode)})</div><div><b>Signed:</b> ${e(report.signedAt)}</div>
 <div><b>Referred by:</b> ${e(report.doctorName)}</div><div><b>Location:</b> ${e(report.location)}</div>
@@ -42,7 +43,8 @@ ${report.isAmended ? `<div class="amend"><b>Amended report:</b> ${e(report.amend
 ${rows ? `<h2>Results</h2><table><thead><tr><th>Parameter</th><th>Result</th><th>Reference range</th><th>Flag</th></tr></thead><tbody>${rows}</tbody></table>` : ''}
 <h2>Key findings</h2><div>${e(report.keyFindings)}</div>
 <h2>Interpretation</h2><div>${e(report.interpretation)}</div>
-<div class="sign">Electronically signed by ${e(signerOf(report) || 'the reporting pathologist')}</div>
+${(report.signature?.amendments || []).map((a) => `<h2>Addendum ${a.number}</h2><div>${e(a.text)} — ${e(a.signedByName || '')}</div>`).join('')}
+<div class="sign">Electronically signed by ${e(signerOf(report) || 'the reporting pathologist')}${report.signature?.designation ? `, ${e(report.signature.designation)}` : ''}${report.signature?.hash ? `<br><span style="font-family:monospace;font-size:10px;color:#64748b">Fingerprint ${e(report.signature.hash.slice(0, 32))}</span>` : ''}</div>
 </body></html>`;
 
   const frame = document.createElement('iframe');

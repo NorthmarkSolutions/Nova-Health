@@ -58,6 +58,7 @@ import {
   SharedLabOrder,
 } from '../../services/patientJourneyService';
 import { useCurrency } from '../../config/currency';
+import { labApiMode, onLabApiError } from '../../services/labService';
 
 interface ScheduleDay {
   day: string;
@@ -538,6 +539,9 @@ export const DoctorDashboard: React.FC = () => {
     setTimeout(() => setToastMessage(null), 4000);
   };
 
+  // Lab server refusals (e.g. patient not registered on the server) appear as a toast
+  useEffect(() => onLabApiError((msg) => showToast(`Lab: ${msg}`)), []);
+
   // Queue Operations
   const handleCallNext = () => {
     const nextWaiting = displayedQueue.find((q) => q.status === 'WAITING');
@@ -599,24 +603,10 @@ export const DoctorDashboard: React.FC = () => {
         isFlaggedAbnormal: false,
         parameters: [],
         technicianNote: `${orderPriority} Order dispatched directly from ${doctorName}'s chamber`,
-      });
+      }, { location: `OPD ${activeToken.room}`.trim(), clinicalNotes: doctorNotes || undefined });
 
-      // Automatically append billable item to patient's invoice in Billing
-      patientJourneyService.appendLabOrderToBilling(newOrder);
-
-      // Async sync to Django backend
-      fetch('/api/v1/lab/orders/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          uhid: activeToken.uhid,
-          patientName: activeToken.patient,
-          testName,
-          priority: orderPriority,
-          clinicalNotes: doctorNotes || `Dispatched from ${doctorName}'s chamber`,
-          status: 'ORDERED',
-        }),
-      }).catch(() => {});
+      // Signed in against the server: Billing stages the lab charge itself when the order is created
+      if (!labApiMode() || isRadio) patientJourneyService.appendLabOrderToBilling(newOrder);
     });
 
     setLabOrders(patientJourneyService.getLabOrders());
@@ -632,12 +622,6 @@ export const DoctorDashboard: React.FC = () => {
       criticalAckActionNote || 'Attending physician acknowledged critical value; appropriate clinical measures initiated.'
     );
 
-    // Backend sync
-    fetch(`/api/v1/lab/orders/${criticalOrderToAcknowledge.id}/acknowledge-critical/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ notes: criticalAckActionNote }),
-    }).catch(() => {});
 
     setLabOrders(patientJourneyService.getLabOrders());
     setShowCriticalAckModal(false);
@@ -743,21 +727,9 @@ export const DoctorDashboard: React.FC = () => {
           price: testPrice,
           isFlaggedAbnormal: false,
           parameters: [],
-        });
+        }, { location: `OPD ${activeToken.room}`.trim(), clinicalNotes: doctorNotes || undefined });
 
-        patientJourneyService.appendLabOrderToBilling(newOrder);
-
-        fetch('/api/v1/lab/orders/', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            uhid: activeToken.uhid,
-            patientName: activeToken.patient,
-            testName,
-            priority: orderPriority,
-            status: 'ORDERED',
-          }),
-        }).catch(() => {});
+        if (!labApiMode() || isRadio) patientJourneyService.appendLabOrderToBilling(newOrder);
       });
       setLabOrders(patientJourneyService.getLabOrders());
     }

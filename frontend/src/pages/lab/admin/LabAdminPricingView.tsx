@@ -20,8 +20,9 @@ import {
 } from '../../../components/hms';
 import { LabAdminStore, buildPriceRows, LabPriceRow, isoDate, fmtDate, fmtStamp, inr } from '../data/labAdminStore';
 import { LabAdminViewProps } from './labAdminUi';
+import { labApiMode } from '../../../services/labService';
 
-const STATUS_TONE = { Synced: 'green', 'Pending sync': 'amber', 'No price': 'red' } as const;
+const STATUS_TONE = { Synced: 'green', 'Pending sync': 'amber', 'Awaiting Billing': 'blue', 'No price': 'red' } as const;
 
 interface Form {
   basePrice: string;
@@ -49,14 +50,15 @@ export const LabAdminPricingView: React.FC<LabAdminViewProps> = ({ data, by, not
   const [formKey, setFormKey] = useState<string | null>(null);
   const [error, setError] = useState('');
 
-  const priceRows = useMemo(() => buildPriceRows(state, catalog, tariffs), [state, catalog, tariffs]);
-  const rank = { 'No price': 0, 'Pending sync': 1, Synced: 2 } as const;
+  const priceRows = useMemo(() => buildPriceRows(state, catalog, tariffs, data.pendingPrices), [state, catalog, tariffs, data.pendingPrices]);
+  const rank = { 'No price': 0, 'Pending sync': 1, 'Awaiting Billing': 2, Synced: 3 } as const;
   const sections = Array.from(new Set(priceRows.map((r) => r.section))).sort();
 
   const filters: Record<string, (r: LabPriceRow) => boolean> = {
     all: () => true,
     noprice: (r) => r.status === 'No price',
     pending: (r) => r.status === 'Pending sync',
+    billing: (r) => r.status === 'Awaiting Billing',
     ...Object.fromEntries(sections.map((s) => [s, (r: LabPriceRow) => r.section === s])),
   };
   const q = search.trim().toLowerCase();
@@ -69,6 +71,7 @@ export const LabAdminPricingView: React.FC<LabAdminViewProps> = ({ data, by, not
     { key: 'all', label: 'All', count: priceRows.length },
     { key: 'noprice', label: 'No price', count: priceRows.filter(filters.noprice).length, tone: 'red' as const },
     { key: 'pending', label: 'Pending sync', count: pending.length, tone: 'amber' as const },
+    ...(labApiMode() ? [{ key: 'billing', label: 'Awaiting Billing', count: priceRows.filter((r) => r.status === 'Awaiting Billing').length }] : []),
     ...sections.map((s) => ({ key: s, label: s, count: priceRows.filter((r) => r.section === s).length })),
   ];
 
@@ -116,7 +119,11 @@ export const LabAdminPricingView: React.FC<LabAdminViewProps> = ({ data, by, not
     LabAdminStore.savePriceDraft(d, by);
     if (andSync) {
       LabAdminStore.syncPrices([r.testName], by);
-      notify(`${r.testName} now costs ${inr(d.basePrice)} in Billing and doctor ordering.`);
+      notify(
+        labApiMode()
+          ? `${r.testName} at ${inr(d.basePrice)} sent to Billing for approval. It applies from ${fmtDate(d.effectiveDate)} once approved.`
+          : `${r.testName} now costs ${inr(d.basePrice)} in Billing and doctor ordering.`
+      );
     } else {
       notify(`Draft saved for ${r.testName}. Billing still charges the current price until you sync.`);
     }
@@ -124,7 +131,7 @@ export const LabAdminPricingView: React.FC<LabAdminViewProps> = ({ data, by, not
 
   const syncAll = () => {
     const n = LabAdminStore.syncPrices(pending.map((r) => r.testName), by);
-    notify(n ? `${n} price${n === 1 ? '' : 's'} synced to the Billing tariff master.` : 'Nothing waiting to sync.');
+    notify(n ? (labApiMode() ? `${n} price change${n === 1 ? '' : 's'} sent to Billing for approval.` : `${n} price${n === 1 ? '' : 's'} synced to the Billing tariff master.`) : 'Nothing waiting to sync.');
   };
 
   const renderDetail = (key: string | null) => {
@@ -151,6 +158,11 @@ export const LabAdminPricingView: React.FC<LabAdminViewProps> = ({ data, by, not
         />
         <HmsDetailBody>
           {r.status === 'No price' && <HmsNotice tone="red">Added to the test catalog by Pathology but has no price — doctors cannot be charged for it yet.</HmsNotice>}
+          {r.pending && (
+            <HmsNotice tone="blue">
+              {r.pending.requestNumber}: {inr(r.pending.proposedPrice)} from {fmtDate(r.pending.effectiveFrom)} · {r.pending.statusLabel}. Billing approves price changes; the live price changes when it takes effect.
+            </HmsNotice>
+          )}
           {r.draft && <HmsNotice tone="amber">Draft {inr(r.draft.basePrice)} saved {fmtStamp(r.draft.savedAt)} — Billing still charges {live ? inr(live.basePrice) : 'nothing'} until synced.</HmsNotice>}
 
           <HmsSection title="Edit price" padded>
@@ -176,7 +188,7 @@ export const LabAdminPricingView: React.FC<LabAdminViewProps> = ({ data, by, not
             )}
             <div style={{ display: 'flex', gap: '10px', marginTop: '16px', flexWrap: 'wrap' }}>
               <HmsButton variant="primary" icon={RefreshCw} onClick={() => saveDraft(r, true)}>
-                Save &amp; sync to Billing
+                {labApiMode() ? 'Save & send to Billing' : 'Save & sync to Billing'}
               </HmsButton>
               <HmsButton icon={Save} onClick={() => saveDraft(r, false)}>
                 Save draft

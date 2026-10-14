@@ -4516,6 +4516,8 @@ class AuditComplianceService:
                       RoleType.FINANCE_CONTROLLER, RoleType.CFO, RoleType.BILLING_ADMIN, RoleType.BILLING_SUPERVISOR,
                       RoleType.CASHIER}
     INACTIVE_ACCESS_DAYS = 45
+    # Access lengths the Finance Controller / CFO may pick when granting an auditor (always capped at fieldwork end)
+    GRANT_DAYS = (1, 7, 15, 30)
 
     CONTROLS = [
         ('IC-01', 'Maker-checker segregation', 'Critical', 'realtime', 'The maker of a document approved it at some level.'),
@@ -4612,10 +4614,19 @@ class AuditComplianceService:
         return eng
 
     @classmethod
-    def grant_access(cls, user, engagement_no: str, auditor_username: str, valid_from=None, valid_until=None):
-        """Read-only access that ends no later than the engagement's fieldwork end"""
+    def grant_access(cls, user, engagement_no: str, auditor_username: str, valid_from=None, valid_until=None, days=None):
+        """Read-only access that ends no later than the engagement's fieldwork end.
+        `days` (1, 7, 15 or 30) sets the length from now; without it access runs to the fieldwork end."""
         from .models import AuditEngagement, AuditorAccessGrant
         cls.require_governance(user)
+        if days is not None:
+            try:
+                days = int(days)
+            except (TypeError, ValueError):
+                days = None
+            if days not in cls.GRANT_DAYS:
+                raise AccountingDomainError('Choose an access length of 1, 7, 15 or 30 days.', code='VALIDATION_FAILED', status_code=422)
+            valid_until = (valid_from or timezone.now()) + timedelta(days=days)
         eng = AuditEngagement.objects.filter(engagement_no=engagement_no).first()
         if not eng:
             raise AccountingDomainError(f'Engagement {engagement_no} not found.', code='NOT_FOUND', status_code=404)
@@ -4632,6 +4643,84 @@ class AuditComplianceService:
                                 entity_id=str(grant.id), reference_no=eng.engagement_no,
                                 new_state={'auditor': auditor.username, 'valid_until': end.isoformat()})
         return grant
+
+    @staticmethod
+    def grant_status(grant):
+        if grant.revoked_at:
+            return 'revoked'
+        now = timezone.now()
+        if grant.valid_until <= now:
+            return 'expired'
+        return 'active' if grant.valid_from <= now else 'scheduled'
+
+    @classmethod
+    def list_engagements(cls, user):
+        """Engagements with every auditor grant, newest fieldwork first (governance only)."""
+        from .models import AuditEngagement
+        cls.require_governance(user)
+        cls.ensure_seed_data()
+        name = lambda u: (u.get_full_name() or u.username) if u else ''
+        out = []
+        for e in AuditEngagement.objects.order_by('-fieldwork_from'):
+            grants = list(e.grants.select_related('auditor', 'granted_by', 'revoked_by').order_by('-valid_from'))
+            out.append({
+                'engagement_no': e.engagement_no, 'type': e.type, 'auditor_firm': e.auditor_firm, 'status': e.status,
+                'period_from': str(e.period_from), 'period_to': str(e.period_to),
+                'fieldwork_from': str(e.fieldwork_from), 'fieldwork_to': str(e.fieldwork_to),
+                'grants': [{
+                    'id': str(g.id), 'auditor': g.auditor.username, 'auditor_name': name(g.auditor),
+                    'valid_from': g.valid_from.isoformat(), 'valid_until': g.valid_until.isoformat(),
+                    'active': g.is_active(), 'status': cls.grant_status(g),
+                    'granted_by': name(g.granted_by), 'revoked_at': g.revoked_at.isoformat() if g.revoked_at else '',
+                    'revoked_by': name(g.revoked_by),
+                } for g in grants],
+            })
+        return out
+
+    @classmethod
+    def list_auditors(cls, user):
+        """Users with an Auditor role, with how many live grants each holds (governance only)."""
+        from .models import AuditorAccessGrant
+        cls.require_governance(user)
+        now = timezone.now()
+        out = []
+        for u in User.objects.filter(role__in=cls.AUDITOR_ROLES).order_by('first_name', 'last_name', 'username'):
+            live = AuditorAccessGrant.objects.filter(auditor=u, revoked_at__isnull=True, valid_from__lte=now, valid_until__gt=now).count()
+            out.append({'id': str(u.id), 'username': u.username, 'name': u.get_full_name() or u.username, 'email': u.email or '',
+                        'role': u.role, 'is_active': u.is_active, 'active_grants': live,
+                        'last_login': u.last_login.isoformat() if u.last_login else ''})
+        return out
+
+    @classmethod
+    def create_auditor(cls, user, data: dict):
+        """Create an Auditor login. Returns (user, temporary password) — the password is shown to the creator once."""
+        import re
+        import secrets
+        cls.require_governance(user)
+        first = str(data.get('first_name') or '').strip()
+        last = str(data.get('last_name') or '').strip()
+        email = str(data.get('email') or '').strip()
+        if not first or not last:
+            raise AccountingDomainError('First and last name are required.', code='VALIDATION_FAILED', status_code=422)
+        if email and not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
+            raise AccountingDomainError('Enter a valid email address.', code='VALIDATION_FAILED', status_code=422)
+        username = str(data.get('username') or '').strip().lower()
+        if username and not re.match(r'^[a-z0-9_.-]{3,40}$', username):
+            raise AccountingDomainError('Username: 3–40 characters, letters, digits, dot, dash or underscore.', code='VALIDATION_FAILED', status_code=422)
+        if not username:
+            base = re.sub(r'[^a-z0-9]+', '.', f'{first}.{last}'.lower()).strip('.') or 'auditor'
+            username, n = base, 1
+            while User.objects.filter(username=username).exists():
+                n += 1
+                username = f'{base}{n}'
+        elif User.objects.filter(username=username).exists():
+            raise AccountingDomainError(f'Username {username} is already taken.', code='VALIDATION_FAILED', status_code=422)
+        role = RoleType.INTERNAL_AUDITOR if str(data.get('kind', '')).lower() == 'internal' else RoleType.AUDITOR
+        password = secrets.token_urlsafe(9)
+        auditor = User.objects.create_user(username=username, email=email, first_name=first, last_name=last, role=role, password=password)
+        AuditService.log_action(actor_user=user, module='audit', action='create_auditor', entity_type='user',
+                                entity_id=str(auditor.id), reference_no=username, new_state={'role': role, 'email': email})
+        return auditor, password
 
     @classmethod
     def revoke_access(cls, user, grant_id):

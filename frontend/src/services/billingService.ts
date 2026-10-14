@@ -673,8 +673,8 @@ export const billingService = {
         tagline: r?.hospital?.tagline || 'Excellence in Patient Care & Clinical Diagnostics',
         address: r?.hospital?.address || '108 Healthcare Blvd, Central Medical District',
         phone: r?.hospital?.phone || '+91 22 2847 0000',
-        gstin: r?.hospital?.gstin || '27AAACN1234F1Z5',
-        pan: r?.hospital?.pan || 'AAACN1234F',
+        gstin: r?.hospital?.gstin || '',
+        pan: r?.hospital?.pan || '',
         token_slip_number: r?.invoice?.token_slip_number || `SLIP-${invoiceId.slice(0, 6)}`,
         invoice_number: r?.invoice?.invoice_number || invoiceId,
         timestamp: r?.printed_at || new Date().toLocaleString(),
@@ -849,180 +849,21 @@ export const billingService = {
   },
 
   // --- PHASE 3: BILLING EXECUTIVE / CASHIER WORKSPACE ---
+  /** Live cashier dashboard. Errors propagate — the screen shows "—", never sample figures. */
   async getCashierDashboard(counter_code?: string): Promise<CashierDashboardData> {
-    try {
-      const res = await api.get('/billing/cashier/dashboard', { params: { counter_code } });
-      const data = res.data;
-      if (data && (!data.kpis?.invoices_today && !data.kpis?.pending_queue_patients)) {
-        return {
-          ...data,
-          kpis: {
-            ...data.kpis,
-            invoices_today: 14,
-            invoices_paid_today: 12,
-            collected_today: data.kpis?.collected_today || 48500,
-            pending_queue_patients: 4,
-            pending_queue_stat: 1,
-            pending_queue_amount: 11000,
-            oldest_wait_minutes: 22,
-            avg_turnaround_minutes: 6.4,
-            turnaround_sla_minutes: 10,
-            within_sla_percent: 94.5,
-            pending_approvals: data.kpis?.pending_approvals || 1
-          },
-          shift: data.shift?.has_active_shift ? data.shift : {
-            ...data.shift,
-            has_active_shift: true,
-            shift_id: 'shift-demo-01',
-            shift_number: 'COUNTER-01 · Today 08:30',
-            counter_code: counter_code || 'COUNTER-01',
-            counter_name: counter_code === 'COUNTER-02' ? 'Counter 2 - IPD & TPA Desk' : 'Counter 1 - Main Lobby OPD',
-            cashier_name: 'Senior Cashier Desk',
-            status: 'OPEN',
-            opening_float: 5000,
-            cash_collected: 750,
-            upi_collected: 500,
-            total_collected: 1250,
-            expected_cash_in_drawer: 5750,
-            transactions: 2,
-            drawer_limit: 50000,
-            utilization_percent: 11.5,
-            started_at: new Date().toISOString()
-          }
-        };
-      }
-      return data;
-    } catch {
-      return {
-        date: new Date().toISOString().slice(0, 10),
-        kpis: {
-          invoices_today: 14,
-          invoices_paid_today: 12,
-          collected_today: 48500,
-          pending_queue_patients: 4,
-          pending_queue_stat: 1,
-          pending_queue_amount: 11000,
-          oldest_wait_minutes: 22,
-          unpaid_invoices: 2,
-          unpaid_balance: 3800,
-          avg_turnaround_minutes: 6.4,
-          turnaround_sla_minutes: 10,
-          within_sla_percent: 94.5,
-          pending_approvals: 1
-        },
-        collections_by_tender: { CASH: 24500, UPI: 18000, CARD: 6000 },
-        shift: {
-          has_active_shift: true,
-          shift_id: 'shift-demo-01',
-          shift_number: 'COUNTER-01 · Shift Active',
-          counter_code: counter_code || 'COUNTER-01',
-          counter_name: counter_code === 'COUNTER-02' ? 'Counter 2 - IPD & TPA Desk' : 'Counter 1 - Main Lobby OPD',
-          cashier_name: 'Cashier Station',
-          status: 'OPEN',
-          opening_float: 5000,
-          cash_collected: 750,
-          upi_collected: 500,
-          total_collected: 1250,
-          expected_cash_in_drawer: 5750,
-          transactions: 2,
-          drawer_limit: 50000,
-          utilization_percent: 11.5,
-          started_at: new Date().toISOString()
-        } as ShiftSummary
-      };
-    }
+    const res = await api.get('/billing/cashier/dashboard', { params: { counter_code } });
+    return res.data;
   },
 
   async getCashierLiveQueue(params?: { department?: string; search?: string; urgency?: string }): Promise<CashierLiveQueue> {
-    try {
-      const res = await api.get('/billing/cashier/live-queue', { params });
-      if (res.data && res.data.rows && res.data.rows.length > 0) {
-        return res.data;
-      }
-    } catch {
-      // ignore
-    }
-    return {
-      total_patients: 4,
-      total_amount: 11000,
-      stat_count: 1,
-      draft_count: 0,
-      department_counts: { ALL: 4, OPD: 1, LAB: 1, IPD: 1, EMERGENCY: 1, RADIOLOGY: 1, PHARMACY: 1 },
-      rows: [
-        {
-          patient_id: 'p-01',
-          patient_name: 'Aarav Patel',
-          uhid: 'UHID-2026-OPD01',
-          mobile: '+91 98765 00001',
-          age_sex: '40y / M',
-          payer_type: 'SELF',
-          payer_label: 'Self Pay',
-          sources: ['OPD', 'LAB'],
-          is_stat: false,
-          token: 'OPD-014',
-          charge_ids: ['c-01', 'c-02'],
-          items_count: 2,
-          amount: 1250,
-          wait_minutes: 8,
-          summary: 'Physician Consultation (Dr. Sarah Jenkins) + CBC Blood Count',
-          status: 'AWAITING_BILL'
-        },
-        {
-          patient_id: 'p-02',
-          patient_name: 'Sunita Deshmukh',
-          uhid: 'UHID-2026-OPD02',
-          mobile: '+91 98765 00002',
-          age_sex: '34y / F',
-          payer_type: 'SELF',
-          payer_label: 'Self Pay',
-          sources: ['LAB', 'RADIOLOGY'],
-          is_stat: false,
-          token: 'LAB-9915',
-          charge_ids: ['c-03', 'c-04'],
-          items_count: 2,
-          amount: 2000,
-          wait_minutes: 14,
-          summary: 'Comprehensive Lipid Profile + Chest X-Ray Digital PA',
-          status: 'AWAITING_BILL'
-        },
-        {
-          patient_id: 'p-03',
-          patient_name: 'Robert Fox',
-          uhid: 'UHID-2026-IPD03',
-          mobile: '+91 98765 00003',
-          age_sex: '48y / M',
-          payer_type: 'IPD',
-          payer_label: 'IPD Running Bill · ADM-2026-0042',
-          sources: ['IPD', 'PHARMACY'],
-          is_stat: false,
-          token: 'ADM-0042',
-          charge_ids: ['c-05', 'c-06'],
-          items_count: 2,
-          amount: 4950,
-          wait_minutes: 22,
-          summary: 'Single Deluxe Room Bed (Day 1) + Inpatient Medication Kit',
-          status: 'AWAITING_BILL'
-        },
-        {
-          patient_id: 'p-04',
-          patient_name: 'Meera Iyer',
-          uhid: 'UHID-2026-TPA04',
-          mobile: '+91 98765 00004',
-          age_sex: '30y / F',
-          payer_type: 'TPA',
-          payer_label: 'Star Health TPA · Pre-Auth Active',
-          sources: ['EMERGENCY'],
-          is_stat: true,
-          token: 'EMG-STAT-081',
-          charge_ids: ['c-07'],
-          items_count: 1,
-          amount: 2800,
-          wait_minutes: 4,
-          summary: 'Emergency Resuscitation & Level 1 Trauma Care',
-          status: 'AWAITING_BILL'
-        }
-      ]
-    };
+    const res = await api.get('/billing/cashier/live-queue', { params });
+    return res.data;
+  },
+
+  /** Today's OPD visits (front desk + online) and where each stands with the cashier. */
+  async getCashierOpdVisits(date?: string): Promise<{ date: string; visits: CashierOpdVisit[] }> {
+    const res = await api.get('/billing/cashier/opd-visits', { params: { date } });
+    return res.data;
   },
 
   async getCashierPatientWorkspace(uhid: string): Promise<CashierPatientWorkspace> {
@@ -1192,6 +1033,12 @@ export const billingService = {
     }
   },
 
+  /** Supervisor confirms fees collected at the OPD front desk were handed over to billing. */
+  async reconcileDeskCash(appointmentIds: string[], note?: string): Promise<{ reconciled: string[]; skipped: string[]; total: number; by_mode: Record<string, number> }> {
+    const res = await api.post('/billing/supervisor/opd/desk-reconcile', { appointment_ids: appointmentIds, note });
+    return res.data;
+  },
+
   async getAuditStream(params?: { counter?: string; unreviewed?: boolean }): Promise<AuditStream> {
     const res = await api.get('/billing/supervisor/audit-stream', {
       params: { counter: params?.counter || undefined, unreviewed: params?.unreviewed ? '1' : undefined }
@@ -1283,6 +1130,12 @@ export const billingService = {
 
   async updateTPAPreAuth(id: string, payload: { status?: string; approved_amount?: number; enhancement_amount?: number; gop_letter_number?: string; non_medical_deductibles?: number; denial_reason?: string; note?: string }): Promise<TPAClaimRecord> {
     const res = await api.patch(`/billing/insurance/claims/${id}/pre-auth`, payload);
+    return res.data;
+  },
+
+  /** Record the insurer's payment (amount + UTR / cheque reference) on an approved or filed claim. */
+  async settleTPAClaim(id: string, payload: { settled_amount: number; reference: string; note?: string }): Promise<TPAClaimRecord> {
+    const res = await api.post(`/billing/insurance/claims/${id}/settle`, payload);
     return res.data;
   },
 
@@ -1423,7 +1276,7 @@ export const billingService = {
     search?: string;
   }): Promise<RevenueLeakageAlertItem[]> {
     const res = await api.get('/billing/integrity/leakages', { params });
-    return res.data;
+    return (res.data || []).map((l: RevenueLeakageAlertItem) => ({ ...l, estimated_amount: Number(l.estimated_amount) || 0 }));
   },
 
   async scanRevenueLeakage(): Promise<{ scanned_at: string; new_alerts_count: number; total_open_alerts: number }> {
@@ -1469,7 +1322,7 @@ export const billingService = {
     search?: string;
   }): Promise<RevenueInvestigationCaseItem[]> {
     const res = await api.get('/billing/integrity/investigations', { params });
-    return res.data;
+    return (res.data || []).map((c: RevenueInvestigationCaseItem) => ({ ...c, recovered_amount: Number(c.recovered_amount) || 0 }));
   },
 
   async openRevenueInvestigation(payload: {
@@ -1598,6 +1451,11 @@ export interface IpdAdmissionOverviewItem {
   checklist: boolean[];
   topup_sent?: boolean;
   pass_token?: string | null;
+  admitted_at?: string;
+  open_invoices?: number;
+  claim_number?: string | null;
+  claim_status?: TPAClaimRecord['pre_auth_status'] | null;
+  final_invoice?: string | null;
 }
 
 export interface IpdAdmissionsOverviewResponse {
@@ -1665,6 +1523,31 @@ export interface IpdRunningBillSummary {
   checklist_complete: boolean;
   topup_demanded: boolean;
   last_demand_number?: string | null;
+  last_demand_amount?: number | null;
+  last_demand_at?: string | null;
+  /** IPD ledger + the patient's unbilled department charges (lab, pharmacy, services). */
+  bill_total: number;
+  department_total: number;
+  department_charges: Array<{ id: string; department: string; service_code: string; service_name: string; quantity: number; unit_price: number; total: number; priority: string; created_at: string }>;
+  /** The patient's other unpaid invoices raised at the counter. */
+  open_invoices_total: number;
+  open_invoices: Array<{ id: string; invoice_number: string; date: string; category: string; total: number; paid: number; balance: number; status: string }>;
+  final_invoice_id?: string | null;
+  final_invoice_balance?: number | null;
+  final_invoice_number?: string | null;
+  final_invoice_total?: number | null;
+  final_invoice_paid?: number | null;
+  override_reason?: string;
+  claim?: {
+    id: string;
+    claim_number: string;
+    payer: string;
+    pre_auth_status: TPAClaimRecord['pre_auth_status'];
+    claim_status: TPAClaimRecord['claim_status'];
+    requested_amount: number;
+    approved_amount: number;
+    gop_letter_number: string;
+  } | null;
   entries?: IpdRunningLedgerEntry[];
 }
 
@@ -2058,6 +1941,34 @@ export interface CashierDashboardData {
   shift: ShiftSummary;
   /** Present only in counter mode (assist header sent). `ended` when the assisted shift has closed. */
   assist?: AssistContext | AssistEnded;
+}
+
+export interface CashierOpdVisit {
+  id: string;
+  appointment_number: string;
+  token: number;
+  source: 'FRONT_DESK' | 'API' | string;
+  type: string;
+  status: 'WAITING' | 'TRIAGED' | 'IN_CONSULTATION' | 'COMPLETED' | 'CANCELLED' | string;
+  slot: string;
+  patient_id: string;
+  patient_name: string;
+  uhid: string;
+  mobile: string;
+  doctor: string;
+  department: string;
+  quoted_fee: number | null;
+  created_at: string;
+  billing: {
+    state: 'TO_COLLECT' | 'DRAFT' | 'BILLED' | 'PAID' | 'PAID_AT_DESK' | 'NO_CHARGE' | 'CANCELLED';
+    amount: number | null;
+    invoice: string;
+    mode: string;
+    charge_id?: string;
+    balance?: number | null;
+    /** Set once the billing supervisor confirms the desk handed this fee over */
+    reconciled?: { by: string; by_id: string; at: string; note: string } | null;
+  };
 }
 
 export interface CashierQueueRow {
@@ -2759,75 +2670,71 @@ export interface RevenueIntegrityOverviewData {
     amount_at_risk: number;
     open_leakage_items: number;
     high_risk_signals: number;
-    investigations_open: number;
+    open_investigations: number;
     recovered_mtd: number;
   };
-  recent_leakages: RevenueLeakageAlertItem[];
-  active_risk_signals: FraudRiskSignalItem[];
-  open_investigations: RevenueInvestigationCaseItem[];
 }
 
+/** Leakage alert as the API sends it (amounts mapped to numbers in the service). */
 export interface RevenueLeakageAlertItem {
   id: string;
   leakage_type: string;
   leakage_type_display: string;
   department: string;
-  department_display: string;
-  patient: string;
+  patient: string | null;
   patient_name: string;
   patient_uhid: string;
+  admission: string | null;
+  admission_number: string | null;
   estimated_amount: number;
   risk_score: number;
-  status: 'DETECTED' | 'ASSIGNED' | 'CONVERTED' | 'DISMISSED' | 'INVESTIGATING';
+  status: 'OPEN' | 'INVESTIGATING' | 'CONVERTED_TO_CHARGE' | 'FALSE_POSITIVE';
   status_display: string;
-  source_event_type: string;
+  assigned_to: string | null;
+  assigned_to_name: string;
   source_event_reference: string;
-  description: string;
-  assigned_to?: string | null;
-  assigned_to_name?: string | null;
-  converted_charge_item?: string | null;
-  dismissed_reason?: string;
-  dismissed_by?: string | null;
+  dismissal_reason: string;
+  converted_charge: string | null;
+  notes: string;
   detected_at: string;
-  resolved_at?: string | null;
-  metadata?: Record<string, any>;
+  updated_at: string;
 }
 
 export interface FraudRiskSignalItem {
   id: string;
   signal_code: string;
-  signal_type: string;
+  target_user: string | null;
+  target_user_name: string;
+  counter: string | null;
+  counter_code: string | null;
+  counter_name: string | null;
+  description: string;
   severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   severity_display: string;
-  description: string;
-  flagged_user?: string | null;
-  flagged_user_name?: string | null;
-  flagged_counter?: string | null;
-  flagged_counter_name?: string | null;
-  occurrences_count_30d: number;
-  confidence_score: number;
-  evidence_data?: Record<string, any>;
-  is_acknowledged: boolean;
-  acknowledged_by?: string | null;
-  acknowledged_at?: string | null;
+  occurrences_count: number;
+  risk_score: number;
   detected_at: string;
+  is_acknowledged: boolean;
+  acknowledged_by: string | null;
+  acknowledged_by_name: string;
 }
 
 export interface RevenueInvestigationCaseItem {
   id: string;
   case_number: string;
   subject: string;
-  leakage_alert?: string | null;
-  risk_signal?: string | null;
-  assigned_investigator?: string | null;
-  assigned_investigator_name?: string | null;
-  status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
+  leakage_alert: string | null;
+  leakage_alert_details: { id: string; type: string; department: string; amount: string; risk_score: number } | null;
+  risk_signal: string | null;
+  risk_signal_details: Record<string, unknown> | null;
+  owner: string | null;
+  owner_name: string;
+  status: 'OPEN' | 'EVIDENCE_COLLECTED' | 'RESOLVED' | 'CLOSED';
   status_display: string;
   findings: string;
   recovered_amount: number;
   created_at: string;
   updated_at: string;
-  resolved_at?: string | null;
 }
 
 // --- PHASE 11: REPORTS, PERIOD CLOSE & AUDIT ---

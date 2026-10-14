@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react';
 import { LabDataStore, AnalyzerItem, LabQueueOrder, CatalogTestItem, mapTestNameToCode } from './labDataStore';
 import { patientJourneyService, LabTariffItem } from '../../../services/patientJourneyService';
+import { LabApi, labApiMode } from '../../../services/labService';
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -17,6 +18,8 @@ export type LabStaffCategory = 'Pathologist' | 'Technologist' | 'Phlebotomist';
 
 export interface LabStaffMember {
   id: string;
+  /** Server only: the user account this team member is (name, email and phone come from it). */
+  userId?: string;
   name: string;
   code: string;
   role: string;
@@ -307,7 +310,39 @@ const seedState = (): LabAdminState => {
 
 let cache: LabAdminState | null = null;
 
+/** Empty picture shown while the server snapshot loads (never the browser demo data). */
+const emptyState = (): LabAdminState => ({
+  staff: [],
+  roster: { weekStart: mondayOf(new Date()), cells: {}, published: false },
+  requests: [],
+  equipment: {},
+  stock: [],
+  purchases: [],
+  priceDrafts: {},
+  settings: DEFAULT_SETTINGS,
+  events: [],
+});
+let emptyCache: LabAdminState | null = null;
+
+const fromServer = (raw: LabAdminState): LabAdminState => ({
+  ...raw,
+  staff: raw.staff.map((m) => ({ ...m, credentialExpiry: m.credentialExpiry || undefined, licenceNumber: m.licenceNumber || undefined, phone: m.phone || undefined, email: m.email || undefined, bench: m.bench || undefined, joinedOn: m.joinedOn || undefined })),
+  stock: raw.stock.map((i) => ({ ...i, expiry: i.expiry || undefined, lot: i.lot || undefined, supplier: i.supplier || undefined })),
+  settings: { ...DEFAULT_SETTINGS, ...raw.settings, savedAt: raw.settings.savedAt || undefined, savedBy: raw.settings.savedBy || undefined },
+});
+let serverRaw: LabAdminState | null = null;
+let serverMapped: LabAdminState | null = null;
+
 const load = (): LabAdminState => {
+  if (labApiMode()) {
+    const raw = LabApi.adminState();
+    if (!raw) return (emptyCache ||= emptyState());
+    if (raw !== serverRaw) {
+      serverRaw = raw;
+      serverMapped = fromServer(raw);
+    }
+    return serverMapped as LabAdminState;
+  }
   if (cache) return cache;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -497,18 +532,28 @@ export interface LabPriceRow {
   catalogCode?: string;
   tariff?: LabTariffItem;
   draft?: LabPriceDraft;
-  status: 'Synced' | 'Pending sync' | 'No price';
+  /** Server only: a price change already sent to Billing and waiting for approval / its effective date. */
+  pending?: { requestNumber: string; proposedPrice: number; effectiveFrom: string; statusLabel: string };
+  status: 'Synced' | 'Pending sync' | 'Awaiting Billing' | 'No price';
 }
 
 const isLabTariff = (t: LabTariffItem) => !(t.code || '').toUpperCase().startsWith('RAD');
 
-export const buildPriceRows = (state: LabAdminState, catalog: CatalogTestItem[], tariffs: Record<string, LabTariffItem>): LabPriceRow[] => {
+export const buildPriceRows = (
+  state: LabAdminState,
+  catalog: CatalogTestItem[],
+  tariffs: Record<string, LabTariffItem>,
+  pending: Record<string, { requestNumber: string; proposedPrice: number; effectiveFrom: string; statusLabel: string }> = {}
+): LabPriceRow[] => {
   const rows: LabPriceRow[] = [];
   const coveredCatalog = new Set<string>();
+  const statusOf = (name: string, draft: LabPriceDraft | undefined, priced: boolean): LabPriceRow['status'] =>
+    draft ? 'Pending sync' : pending[name] ? 'Awaiting Billing' : priced ? 'Synced' : 'No price';
   Object.values(tariffs)
     .filter(isLabTariff)
     .forEach((t) => {
-      const catalogCode = mapTestNameToCode(t.testName);
+      // Server tariffs carry the test's own code; browser tariffs are matched by name
+      const catalogCode = catalog.some((c) => c.code === t.code) ? (t.code as string) : mapTestNameToCode(t.testName);
       const cat = catalog.find((c) => c.code === catalogCode);
       if (cat) coveredCatalog.add(cat.code);
       const draft = state.priceDrafts[t.testName];
@@ -522,7 +567,8 @@ export const buildPriceRows = (state: LabAdminState, catalog: CatalogTestItem[],
         catalogCode: cat?.code,
         tariff: t,
         draft,
-        status: draft ? 'Pending sync' : 'Synced',
+        pending: pending[t.testName],
+        status: statusOf(t.testName, draft, true),
       });
     });
   catalog
@@ -538,7 +584,8 @@ export const buildPriceRows = (state: LabAdminState, catalog: CatalogTestItem[],
         tatTarget: c.tatTarget,
         catalogCode: c.code,
         draft,
-        status: draft ? 'Pending sync' : 'No price',
+        pending: pending[c.name],
+        status: statusOf(c.name, draft, false),
       });
     });
   return rows;
@@ -554,15 +601,21 @@ export interface LabAdminSnapshot {
   analyzers: AnalyzerItem[];
   catalog: CatalogTestItem[];
   tariffs: Record<string, LabTariffItem>;
+  /** Server only: price changes waiting in Billing, by test name. */
+  pendingPrices: Record<string, { requestNumber: string; proposedPrice: number; effectiveFrom: string; statusLabel: string }>;
 }
 
-const readSnapshot = (): LabAdminSnapshot => ({
-  state: load(),
-  orders: LabDataStore.getOrders(),
-  analyzers: LabDataStore.getAnalyzers(),
-  catalog: LabDataStore.getCatalog(),
-  tariffs: patientJourneyService.getLabTariffs(),
-});
+const readSnapshot = (): LabAdminSnapshot => {
+  const pricing = labApiMode() ? LabApi.pricing() : null;
+  return {
+    state: load(),
+    orders: LabDataStore.getOrders(),
+    analyzers: LabDataStore.getAnalyzers(),
+    catalog: LabDataStore.getCatalog(),
+    tariffs: pricing ? pricing.tariffs : labApiMode() ? {} : patientJourneyService.getLabTariffs(),
+    pendingPrices: pricing ? pricing.pending : {},
+  };
+};
 
 /** Live view of every Lab Admin data source; refreshes on any lab, admin or billing change. */
 export const useLabAdminData = (): LabAdminSnapshot => {
@@ -592,6 +645,14 @@ export const LabAdminStore = {
   get: load,
 
   addStaff(member: Omit<LabStaffMember, 'id'>, defaultShift: ShiftCode, by: string) {
+    if (labApiMode()) {
+      if (!member.userId) {
+        LabApi.unsupported('Choose the staff member\'s user account.');
+        return '';
+      }
+      void LabApi.admin('staff/', { ...member, defaultShift });
+      return '';
+    }
     const id = `ls-${Date.now()}`;
     update((s) =>
       logEvent(
@@ -609,6 +670,10 @@ export const LabAdminStore = {
   },
 
   updateStaff(id: string, patch: Partial<LabStaffMember>, by: string) {
+    if (labApiMode()) {
+      void LabApi.admin(`staff/${id}/`, patch, 'patch');
+      return;
+    }
     update((s) => {
       const target = s.staff.find((m) => m.id === id);
       return logEvent({ ...s, staff: s.staff.map((m) => (m.id === id ? { ...m, ...patch } : m)) }, 'staff', `Updated ${target?.name || id}`, by);
@@ -616,6 +681,10 @@ export const LabAdminStore = {
   },
 
   setShift(staffId: string, day: number, code: ShiftCode, by: string) {
+    if (labApiMode()) {
+      void LabApi.admin('roster/shift/', { staffId, day, code });
+      return;
+    }
     update((s) => {
       const cells = [...(s.roster.cells[staffId] || (Array(7).fill('O') as ShiftCode[]))];
       cells[day] = code;
@@ -630,10 +699,18 @@ export const LabAdminStore = {
   },
 
   publishRoster(by: string) {
+    if (labApiMode()) {
+      void LabApi.admin('roster/publish/');
+      return;
+    }
     update((s) => logEvent({ ...s, roster: { ...s.roster, published: true, publishedAt: new Date().toISOString() } }, 'roster', 'Published the weekly roster', by));
   },
 
   copyPreviousWeekPattern(by: string) {
+    if (labApiMode()) {
+      void LabApi.admin('roster/next-week/');
+      return;
+    }
     // The roster keeps one week; "start next week" carries the same pattern forward as a new draft.
     update((s) =>
       logEvent(
@@ -646,6 +723,10 @@ export const LabAdminStore = {
   },
 
   decideRequest(id: string, approve: boolean, by: string) {
+    if (labApiMode()) {
+      void LabApi.admin(`requests/${id}/decide/`, { approve });
+      return;
+    }
     update((s) => {
       const req = s.requests.find((r) => r.id === id);
       if (!req || req.status !== 'Pending') return s;
@@ -683,6 +764,10 @@ export const LabAdminStore = {
   },
 
   logMaintenance(analyzerId: string, text: string, kind: 'pm' | 'calibration' | 'ticket', by: string) {
+    if (labApiMode()) {
+      void LabApi.admin(`equipment/${analyzerId}/log/`, { text, kind });
+      return;
+    }
     update((s) => {
       const meta = s.equipment[analyzerId] || { lastPm: '', nextPm: '', contract: '', log: [] };
       const today = isoDate(new Date());
@@ -697,6 +782,10 @@ export const LabAdminStore = {
   },
 
   addAnalyzer(input: { name: string; serial: string; section: string; contract: string; testsCovered: string }, by: string) {
+    if (labApiMode()) {
+      void LabApi.admin('analyzers/', input);
+      return '';
+    }
     const id = `an-${Date.now()}`;
     const analyzers = LabDataStore.getAnalyzers();
     LabDataStore.saveAnalyzers([
@@ -716,10 +805,20 @@ export const LabAdminStore = {
   },
 
   addStockItem(item: LabStockItem, by: string) {
+    if (labApiMode()) {
+      void LabApi.admin('stock/', item);
+      return;
+    }
     update((s) => logEvent({ ...s, stock: [item, ...s.stock] }, 'stock', `Added stock item ${item.name}`, by));
   },
 
   raisePurchase(input: { stockId?: string; item: string; qty: number; unit: string; estCost: number }, by: string) {
+    if (labApiMode()) {
+      // The server numbers it the same way (next PR-LAB-###); the list refreshes with the confirmed code
+      const next = load().purchases.reduce((mx, p) => Math.max(mx, Number(/(\d+)$/.exec(p.code)?.[1] || 0)), 0) + 1;
+      void LabApi.admin('purchases/', input);
+      return `PR-LAB-${String(next).padStart(3, '0')}`;
+    }
     const s0 = load();
     const nextNo = s0.purchases.reduce((mx, p) => Math.max(mx, Number(/(\d+)$/.exec(p.code)?.[1] || 0)), 0) + 1;
     const code = `PR-LAB-${String(nextNo).padStart(3, '0')}`;
@@ -741,6 +840,10 @@ export const LabAdminStore = {
   },
 
   setPurchaseStatus(id: string, status: LabPurchaseRequest['status'], by: string) {
+    if (labApiMode()) {
+      void LabApi.admin(`purchases/${id}/status/`, { status });
+      return;
+    }
     update((s) => {
       const pr = s.purchases.find((p) => p.id === id);
       if (!pr) return s;
@@ -758,12 +861,21 @@ export const LabAdminStore = {
   },
 
   savePriceDraft(draft: Omit<LabPriceDraft, 'savedAt'>, by: string) {
+    if (labApiMode()) {
+      void LabApi.admin('pricing/draft/', draft);
+      return;
+    }
     update((s) =>
       logEvent({ ...s, priceDrafts: { ...s.priceDrafts, [draft.testName]: { ...draft, savedAt: new Date().toISOString() } } }, 'pricing', `Saved draft price for ${draft.testName}`, by)
     );
   },
 
   discardPriceDraft(testName: string, by: string) {
+    if (labApiMode()) {
+      const code = load().priceDrafts[testName]?.code;
+      if (code) void LabApi.admin('pricing/discard/', { code });
+      return;
+    }
     update((s) => {
       const next = { ...s.priceDrafts };
       delete next[testName];
@@ -773,6 +885,16 @@ export const LabAdminStore = {
 
   /** Push drafts to the Billing tariff master (the price doctors and billing actually charge). */
   syncPrices(testNames: string[], by: string) {
+    if (labApiMode()) {
+      // Billing approves price changes: this raises one tariff change request per test
+      const drafts = load().priceDrafts;
+      const codes = testNames.map((n) => drafts[n]?.code).filter(Boolean) as string[];
+      if (!codes.length) return 0;
+      void LabApi.admin<{ errors: { testName: string; error: string }[] }>('pricing/submit/', { codes }).then((r) => {
+        if (r?.errors?.length) LabApi.unsupported(r.errors.map((e) => `${e.testName}: ${e.error}`).join(' '));
+      });
+      return codes.length;
+    }
     const s0 = load();
     const tariffs: Record<string, LabTariffItem> = {};
     testNames.forEach((n) => {
@@ -790,6 +912,10 @@ export const LabAdminStore = {
   },
 
   saveSettings(settings: LabSettings, by: string) {
+    if (labApiMode()) {
+      void LabApi.admin('settings/', { settings });
+      return;
+    }
     update((s) => logEvent({ ...s, settings: { ...settings, savedAt: new Date().toISOString(), savedBy: by } }, 'settings', 'Updated department settings', by));
   },
 

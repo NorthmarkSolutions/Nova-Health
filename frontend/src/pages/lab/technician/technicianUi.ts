@@ -1,6 +1,7 @@
 // Shared props and the printable specimen label for the Lab Technician views.
 import type { TechnicianSnapshot } from '../data/technicianStore';
 import type { LabQueueOrder } from '../data/labDataStore';
+import { ageSex } from '../data/labDataStore';
 
 export interface TechnicianViewProps {
   data: TechnicianSnapshot;
@@ -24,7 +25,7 @@ export const printSpecimenLabel = (o: LabQueueOrder) => {
 <style>@page{size:50mm 25mm;margin:2mm}body{font-family:Arial,sans-serif;margin:0;font-size:8pt;line-height:1.25}
 .id{font-family:'Courier New',monospace;font-size:14pt;font-weight:700;letter-spacing:1px}.b{font-weight:700}</style></head><body>
 <div class="id">*${esc(o.specimenNumber)}*</div>
-<div class="b">${esc(o.patientName)} · ${o.age}${esc(o.gender)}</div>
+<div class="b">${esc(o.patientName)} · ${esc(ageSex(o.age, o.gender))}</div>
 <div>${esc(o.uhid)} · ${esc(o.orderNumber)}</div>
 <div>${esc(o.testName)} · ${esc(o.sampleType)}</div>
 <div class="b">${esc(o.priority.toUpperCase())}${o.collectedAt ? ` · coll ${esc(o.collectedAt)}` : ''}</div>

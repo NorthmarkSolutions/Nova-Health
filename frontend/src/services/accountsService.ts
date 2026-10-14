@@ -1,5 +1,17 @@
 import api from './api';
 
+/** GET /accounts/audit/integrity/ — hash-chain verification of the audit log. */
+export interface AuditIntegrity {
+  status: string;
+  valid: boolean;
+  total_records: number;
+  last_sequence?: number;
+  head_hash?: string;
+  error?: string;
+  broken_at_sequence?: number;
+  days?: Array<{ date: string; records: number; valid: boolean }>;
+}
+
 export interface ChartOfAccountItem {
   id: string;
   code: string;
@@ -177,15 +189,32 @@ export interface BankTransactionItem {
   direction: 'credit' | 'debit';
   type: string;
   match_status: 'unmatched' | 'suggested' | 'matched' | 'for_review' | 'excluded';
-  suggested_matches?: Array<{
-    target_id: string;
-    reference: string;
-    party: string;
-    amount: string;
-    date: string;
-    confidence: number;
-    reason: string;
-  }>;
+  suggested_matches?: BankSuggestion[];
+}
+
+/** One candidate ledger entry for a bank line (server: BankReconciliationService.suggest_matches). */
+export interface BankSuggestion {
+  matched_type: string;
+  matched_id: string;
+  reference_no: string;
+  amount: string;
+  date: string;
+  confidence: number;
+  difference: string;
+}
+
+export interface AccountDocumentItem {
+  id: string;
+  entity_type: string;
+  entity_id: string;
+  doc_type: string;
+  file_name: string;
+  file_url: string;
+  uploaded_by_name: string;
+  validated: boolean;
+  rejection_reason: string;
+  checksum: string;
+  created_at: string;
 }
 
 export interface ReceivableItem {
@@ -244,6 +273,8 @@ export interface ExpenseRequestItem {
   budget_available_at_submit: string;
   status: 'draft' | 'in_approval' | 'approved' | 'rejected' | 'returned';
   created_at: string;
+  cost_center_code?: string;
+  maker_name?: string;
 }
 
 export interface GSTBatchItem {
@@ -268,75 +299,31 @@ export interface GSTBatchItem {
   }>;
 }
 
+/** GET /accounts/supervisor/dashboard/ — counts and alerts computed by the server. */
 export interface SupervisorDashboardResponse {
   kpis: {
-    pending_approvals: { value: number; label: string; trend: string; tone: string };
-    overdue_actions: { value: number; label: string; trend: string; tone: string };
-    open_escalations: { value: number; label: string; trend: string; tone: string };
-    close_readiness: { value: string; label: string; trend: string; tone: string };
+    pending_approvals: number;
+    pending_value: string;
+    returned_today: number;
+    escalations: number;
+    overdue_reviews: number;
+    pending_gst: number;
+    daily_close_status: string;
+    blocker_count: number;
   };
-  priority_queue: ApprovalRequestItem[];
-  recent_activity: Array<{
-    id: string;
-    action: string;
-    actor_name: string;
-    reference: string;
-    module: string;
-    detail: string;
-    occurred_at: string;
-  }>;
-  exceptions: Array<{
-    id: string;
-    type: string;
-    reference: string;
-    detail: string;
-    severity: string;
-  }>;
-  critical_alerts: Array<{
-    id: string;
-    title: string;
-    description: string;
-    severity: string;
-    link_type?: string;
-    link_id?: string;
-  }>;
+  alerts: Array<{ t: string; d: string; severity: 'critical' | 'warning' | 'info' | string }>;
+  exceptions: Array<{ ref: string; t: string; severity: string }>;
 }
 
+/** GET /accounts/close/daily/<date>/ */
 export interface DailyCloseResponse {
-  date: string;
-  status: 'not_started' | 'in_progress' | 'ready_to_close' | 'closed' | 'locked' | 'reopened';
-  status_display: string;
-  is_locked: boolean;
-  sections: Array<{
-    key: string;
-    title: string;
-    note: string;
-    done: number;
-    total: number;
-    pct: string;
-    extra?: string;
-    color: string;
-  }>;
-  checklist: Array<{
-    key: string;
-    title: string;
-    detail: string;
-    passed: boolean;
-    mark: string;
-    bg: string;
-    fg: string;
-  }>;
-  blockers: Array<{
-    type: string;
-    reason: string;
-    count: number;
-    items?: any[];
-  }>;
-  timeline: Array<{
-    step: string;
-    actor: string;
-    timestamp: string;
-  }>;
+  business_date: string;
+  date_formatted: string;
+  status: 'open' | 'closed' | 'locked' | string;
+  blockers: string[];
+  blocker_count: number;
+  sections: Array<{ title: string; screen: string; done: number; total: number; pct: string; note: string }>;
+  checks: Array<{ title: string; ok: boolean; desc: string }>;
 }
 
 export interface EscalationItem {
@@ -349,51 +336,103 @@ export interface EscalationItem {
   raised_by_name: string;
   raised_to: string;
   amount: string;
-  status: 'open' | 'with_manager' | 'resolved' | 'closed';
-  notes: Array<{
-    author: string;
-    role: string;
-    text: string;
-    timestamp: string;
-  }>;
-  resolution_summary?: string;
+  status: 'open' | 'with_manager' | 'resolved' | 'closed' | string;
+  /** Normalised from the server's {who, when, t}. */
+  notes: Array<{ author: string; when: string; text: string }>;
+  resolution: string;
   created_at: string;
 }
 
 export interface TeamPerformanceMember {
-  user_id: string;
   name: string;
   code: string;
-  initials: string;
   processed: number;
   pending: number;
   approved: number;
   returned: number;
   errors: number;
-  first_pass_rate: string;
+  first_pass: string;
   productivity: string;
-  productivity_pct: number;
-  collections_count?: number;
-  pending_items: Array<{
-    id: string;
-    ref: string;
-    type: string;
-    amount: string;
-    age: number;
-    priority: string;
-  }>;
+  collections_count: number;
 }
 
 export interface WriteOffRequestItem {
   id: string;
   reference_no: string;
-  customer?: { id: string; name: string };
-  receivable?: { id: string; reference_no: string; outstanding_amount: string };
+  customer_name: string;
+  receivable_ref: string;
   amount: string;
   reason: string;
-  status: 'pending' | 'approved' | 'rejected' | 'forwarded';
+  category: string;
+  status: 'pending' | 'approved' | 'rejected' | 'forwarded' | string;
   created_at: string;
 }
+
+export interface ReconciliationMatchItem {
+  id: string;
+  bank_transaction: string;
+  matched_type: string;
+  matched_id: string;
+  confidence: number;
+  method: string;
+  status: string;
+  proposed_by_name: string;
+  created_at: string;
+}
+
+// ---- Map API rows to the shape the screens read (HMS bible 19.9) ----
+// The serializers return FK ids plus *_name fields; the screens read nested objects.
+const listOf = (data: any): any[] => (Array.isArray(data) ? data : Array.isArray(data?.results) ? data.results : []);
+
+const normaliseSuggestion = (s: any): BankSuggestion => ({
+  matched_type: s?.matched_type || 'receipt',
+  matched_id: String(s?.matched_id ?? s?.target_id ?? ''),
+  reference_no: s?.reference_no || s?.reference || '',
+  amount: String(s?.amount ?? '0'),
+  date: s?.date || '',
+  confidence: Number(s?.confidence) || 0,
+  difference: String(s?.difference ?? '0'),
+});
+
+const normaliseBill = (b: any): VendorBillItem => ({
+  ...b,
+  vendor:
+    b?.vendor && typeof b.vendor === 'object'
+      ? b.vendor
+      : { id: b?.vendor ? String(b.vendor) : '', name: b?.vendor_name || '', gstin: b?.vendor_gstin || '', payment_terms_days: 0 },
+  duplicate_score: Number(b?.duplicate_score) || 0,
+});
+
+const normaliseReceivable = (r: any): ReceivableItem => ({
+  ...r,
+  customer:
+    r?.customer && typeof r.customer === 'object'
+      ? r.customer
+      : r?.customer || r?.customer_name
+        ? { id: r?.customer ? String(r.customer) : '', name: r?.customer_name || '', source_type: r?.receivable_type || '' }
+        : undefined,
+});
+
+const normaliseCase = (c: any): CollectionCaseItem => ({
+  ...c,
+  customer:
+    c?.customer && typeof c.customer === 'object'
+      ? c.customer
+      : { id: c?.customer ? String(c.customer) : '', name: c?.customer_name || '', source_type: '' },
+});
+
+const normaliseBankTxn = (t: any): BankTransactionItem => ({
+  ...t,
+  bank_account: t?.bank_account != null ? String(t.bank_account) : '',
+  suggested_matches: Array.isArray(t?.suggested_matches) ? t.suggested_matches.map(normaliseSuggestion) : [],
+});
+
+const normaliseEscalation = (e: any): EscalationItem => ({
+  ...e,
+  raised_by_name: e?.raised_by_full_name || e?.raised_by_name || '',
+  resolution: e?.resolution || e?.resolution_summary || '',
+  notes: (Array.isArray(e?.notes) ? e.notes : []).map((n: any) => ({ author: n?.who || n?.author || '', when: n?.when || n?.timestamp || '', text: n?.t || n?.text || '' })),
+});
 
 export const accountsService = {
   getWorkload: async (): Promise<WorkloadResponse> => {
@@ -476,7 +515,7 @@ export const accountsService = {
     return res.data;
   },
 
-  getAuditIntegrity: async (): Promise<{ status: string; total_records: number; valid: boolean }> => {
+  getAuditIntegrity: async (): Promise<AuditIntegrity> => {
     const res = await api.get('/accounts/audit/integrity/');
     return res.data;
   },
@@ -499,7 +538,7 @@ export const accountsService = {
 
   getVendorBills: async (params?: { status?: string }): Promise<VendorBillItem[]> => {
     const res = await api.get('/accounts/vendor-bills/', { params });
-    return res.data.results || res.data;
+    return listOf(res.data).map(normaliseBill);
   },
 
   checkDuplicateBill: async (params: { vendor_id: string; invoice_no: string; amount: number; invoice_date?: string }): Promise<any> => {
@@ -509,7 +548,7 @@ export const accountsService = {
 
   createVendorBill: async (payload: any): Promise<VendorBillItem> => {
     const res = await api.post('/accounts/vendor-bills/', payload);
-    return res.data;
+    return normaliseBill(res.data);
   },
 
   submitVendorBill: async (billId: string, ackDuplicate: boolean = false, version: number = 1): Promise<any> => {
@@ -519,12 +558,12 @@ export const accountsService = {
 
   getBankTransactions: async (params?: { status?: string }): Promise<BankTransactionItem[]> => {
     const res = await api.get('/accounts/bank-transactions/', { params });
-    return res.data.results || res.data;
+    return listOf(res.data).map(normaliseBankTxn);
   },
 
-  getBankSuggestions: async (txnId: string): Promise<any> => {
+  getBankSuggestions: async (txnId: string): Promise<BankSuggestion[]> => {
     const res = await api.get(`/accounts/bank-transactions/${txnId}/suggestions/`);
-    return res.data;
+    return listOf(res.data?.suggestions ?? res.data).map(normaliseSuggestion);
   },
 
   matchBankTransaction: async (payload: { bank_transaction_id: string; matched_type: string; matched_id: string; confidence: number; method: string }): Promise<any> => {
@@ -539,7 +578,7 @@ export const accountsService = {
 
   getReceivables: async (params?: { aging_bucket?: string; status?: string }): Promise<ReceivableItem[]> => {
     const res = await api.get('/accounts/receivables/', { params });
-    return res.data.results || res.data;
+    return listOf(res.data).map(normaliseReceivable);
   },
 
   logReceivableFollowup: async (receivableId: string, payload: { channel: string; contact_person?: string; outcome?: string; notes?: string; next_action_on?: string }): Promise<any> => {
@@ -549,7 +588,28 @@ export const accountsService = {
 
   getCollectionPipeline: async (): Promise<CollectionCaseItem[]> => {
     const res = await api.get('/accounts/collections/pipeline');
+    return listOf(res.data).map(normaliseCase);
+  },
+
+  validateDocument: async (id: string, valid: boolean, reason?: string): Promise<AccountDocumentItem> => {
+    const res = await api.post(`/accounts/documents/${id}/validate/`, { valid, reason });
     return res.data;
+  },
+
+  getReconciliationMatches: async (): Promise<ReconciliationMatchItem[]> => {
+    const res = await api.get('/accounts/reconciliation/matches/');
+    return listOf(res.data);
+  },
+
+  /** Department audit trail as raw log rows (the Manager screen uses getRecentAudit's AuditRecord shape). */
+  getDepartmentAudit: async (days: number = 31): Promise<AuditLogItem[]> => {
+    const res = await api.get('/accounts/audit/recent/', { params: { days } });
+    return listOf(res.data);
+  },
+
+  getDocuments: async (): Promise<AccountDocumentItem[]> => {
+    const res = await api.get('/accounts/documents/');
+    return listOf(res.data);
   },
 
   getExpenseRequests: async (params?: { status?: string }): Promise<ExpenseRequestItem[]> => {
@@ -610,7 +670,7 @@ export const accountsService = {
 
   getEscalations: async (params?: { status?: string }): Promise<EscalationItem[]> => {
     const res = await api.get('/accounts/escalations/', { params });
-    return res.data.results || res.data;
+    return listOf(res.data).map(normaliseEscalation);
   },
 
   addEscalationNote: async (id: string, note: string): Promise<any> => {
@@ -635,7 +695,7 @@ export const accountsService = {
 
   getWriteOffRequests: async (params?: { status?: string }): Promise<WriteOffRequestItem[]> => {
     const res = await api.get('/accounts/write-offs/', { params });
-    return res.data.results || res.data;
+    return listOf(res.data);
   },
 
   decideWriteOff: async (id: string, payload: { decision: 'approve' | 'reject' | 'forward'; comment?: string }): Promise<any> => {
@@ -643,9 +703,9 @@ export const accountsService = {
     return res.data;
   },
 
-  getTeamPerformance: async (level: string = 'executive'): Promise<{ members: TeamPerformanceMember[] }> => {
+  getTeamPerformance: async (level: string = 'executive'): Promise<TeamPerformanceMember[]> => {
     const res = await api.get('/accounts/team/performance/', { params: { level } });
-    return res.data;
+    return listOf(res.data?.members ?? res.data);
   },
 
   decideReconciliationMatch: async (matchId: string, payload: { decision: 'approve' | 'return' | 'escalate'; comment?: string }): Promise<any> => {
@@ -847,240 +907,261 @@ export const accountsService = {
     return res.data;
   },
 
-  // === Phase 5: Finance Controller APIs ===
+  // === Phase 5: Finance Controller APIs (paths match apps/accounting/urls.py) ===
   getControllerDashboard: async (): Promise<ControllerDashboardData> => {
     const res = await api.get('/accounts/controller/dashboard/');
     return res.data;
   },
 
-  getMonthEndClose: async (period?: string): Promise<MonthEndCloseData> => {
-    const res = await api.get('/accounts/controller/close/monthly/', { params: { period } });
+  getMonthEndClose: async (period: string): Promise<MonthEndCloseData> => {
+    const res = await api.get(`/accounts/close/monthly/${period}/`);
     return res.data;
   },
 
-  approveMonthEndClose: async (period?: string): Promise<any> => {
-    const res = await api.post('/accounts/controller/close/monthly/approve/', { period });
+  approveMonthEndClose: async (period: string): Promise<{ status: string; message: string }> => {
+    const res = await api.post(`/accounts/close/monthly/${period}/approve/`);
     return res.data;
   },
 
-  delayMonthEndClose: async (newDate: string, comment: string, period?: string): Promise<any> => {
-    const res = await api.post('/accounts/controller/close/monthly/delay/', { new_date: newDate, comment, period });
+  delayMonthEndClose: async (period: string, newDate: string, reason: string): Promise<{ status: string; message: string }> => {
+    const res = await api.post(`/accounts/close/monthly/${period}/delay/`, { new_date: newDate, reason, comment: reason });
     return res.data;
   },
 
-  escalateMonthEndClose: async (comment: string, period?: string): Promise<any> => {
-    const res = await api.post('/accounts/controller/close/monthly/escalate/', { comment, period });
+  escalateMonthEndClose: async (period: string, reason: string): Promise<{ status: string; message: string }> => {
+    const res = await api.post(`/accounts/close/monthly/${period}/escalate/`, { reason, comment: reason });
     return res.data;
   },
 
-  getQuarterEndClose: async (quarter?: string): Promise<QuarterEndCloseData> => {
-    const res = await api.get('/accounts/controller/close/quarterly/', { params: { quarter } });
+  getQuarterEndClose: async (quarter: string): Promise<QuarterEndCloseData> => {
+    const res = await api.get(`/accounts/close/quarterly/${quarter}/`);
     return res.data;
   },
 
-  reviewQuarterEndItem: async (itemId: string): Promise<any> => {
-    const res = await api.post('/accounts/controller/close/quarterly/review/', { item_id: itemId });
+  reviewQuarterEndItem: async (quarter: string, itemId: string): Promise<{ status: string; message: string }> => {
+    const res = await api.post(`/accounts/close/quarterly/${quarter}/items/${itemId}/review/`);
     return res.data;
   },
 
-  approveQuarterEndClose: async (quarter?: string): Promise<any> => {
-    const res = await api.post('/accounts/controller/close/quarterly/approve/', { quarter });
+  approveQuarterEndClose: async (quarter: string): Promise<{ status: string; message: string }> => {
+    const res = await api.post(`/accounts/close/quarterly/${quarter}/approve/`);
     return res.data;
   },
 
-  lockQuarterEndClose: async (quarter?: string): Promise<any> => {
-    const res = await api.post('/accounts/controller/close/quarterly/lock/', { quarter });
+  lockQuarterEndClose: async (quarter: string): Promise<{ status: string; message: string }> => {
+    const res = await api.post(`/accounts/close/quarterly/${quarter}/lock/`);
     return res.data;
   },
 
-  getYearEndClose: async (fiscalYear?: string): Promise<YearEndCloseData> => {
-    const res = await api.get('/accounts/controller/close/yearly/', { params: { fiscal_year: fiscalYear } });
+  getYearEndClose: async (fiscalYear: string): Promise<YearEndCloseData> => {
+    const res = await api.get(`/accounts/close/yearly/${fiscalYear}/`);
     return res.data;
   },
 
-  actYearEndItem: async (itemId: string, action: string): Promise<any> => {
-    const res = await api.post('/accounts/controller/close/yearly/act/', { item_id: itemId, action });
+  actYearEndItem: async (fiscalYear: string, itemId: string): Promise<{ status: string; message: string }> => {
+    const res = await api.post(`/accounts/close/yearly/${fiscalYear}/observations/${itemId}/act/`);
     return res.data;
   },
 
-  getControllerPeriods: async (): Promise<ControllerPeriodItem[]> => {
-    const res = await api.get('/accounts/controller/periods/');
-    return res.data.results || res.data;
-  },
-
-  lockControllerPeriod: async (periodId: string): Promise<any> => {
-    const res = await api.post('/accounts/controller/periods/lock/', { period_id: periodId });
+  lockControllerPeriod: async (periodId: string): Promise<{ status: string; message: string }> => {
+    const res = await api.post(`/accounts/periods/${periodId}/lock/`);
     return res.data;
   },
 
-  reopenControllerPeriod: async (periodId: string, comment: string, ack: boolean = true): Promise<any> => {
-    const res = await api.post('/accounts/controller/periods/reopen/', { period_id: periodId, comment, ack });
+  reopenControllerPeriod: async (periodId: string, comment: string): Promise<{ status: string; message: string }> => {
+    const res = await api.post(`/accounts/periods/${periodId}/reopen/`, { comment, ack: true });
     return res.data;
   },
 
-  decidePeriodReopen: async (periodId: string, decision: 'approve' | 'reject', comment?: string): Promise<any> => {
-    const res = await api.post('/accounts/controller/periods/decide-reopen/', { period_id: periodId, decision, comment });
+  getPaymentBatches: async (): Promise<PaymentBatchItem[]> => {
+    const res = await api.get('/accounts/payment-batches/');
+    return listOf(res.data);
+  },
+
+  releasePaymentBatch: async (batchId: string, acknowledged: boolean): Promise<{ status: string; message: string }> => {
+    const res = await api.post(`/accounts/payment-batches/${batchId}/release/`, { ack: acknowledged });
     return res.data;
   },
 
-  getPaymentBatches: async (params?: { status?: string }): Promise<PaymentBatchItem[]> => {
-    const res = await api.get('/accounts/controller/payments/batches/', { params });
-    return res.data.results || res.data;
-  },
-
-  getBatchChecks: async (batchId: string): Promise<BatchCheckItem[]> => {
-    const res = await api.get(`/accounts/controller/payments/batches/${batchId}/checks/`);
-    return res.data.checks || res.data;
-  },
-
-  releasePaymentBatch: async (batchId: string, ack: boolean = false): Promise<any> => {
-    const res = await api.post(`/accounts/controller/payments/batches/${batchId}/release/`, { ack });
+  holdPaymentBatch: async (batchId: string, comment: string): Promise<{ status: string; message: string }> => {
+    const res = await api.post(`/accounts/payment-batches/${batchId}/hold/`, { comment });
     return res.data;
   },
 
-  holdPaymentBatch: async (batchId: string, comment: string): Promise<any> => {
-    const res = await api.post(`/accounts/controller/payments/batches/${batchId}/hold/`, { comment });
+  returnPaymentBatch: async (batchId: string, comment: string): Promise<{ status: string; message: string }> => {
+    const res = await api.post(`/accounts/payment-batches/${batchId}/return/`, { comment });
     return res.data;
   },
 
-  returnPaymentBatch: async (batchId: string, comment: string): Promise<any> => {
-    const res = await api.post(`/accounts/controller/payments/batches/${batchId}/return/`, { comment });
-    return res.data;
-  },
-
-  cosignPaymentBatch: async (batchId: string, comment?: string): Promise<any> => {
-    const res = await api.post(`/accounts/controller/payments/batches/${batchId}/cosign/`, { comment });
+  cosignPaymentBatch: async (batchId: string, comment: string): Promise<{ status: string; message: string }> => {
+    const res = await api.post(`/accounts/payment-batches/${batchId}/cosign/`, { comment });
     return res.data;
   },
 
   getBankAccounts: async (): Promise<BankAccountControlItem[]> => {
-    const res = await api.get('/accounts/controller/bank/accounts/');
-    return res.data.results || res.data;
+    const res = await api.get('/accounts/bank-accounts/');
+    return listOf(res.data);
   },
 
-  freezeBankAccount: async (bankAccountId: string, comment: string): Promise<any> => {
-    const res = await api.post(`/accounts/controller/bank/accounts/${bankAccountId}/freeze/`, { comment });
+  /** Toggles: freezes an active account, unfreezes a frozen one. */
+  freezeBankAccount: async (bankAccountId: string, comment: string): Promise<{ status: string; message: string }> => {
+    const res = await api.post(`/accounts/bank-accounts/${bankAccountId}/freeze/`, { comment });
     return res.data;
   },
 
-  getBankReconciliations: async (): Promise<any[]> => {
-    const res = await api.get('/accounts/controller/bank/reconciliations/');
-    return res.data.results || res.data;
+  getBankReconciliations: async (): Promise<BankReconciliationItem[]> => {
+    const res = await api.get('/accounts/reconciliations/');
+    return listOf(res.data);
   },
 
-  approveBankReconciliation: async (reconId: string, ack: boolean = false): Promise<any> => {
-    const res = await api.post(`/accounts/controller/bank/reconciliations/${reconId}/approve/`, { ack });
+  approveBankReconciliation: async (reconId: string, acknowledged: boolean): Promise<{ status: string; message: string }> => {
+    const res = await api.post(`/accounts/reconciliations/${reconId}/approve/`, { ack: acknowledged });
     return res.data;
   },
 
-  returnBankReconciliation: async (reconId: string, comment: string): Promise<any> => {
-    const res = await api.post(`/accounts/controller/bank/reconciliations/${reconId}/return/`, { comment });
+  returnBankReconciliation: async (reconId: string, comment: string): Promise<{ status: string; message: string }> => {
+    const res = await api.post(`/accounts/reconciliations/${reconId}/return/`, { comment });
     return res.data;
   },
 
-  getFinancialStatement: async (statementType: 'pl' | 'bs' | 'cf', period?: string): Promise<FinancialStatementData> => {
-    const res = await api.get('/accounts/controller/reporting/statements/', { params: { type: statementType, period } });
+  getFinancialStatement: async (statementType: 'pl' | 'bs' | 'cf', period: string): Promise<FinancialStatementData> => {
+    const res = await api.get(`/accounts/statements/${statementType}/`, { params: { period } });
     return res.data;
   },
 
-  flagStatementVariance: async (statementType: string, lineKey: string, comment: string, period?: string): Promise<any> => {
-    const res = await api.post('/accounts/controller/reporting/statements/flag-variance/', { statement_type: statementType, line_key: lineKey, comment, period });
+  flagStatementVariance: async (statementType: string, lineKey: string, query: string): Promise<{ status: string; message: string }> => {
+    const res = await api.post(`/accounts/statements/${statementType}/flags/`, { line_key: lineKey, query });
     return res.data;
   },
 
-  approveFinancialStatement: async (statementType: string, ack: boolean = false, period?: string): Promise<any> => {
-    const res = await api.post('/accounts/controller/reporting/statements/approve/', { statement_type: statementType, ack, period });
+  approveFinancialStatement: async (statementType: string, acknowledged: boolean): Promise<{ status: string; message: string }> => {
+    const res = await api.post(`/accounts/statements/${statementType}/approve/`, { ack: acknowledged });
     return res.data;
   },
 
   getTaxReturns: async (): Promise<TaxReturnItem[]> => {
-    const res = await api.get('/accounts/controller/compliance/tax-returns/');
-    return res.data.results || res.data;
+    const res = await api.get('/accounts/tax/returns/');
+    return listOf(res.data);
   },
 
-  approveTaxReturn: async (returnId: string, ack: boolean = false): Promise<any> => {
-    const res = await api.post(`/accounts/controller/compliance/tax-returns/${returnId}/approve/`, { ack });
+  approveTaxReturn: async (returnId: string, acknowledged: boolean): Promise<{ status: string; message: string }> => {
+    const res = await api.post(`/accounts/tax/returns/${returnId}/approve/`, { ack: acknowledged });
     return res.data;
   },
 
-  returnTaxReturn: async (returnId: string, comment: string): Promise<any> => {
-    const res = await api.post(`/accounts/controller/compliance/tax-returns/${returnId}/return/`, { comment });
+  returnTaxReturn: async (returnId: string, comment: string): Promise<{ status: string; message: string }> => {
+    const res = await api.post(`/accounts/tax/returns/${returnId}/return/`, { comment });
     return res.data;
   },
 
-  escalateTaxReturn: async (returnId: string, comment: string): Promise<any> => {
-    const res = await api.post(`/accounts/controller/compliance/tax-returns/${returnId}/escalate/`, { comment });
+  escalateTaxReturn: async (returnId: string, comment: string): Promise<{ status: string; message: string }> => {
+    const res = await api.post(`/accounts/tax/returns/${returnId}/escalate/`, { comment });
     return res.data;
   },
 
   getAuditRequests: async (): Promise<AuditRequestItem[]> => {
-    const res = await api.get('/accounts/controller/compliance/audit-requests/');
-    return res.data.results || res.data;
+    const res = await api.get('/accounts/audit/requests/');
+    return listOf(res.data);
   },
 
-  markAuditRequestReady: async (requestId: string): Promise<any> => {
-    const res = await api.post(`/accounts/controller/compliance/audit-requests/${requestId}/ready/`);
+  markAuditRequestReady: async (requestId: string): Promise<{ status: string; message: string }> => {
+    const res = await api.post(`/accounts/audit/requests/${requestId}/ready/`);
     return res.data;
   },
 
-  shareAuditRequest: async (requestId: string): Promise<any> => {
-    const res = await api.post(`/accounts/controller/compliance/audit-requests/${requestId}/share/`);
+  shareAuditRequest: async (requestId: string): Promise<{ status: string; message: string }> => {
+    const res = await api.post(`/accounts/audit/requests/${requestId}/share/`);
     return res.data;
   },
 
-  requestAuditEvidence: async (requestId: string, owner: string, comment?: string): Promise<any> => {
-    const res = await api.post(`/accounts/controller/compliance/audit-requests/${requestId}/evidence/`, { owner, comment });
+  requestAuditEvidence: async (requestId: string, owner: string): Promise<{ status: string; message: string }> => {
+    const res = await api.post(`/accounts/audit/requests/${requestId}/request-evidence/`, { owner });
+    return res.data;
+  },
+
+  getAuditObservations: async (): Promise<AuditObservationItem[]> => {
+    const res = await api.get('/accounts/audit/observations/');
+    return listOf(res.data);
+  },
+
+  actAuditObservation: async (obsId: string): Promise<{ status: string; message: string }> => {
+    const res = await api.post(`/accounts/audit/observations/${obsId}/act/`);
     return res.data;
   },
 
   getControlViolations: async (): Promise<ControlViolationItem[]> => {
-    const res = await api.get('/accounts/controller/governance/controls/');
-    return res.data.results || res.data;
+    const res = await api.get('/accounts/controls/violations/');
+    return listOf(res.data);
   },
 
-  actControlViolation: async (violationId: string, action: 'remediate' | 'cfo' | 'close', owner?: string, comment?: string): Promise<any> => {
-    const res = await api.post(`/accounts/controller/governance/controls/${violationId}/act/`, { action, owner, comment });
+  actControlViolation: async (violationId: string, action: 'remediate' | 'escalate' | 'close', owner?: string, comment?: string): Promise<{ status: string; message: string }> => {
+    const res = await api.post(`/accounts/controls/violations/${violationId}/action/`, { action, owner, comment });
     return res.data;
   },
 
   getHighRiskItems: async (): Promise<HighRiskReviewItem[]> => {
-    const res = await api.get('/accounts/controller/governance/high-risk/');
-    return res.data.results || res.data;
+    const res = await api.get('/accounts/high-risk/');
+    return listOf(res.data);
   },
 
-  decideHighRiskItem: async (itemId: string, decision: 'approve' | 'return' | 'reject' | 'forward_to_cfo', comment?: string, ack: boolean = false): Promise<any> => {
-    const res = await api.post(`/accounts/controller/governance/high-risk/${itemId}/decide/`, { decision, comment, ack });
+  decideHighRiskItem: async (itemId: string, decision: 'approve' | 'return' | 'reject' | 'forward_to_cfo', comment: string, acknowledged: boolean): Promise<{ status: string; message: string }> => {
+    const res = await api.post(`/accounts/high-risk/${itemId}/decision/`, { decision, comment, ack: acknowledged });
     return res.data;
   },
 
-  getControllerExceptions: async (): Promise<any[]> => {
-    const res = await api.get('/accounts/controller/governance/exceptions/');
-    return res.data.results || res.data;
-  },
-
-  actControllerException: async (exceptionId: string, action: 'assign' | 'accept' | 'cfo' | 'close', owner?: string, comment?: string): Promise<any> => {
-    const res = await api.post(`/accounts/controller/governance/exceptions/${exceptionId}/act/`, { action, owner, comment });
+  /** Controller actions on the shared exception register: assign · accept (risk) · cfo (escalate) · close. */
+  actControllerException: async (exceptionId: string, action: 'assign' | 'accept' | 'cfo' | 'close', owner?: string, comment?: string): Promise<{ status: string; message: string }> => {
+    const res = await api.post(`/accounts/exceptions/${exceptionId}/action/`, { action, owner, comment });
     return res.data;
   },
 
   getFinancialPolicies: async (): Promise<PolicyMasterItem[]> => {
-    const res = await api.get('/accounts/controller/governance/policies/');
-    return res.data.results || res.data;
+    const res = await api.get('/accounts/policies/');
+    return listOf(res.data);
   },
 
-  decidePolicyChange: async (policyId: string, decision: 'approve' | 'reject', comment?: string): Promise<any> => {
-    const res = await api.post(`/accounts/controller/governance/policies/${policyId}/decide/`, { decision, comment });
+  /** The server resolves the pending change from the policy itself; the change id in the path is not used. */
+  decidePolicyChange: async (policyId: string, decision: 'approve' | 'reject', comment: string): Promise<{ status: string; message: string }> => {
+    const res = await api.post(`/accounts/policies/${policyId}/changes/current/decision/`, { decision, comment });
     return res.data;
   },
 
-  reviewFinancialPolicy: async (policyId: string): Promise<any> => {
-    const res = await api.post(`/accounts/controller/governance/policies/${policyId}/review/`);
+  reviewPolicy: async (policyId: string): Promise<{ status: string; message: string }> => {
+    const res = await api.post(`/accounts/policies/${policyId}/review/`);
     return res.data;
   },
 
-  getAuditObservations: async (): Promise<any[]> => {
-    const res = await api.get('/accounts/controller/tracking/audit-observations/');
-    return res.data.results || res.data;
+  // === Audit governance (Finance Controller / CFO): engagements, auditor logins, time-boxed access ===
+  getAuditEngagements: async (): Promise<AuditEngagementItem[]> => {
+    const res = await api.get('/accounts/audit/engagements/');
+    return listOf(res.data);
+  },
+
+  createAuditEngagement: async (payload: { engagement_no?: string; auditor_firm: string; type: string; period_from: string; period_to: string; fieldwork_from: string; fieldwork_to: string }): Promise<{ engagement_no: string; auditor_firm: string }> => {
+    const res = await api.post('/accounts/audit/engagements/', payload);
+    return res.data;
+  },
+
+  /** days: 1, 7, 15 or 30 — the server caps access at the engagement's fieldwork end. */
+  grantAuditorAccess: async (engagementNo: string, auditorUsername: string, days: 1 | 7 | 15 | 30): Promise<{ id: string; auditor: string; valid_until: string }> => {
+    const res = await api.post(`/accounts/audit/engagements/${encodeURIComponent(engagementNo)}/grants/`, { auditor_username: auditorUsername, days });
+    return res.data;
+  },
+
+  revokeAuditorGrant: async (grantId: string): Promise<{ id: string; revoked_at: string }> => {
+    const res = await api.post(`/accounts/audit/grants/${grantId}/revoke/`);
+    return res.data;
+  },
+
+  getAuditorUsers: async (): Promise<AuditorUserItem[]> => {
+    const res = await api.get('/accounts/audit/auditors/');
+    return listOf(res.data);
+  },
+
+  /** Returns the new login with a one-time temporary password to hand to the auditor. */
+  createAuditorUser: async (payload: { first_name: string; last_name: string; email?: string; username?: string; kind?: 'external' | 'internal' }): Promise<AuditorUserItem & { temporary_password: string }> => {
+    const res = await api.post('/accounts/audit/auditors/', payload);
+    return res.data;
   },
 
   // === Phase 6: Chief Financial Officer (CFO) Strategy APIs ===
@@ -1507,261 +1588,248 @@ export interface AuditRecord {
   occurred_at: string;
 }
 
-// === Phase 5: Finance Controller Types ===
+// === Phase 5: Finance Controller Types (shapes built by FinanceControllerService) ===
 export interface ControllerDashboardData {
-  ready: number;
-  bank_ok: number;
-  open_ex: number;
-  block_ex: number;
-  gst_risk: number;
-  ctl_open: number;
-  ctl_critical: number;
-  aud_pct: number;
-  st_app: number;
-  st_flag_open: number;
-  batches_aw_amt: number;
-  batches_aw_count: number;
-  batches_ok_count: number;
-  close_target: string;
-  close_state: string;
-  sep_status: string;
-  iq: Array<{
-    q: string;
-    v: string;
-    tone: 'g' | 'a' | 'r' | 'b';
-    d: string;
-    screen: string;
-  }>;
-  chk_mini: Array<{
-    id: string;
-    t: string;
-    d: string;
-    pct: number;
-    st: string;
-    go: string | null;
-  }>;
-  risks: Array<{
-    sev: 'critical' | 'warning' | 'info';
-    tag: string;
-    t: string;
-    d: string;
-    screen: string;
-  }>;
-  pending_actions: Array<{
-    type: string;
-    ref: string;
-    title: string;
-    module: string;
-    amt: number;
-    screen: string;
-    item_id?: string;
-  }>;
+  controller_name: string;
+  kpis: Array<{ code: string; label: string; value: string; trend: string; tone: string; link_screen: string }>;
+  integrity_questions: Array<{ q: string; v: string; tone: 'g' | 'a' | 'r' | 'b'; desc: string; screen: string }>;
+  readiness_pct: number;
+  closing_status: string;
+  target_close_date: string;
+  checklist: CloseChecklistItem[];
+  risks: Array<{ sev: string; title: string; desc: string; screen: string }>;
+  pending_actions: Array<{ type: string; ref: string; title: string; module: string; amount: number; item_id: string; screen: string }>;
 }
 
-export interface MonthEndCloseChecklistItem {
+export interface CloseChecklistItem {
   id: string;
   t: string;
   d: string;
   pct: number;
   owner: string;
   go: string | null;
-  st: 'Done' | 'At Risk' | 'In Progress';
+  st: string;
 }
 
 export interface MonthEndCloseData {
   period: string;
-  ready: number;
-  target_date: string;
+  readiness_pct: number;
   status: string;
-  checklist: MonthEndCloseChecklistItem[];
-  timeline: Array<{
-    title: string;
-    when: string;
-    state: 'd' | 'c' | 'f';
-  }>;
-}
-
-export interface QuarterEndItem {
-  id: string;
-  t: string;
-  d: string;
-  owner: string;
-  st: 'Done' | 'Reviewed' | 'For Review' | 'Blocked';
-  need?: string;
-  need_st?: boolean;
+  target_date: string;
+  checklist: CloseChecklistItem[];
+  blockers: string[];
+  timeline: Array<{ t: string; when: string; state: 'd' | 'c' | 'f' }>;
 }
 
 export interface QuarterEndCloseData {
   quarter: string;
+  label: string;
+  months_locked: string;
+  items_reviewed: string;
+  bad_debt_provision: string;
   status: string;
-  months_locked: number;
-  checklist: QuarterEndItem[];
-}
-
-export interface YearEndItem {
-  id: string;
-  t: string;
-  d: string;
-  owner: string;
-  st: 'Open' | 'Remediated' | 'For Review' | 'Approved';
-  kind: 'obs' | 'plan';
+  items: Array<{ id: string; title: string; desc: string; owner: string; status: string }>;
 }
 
 export interface YearEndCloseData {
   fiscal_year: string;
-  open_observations: number;
-  remediated_observations: number;
-  days_to_year_end: number;
-  checklist: YearEndItem[];
+  items: AuditObservationItem[];
 }
 
-export interface ControllerPeriodItem {
+export interface AuditObservationItem {
   id: string;
-  label: string;
-  period_type: string;
-  status: 'Open' | 'Close Pending' | 'Close Approved' | 'Locked' | 'Reopen Requested' | 'Reopened';
-  locked: string;
-  note?: string;
-  req?: {
-    by: string;
-    why: string;
-  } | null;
-  trail?: TrailEntry[];
+  title: string;
+  desc?: string;
+  description?: string;
+  owner: string;
+  status: string;
+  kind: string;
 }
 
 export interface BatchCheckItem {
   t: string;
   ok: boolean;
-  sev?: 'critical' | 'warning' | 'info';
+  sev?: string;
   ctl?: string;
   hard?: boolean;
 }
 
 export interface PaymentBatchItem {
   id: string;
+  db_id: string;
   name: string;
-  type: string;
-  count: number;
-  amount: number;
-  src: string;
-  sched: string;
-  status: 'Awaiting Release' | 'Released' | 'Awaiting CFO Co-sign' | 'On Hold' | 'Returned' | 'Rejected';
-  prep: string;
-  appr: string;
+  batch_type: string;
+  total_amount: number;
+  item_count: number;
+  source_bank_code: string;
+  value_date_label: string;
+  status: string;
+  prepared_by: string;
+  approved_by: string;
   checks: BatchCheckItem[];
-  ack_t?: string;
-  items: string[];
+  ack_text: string;
+  items_summary: string[] | string;
   trail: TrailEntry[];
 }
 
 export interface BankAccountControlItem {
   id: string;
-  bank: string;
-  account_no: string;
+  bank_name: string;
+  account_no_masked: string;
+  purpose: string;
+  book_balance: number;
+  statement_balance: number;
+  frozen: boolean;
+  frozen_reason: string;
+}
+
+export interface BankReconciliationItem {
+  id: string;
+  db_id: string;
+  bank_name: string;
+  account_no_masked: string;
   purpose: string;
   book_balance: number;
   statement_balance: number;
   difference: number;
-  linked_exception?: string;
-  status: 'Unreconciled' | 'Under Review' | 'Reconciled' | 'Approved' | 'Frozen';
-  frozen: boolean;
+  status: string;
   prepared_by: string;
   last_reconciled: string;
-  ack_t?: string;
+  exception_ref: string;
+  ack_text: string;
   trail: TrailEntry[];
 }
 
 export interface StatementLineItem {
-  type: 'h' | 'l' | 't';
-  key: string;
+  id: string;
+  line_key: string;
   label: string;
+  line_type: string;
   current_amount: number;
-  prior_amount: number;
-  variance_pct?: number;
-  flag_exception_id?: string;
+  comparison_amount: number;
+  variance_pct: number;
+  flag_exception_no: string | null;
 }
 
 export interface FinancialStatementData {
-  statement_type: 'pl' | 'bs' | 'cf';
+  statement_type: string;
   name: string;
-  subtitle: string;
+  sub_title: string;
+  period: string;
   is_approved: boolean;
-  tie_outs: Array<{ check: string; passed: boolean }>;
+  tie_outs: unknown[];
   lines: StatementLineItem[];
-  flags: Array<{ line_key: string; exception_id: string; description: string }>;
 }
 
 export interface TaxReturnItem {
   id: string;
+  db_id: string;
   form: string;
   period: string;
-  due: string;
-  tax: number;
-  status: 'Exceptions' | 'Ready' | 'In Preparation' | 'Approved For Filing' | 'Filed' | 'Returned' | 'With CFO';
+  due_date: string;
+  tax_amount: number;
+  status: string;
   exceptions: string[];
-  link?: string;
+  link_exception: string;
   prepared_by: string;
-  invoices_count: number;
-  ack_t?: string;
+  invoice_count: number;
+  ack_text: string;
   trail: TrailEntry[];
 }
 
 export interface AuditRequestItem {
   id: string;
+  db_id: string;
   title: string;
   owner: string;
-  due: string;
-  status: 'Ready' | 'In Progress' | 'Gap' | 'Missing' | 'Shared' | 'Requested';
+  due_date: string;
+  status: string;
   evidence_files: string[];
-  note?: string;
+  note: string;
   trail: TrailEntry[];
 }
 
 export interface ControlViolationItem {
   id: string;
+  db_id: string;
   control_name: string;
-  severity: 'Critical' | 'High' | 'Medium' | 'Low';
+  severity: string;
   title: string;
-  source_or_user: string;
-  references: string;
-  detected_at: string;
-  status: 'Open' | 'Remediating' | 'Closed' | 'Escalated';
+  who: string;
+  refs: string;
   exposure_amount: number;
-  owner?: string;
+  detected_date: string;
+  status: string;
+  owner: string;
   trail: TrailEntry[];
 }
 
 export interface HighRiskReviewItem {
   id: string;
-  reference_no: string;
-  kind: 'Journal' | 'Vendor Bill' | 'Write-off' | 'Capital Purchase' | 'Related Party';
+  db_id: string;
+  ref: string;
+  kind: string;
   title: string;
-  department: string;
+  dept: string;
   amount: number;
-  risk: 'High' | 'Medium' | 'Low';
-  reason: string;
-  received_at: string;
+  risk: string;
+  why: string;
+  recv_date: string;
   key_values: Array<[string, string]>;
-  evidence_docs: string[];
-  status: 'Awaiting Controller' | 'Approved' | 'Returned' | 'Rejected' | 'With CFO';
-  ack_t?: string;
+  documents: string[];
+  ack_text: string;
+  status: string;
   trail: TrailEntry[];
 }
 
 export interface PolicyMasterItem {
   id: string;
+  db_id: string;
   name: string;
   version: string;
   owner: string;
   next_review: string;
-  status: 'Active' | 'Review Due' | 'Change Proposed';
-  proposed_change?: {
-    what: string;
-    by: string;
-    why: string;
-  } | null;
-  key_rules: Array<[string, string]>;
+  status: string;
+  change_data: { what?: string; by?: string; why?: string } | null;
+  key_values: Array<[string, string]>;
   trail: TrailEntry[];
+}
+
+// === Audit governance types ===
+export interface AuditGrantItem {
+  id: string;
+  auditor: string;
+  auditor_name: string;
+  valid_from: string;
+  valid_until: string;
+  active: boolean;
+  status: 'active' | 'scheduled' | 'expired' | 'revoked';
+  granted_by: string;
+  revoked_at: string;
+  revoked_by: string;
+}
+
+export interface AuditEngagementItem {
+  engagement_no: string;
+  type: string;
+  auditor_firm: string;
+  status: string;
+  period_from: string;
+  period_to: string;
+  fieldwork_from: string;
+  fieldwork_to: string;
+  grants: AuditGrantItem[];
+}
+
+export interface AuditorUserItem {
+  id: string;
+  username: string;
+  name: string;
+  email: string;
+  role: string;
+  is_active: boolean;
+  active_grants: number;
+  last_login: string;
 }
 
 // === Phase 6: Chief Financial Officer (CFO) Strategy Types ===

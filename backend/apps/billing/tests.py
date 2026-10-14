@@ -3534,6 +3534,102 @@ class Phase9IPDBillingTestCase(APITestCase):
         self.assertEqual(Decimal(str(cdata['deposit_applied'])), Decimal('11400.00'))
 
 
+    def _payer(self):
+        return CorporateAccount.objects.create(name='Niva Bupa', code='niva_ph9', account_type='TPA_INSURANCE',
+                                               credit_limit=Decimal('5000000.00'), co_pay_percentage=Decimal('0.00'), is_active=True)
+
+    def test_ipd_tpa_desk_cashless_claim_lifecycle(self):
+        """IPD & TPA desk: pre-auth from an admission, insurer decision, cover in the running bill, awaiting-TPA, settlement."""
+        payer = self._payer()
+        self.client.force_authenticate(user=self.cashier)
+        url = '/api/v1/billing/insurance/claims'
+        # Validation at the API: policy and amount required
+        self.assertEqual(self.client.post(url, {'admission': self.admission.admission_number, 'corporate_account': str(payer.id), 'requested_amount': 50000}, format='json').status_code, 400)
+        self.assertEqual(self.client.post(url, {'admission': self.admission.admission_number, 'corporate_account': str(payer.id), 'policy_number': 'P-1', 'requested_amount': 0}, format='json').status_code, 400)
+        # Patient is taken from the admission
+        r = self.client.post(url, {'admission': self.admission.admission_number, 'corporate_account': str(payer.id), 'policy_number': 'NB-778', 'tpa_member_id': 'M-1', 'requested_amount': 50000}, format='json')
+        self.assertEqual(r.status_code, 201, r.content)
+        claim_id = r.json()['id']
+        self.assertEqual(r.json()['patient_uhid'], 'NH-IPD-9901')
+        # One open claim per admission
+        self.assertEqual(self.client.post(url, {'admission': self.admission.admission_number, 'corporate_account': str(payer.id), 'policy_number': 'NB-778', 'requested_amount': 1000}, format='json').status_code, 400)
+
+        # Insurer decision pending + discharge started -> awaiting TPA (and the overview no longer crashes with a claim)
+        self.admission.status = 'DISCHARGE_INITIATED'
+        self.admission.save()
+        row = next(a for a in self.client.get('/api/v1/billing/ipd/admissions').json()['admissions'] if a['ip'] == 'IP-26-0099')
+        self.assertEqual((row['status'], row['claim_status']), ('AWAITING_TPA', 'PENDING'))
+
+        pa = f'{url}/{claim_id}/pre-auth'
+        self.assertEqual(self.client.patch(pa, {'status': 'REJECTED'}, format='json').status_code, 400)  # reason needed
+        self.assertEqual(self.client.patch(pa, {'status': 'QUERY_RAISED'}, format='json').status_code, 400)  # query text needed
+        self.assertEqual(self.client.patch(pa, {'status': 'APPROVED'}, format='json').status_code, 400)  # amount needed
+        r = self.client.patch(pa, {'status': 'APPROVED', 'approved_amount': 40000, 'gop_letter_number': 'GOP-1'}, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+
+        # Approved cover counts in the running bill: ledger 70,000 - deposit 25,000 - cover 40,000 = 5,000 patient share
+        IPDRunningLedgerService.add_running_charge(admission_id_or_number=self.admission.id, item_type='OT_PROCEDURE', description='Surgery', amount=Decimal('70000.00'))
+        summary = IPDRunningLedgerService.get_running_bill_summary(self.admission.id)
+        self.assertTrue(summary['has_tpa'])
+        self.assertEqual(summary['tpa_provider'], 'Niva Bupa · TPA')
+        self.assertEqual(summary['net_balance'], Decimal('5000.00'))
+        row = next(a for a in self.client.get('/api/v1/billing/ipd/admissions').json()['admissions'] if a['ip'] == 'IP-26-0099')
+        self.assertEqual(row['status'], 'MEDICALLY_DISCHARGED')
+
+        # Settlement: within the approved amount, reference required
+        st = f'{url}/{claim_id}/settle'
+        self.assertEqual(self.client.post(st, {'settled_amount': 45000, 'reference': 'UTR1'}, format='json').status_code, 400)
+        self.assertEqual(self.client.post(st, {'settled_amount': 38000}, format='json').status_code, 400)
+        r = self.client.post(st, {'settled_amount': 38000, 'reference': 'UTR-889'}, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual((r.json()['claim_status'], Decimal(r.json()['deduction_amount'])), ('SETTLED', Decimal('2000.00')))
+        self.assertEqual(self.client.patch(pa, {'status': 'APPROVED', 'approved_amount': 50000}, format='json').status_code, 400)  # settled is final
+
+    def test_final_bill_consolidates_once_and_balance_follows_invoice(self):
+        """No duplicate final bills; once consolidated the running-bill balance is the invoice balance."""
+        with self.assertRaises(ValueError):
+            IPDRunningLedgerService.consolidate_final_discharge_bill(self.admission.id, cashier=self.cashier)  # nothing posted
+        IPDRunningLedgerService.add_running_charge(admission_id_or_number=self.admission.id, item_type='OT_PROCEDURE', description='Procedure', amount=Decimal('30000.00'))
+        res = IPDRunningLedgerService.consolidate_final_discharge_bill(self.admission.id, cashier=self.cashier)
+        self.assertEqual(res['balance_due'], 5000.0)
+        summary = IPDRunningLedgerService.get_running_bill_summary(self.admission.id)
+        self.assertEqual(summary['net_balance'], Decimal('5000.00'))  # not 30,000 after the deposit was used up
+        self.assertEqual(summary['final_invoice_number'], res['invoice_number'])
+        with self.assertRaises(ValueError):
+            IPDRunningLedgerService.consolidate_final_discharge_bill(self.admission.id, cashier=self.cashier)
+        # A cashier cannot override the balance; a supervisor can
+        with self.assertRaises(ValueError):
+            IPDRunningLedgerService.issue_financial_discharge_clearance(self.admission.id, cashier=self.cashier, override_reason='Charity discharge')
+        c = IPDRunningLedgerService.issue_financial_discharge_clearance(self.admission.id, cashier=self.supervisor, override_reason='Charity discharge')
+        self.assertEqual(c.clearance_status, DischargeClearanceStatus.OVERRIDDEN)
+
+
+    def test_department_charges_and_counter_invoices_join_the_ipd_bill(self):
+        """Lab/pharmacy charges and unpaid counter invoices count on the IPD bill, the final bill and the discharge gate."""
+        BillableChargeItem.objects.create(patient=self.patient, department='LAB', service_code='HEM-CBC-01', service_name='CBC',
+                                          unit_price=Decimal('350.00'), quantity=1, total_amount=Decimal('350.00'))
+        BillableChargeItem.objects.create(patient=self.patient, department='PHARMACY', service_code='RX-1', service_name='IV kit',
+                                          unit_price=Decimal('1450.00'), quantity=1, total_amount=Decimal('1450.00'))
+        Invoice.objects.create(invoice_number='INV-OPEN-1', patient=self.patient, category=InvoiceCategory.OPD, date='2026-10-01',
+                               subtotal=Decimal('2200.00'), total=Decimal('2200.00'), balance=Decimal('2200.00'), status=InvoiceStatus.UNPAID)
+        IPDRunningLedgerService.add_running_charge(admission_id_or_number=self.admission.id, item_type='OT_PROCEDURE', description='Procedure', amount=Decimal('25000.00'))
+
+        s = IPDRunningLedgerService.get_running_bill_summary(self.admission.id)
+        self.assertEqual(s['bill_total'], Decimal('26800.00'))  # 25,000 ledger + 1,800 department charges
+        self.assertEqual(s['open_invoices_total'], Decimal('2200.00'))
+        self.assertEqual(s['net_balance'], Decimal('4000.00'))  # 26,800 + 2,200 - 25,000 deposit
+        labels = {c['label'] for c in s['category_split']}
+        self.assertTrue({'Lab & imaging', 'Pharmacy'} <= labels)
+
+        res = IPDRunningLedgerService.consolidate_final_discharge_bill(self.admission.id, cashier=self.cashier)
+        self.assertEqual(res['gross_amount'], 26800.0)
+        self.assertFalse(BillableChargeItem.objects.filter(patient=self.patient, status=ChargeItemStatus.PENDING).exists())
+        s = IPDRunningLedgerService.get_running_bill_summary(self.admission.id)
+        self.assertEqual(s['net_balance'], Decimal('4000.00'))  # 1,800 final-bill balance + 2,200 counter invoice
+        with self.assertRaises(ValueError):
+            IPDRunningLedgerService.issue_financial_discharge_clearance(self.admission.id, cashier=self.cashier)
+
+
 class Phase10RevenueIntegrityTestCase(APITestCase):
     """Phase 10: Revenue Integrity, Leakage Detection, Behavioral Risk Signals, and Investigations."""
 
@@ -4278,3 +4374,140 @@ class Phase3GeneralLedgerBridgeTestCase(APITestCase):
         self.assertIn('PHARMACY', data['departments'])
         self.assertGreaterEqual(data['totals']['total_collected'], 800.00)
 
+
+
+class OpdFrontDeskSyncTestCase(APITestCase):
+    """Front-desk OPD tokens reach billing: appointment + consultation charge, no double collection, no-show release."""
+
+    def setUp(self):
+        from apps.accounts.models import DoctorProfile
+        self.reception = User.objects.create_user(username='frontdesk', password='x', role=RoleType.RECEPTIONIST)
+        self.cashier = User.objects.create_user(username='cashier.opd', password='x', role=RoleType.CASHIER)
+        self.nurse = User.objects.create_user(username='nurse.opd', password='x', role=RoleType.NURSE)
+        doc_user = User.objects.create_user(username='dr.rao', password='x', role=RoleType.DOCTOR, first_name='Kavita', last_name='Rao')
+        self.doctor = DoctorProfile.objects.create(user=doc_user, license_number='MCI-77', department='Cardiology')
+        self.patient = Patient.objects.create(first_name='Sunil', last_name='Joshi', uhid='UHID-FD-001', date_of_birth='1979-01-01', gender='MALE', phone_number='9000000001')
+
+    def token(self, **kw):
+        t = {'id': 'apt-1700000000001', 'token': 7, 'aptNo': 'APT-20261013-0007', 'uhid': 'UHID-FD-001', 'patient': 'Sunil Joshi',
+             'doctor': 'Dr. Kavita Rao (Cardiology)', 'room': 'OPD-3', 'time': '10:30', 'type': 'WALK_IN', 'status': 'WAITING',
+             'feePaid': False, 'totalFee': 610}
+        t.update(kw)
+        return t
+
+    def test_front_desk_tokens_sync_to_cashier(self):
+        from apps.appointments.models import Appointment
+        url = '/api/v1/billing/opd/front-desk/sync'
+        self.client.force_authenticate(self.nurse)
+        self.assertEqual(self.client.post(url, {'tokens': [self.token()]}, format='json').status_code, 403)
+
+        self.client.force_authenticate(self.reception)
+        r = self.client.post(url, {'tokens': [self.token()]}, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()['results'][0]['charge'], 'TO_COLLECT')
+        apt = Appointment.objects.get(source='FRONT_DESK', external_ref='apt-1700000000001')
+        self.assertEqual((apt.doctor, apt.token_number, apt.appointment_number), (self.doctor, 7, 'FD-APT-20261013-0007'))
+        charges = BillableChargeItem.objects.filter(department='OPD', source_reference_id=str(apt.id))
+        self.assertEqual(charges.filter(status=ChargeItemStatus.PENDING).count(), 1)
+
+        # Re-sync is idempotent
+        self.client.post(url, {'tokens': [self.token(status='TRIAGED')]}, format='json')
+        self.assertEqual(Appointment.objects.filter(external_ref='apt-1700000000001').count(), 1)
+        self.assertEqual(charges.count(), 1)
+
+        # The cashier sees the visit with a charge to collect
+        self.client.force_authenticate(self.cashier)
+        visits = self.client.get('/api/v1/billing/cashier/opd-visits', {'date': apt.appointment_date}).json()['visits']
+        v = next(x for x in visits if x['appointment_number'] == 'FD-APT-20261013-0007')
+        self.assertEqual((v['billing']['state'], v['doctor'], v['quoted_fee']), ('TO_COLLECT', 'Dr. Kavita Rao', 610))
+
+        # Desk collects the fee itself → the cashier charge is released, never collected twice
+        self.client.force_authenticate(self.reception)
+        r = self.client.post(url, {'tokens': [self.token(feePaid=True, paymentMode='UPI', invoiceNo='RCPT-9')]}, format='json')
+        self.assertEqual(r.json()['results'][0]['released'], 1)
+        self.assertFalse(charges.filter(status=ChargeItemStatus.PENDING).exists())
+        self.client.force_authenticate(self.cashier)
+        v = next(x for x in self.client.get('/api/v1/billing/cashier/opd-visits', {'date': apt.appointment_date}).json()['visits'] if x['id'] == str(apt.id))
+        self.assertEqual((v['billing']['state'], v['billing']['mode']), ('PAID_AT_DESK', 'UPI'))
+
+    def test_unregistered_patient_and_no_show(self):
+        self.client.force_authenticate(self.reception)
+        url = '/api/v1/billing/opd/front-desk/sync'
+        t = self.token(id='apt-2', aptNo='APT-20261013-0008', uhid='UHID-NEW-77', patient='Meena Pillai', gender='F', phone='9000000002', doctor='Dr. Nobody (General)')
+        r = self.client.post(url, {'tokens': [t, {'id': ''}]}, format='json').json()
+        self.assertEqual((r['synced'], len(r['errors'])), (1, 1))  # one bad token does not block the rest
+        p = Patient.objects.get(uhid='UHID-NEW-77')
+        self.assertEqual((p.first_name, p.last_name, p.gender, p.date_of_birth), ('Meena', 'Pillai', 'FEMALE', ''))
+        r = self.client.post(url, {'tokens': [dict(t, status='NO_SHOW')]}, format='json').json()
+        self.assertEqual((r['results'][0]['charge'], r['results'][0]['released']), ('CANCELLED', 1))
+
+    def test_supervisor_reconciles_front_desk_fees(self):
+        from apps.appointments.models import Appointment
+        from .models import BillingAuditEvent
+        url = '/api/v1/billing/opd/front-desk/sync'
+        recon = '/api/v1/billing/supervisor/opd/desk-reconcile'
+        supervisor = User.objects.create_user(username='sup.opd', password='x', role=RoleType.BILLING_SUPERVISOR, first_name='Asha', last_name='Nair')
+        self.client.force_authenticate(self.reception)
+        self.client.post(url, {'tokens': [self.token(feePaid=True, paymentMode='CASH', invoiceNo='RCPT-1'),
+                                          self.token(id='apt-9', aptNo='APT-20261013-0009', token=9)]}, format='json')
+        paid = Appointment.objects.get(external_ref='apt-1700000000001')
+        unpaid = Appointment.objects.get(external_ref='apt-9')
+
+        # Cashiers cannot sign off desk cash
+        self.client.force_authenticate(self.cashier)
+        self.assertEqual(self.client.post(recon, {'appointment_ids': [str(paid.id)]}, format='json').status_code, 403)
+
+        self.client.force_authenticate(supervisor)
+        self.assertEqual(self.client.post(recon, {'appointment_ids': []}, format='json').status_code, 400)
+        r = self.client.post(recon, {'appointment_ids': [str(paid.id), str(unpaid.id)], 'note': 'Desk bag 1'}, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+        body = r.json()
+        self.assertEqual((body['reconciled'], body['skipped'], body['total']), ([paid.appointment_number], [unpaid.appointment_number], 610.0))
+        self.assertTrue(BillingAuditEvent.objects.filter(title='Front-desk OPD fees received').exists())
+
+        # Reconciling twice is a no-op, and a desk re-sync keeps the stamp
+        again = self.client.post(recon, {'appointment_ids': [str(paid.id)]}, format='json').json()
+        self.assertEqual((again['reconciled'], again['skipped']), ([], [paid.appointment_number]))
+        self.client.force_authenticate(self.reception)
+        self.client.post(url, {'tokens': [self.token(feePaid=True, paymentMode='CASH', invoiceNo='RCPT-1', status='COMPLETED')]}, format='json')
+        self.client.force_authenticate(supervisor)
+        v = next(x for x in self.client.get('/api/v1/billing/cashier/opd-visits', {'date': paid.appointment_date}).json()['visits'] if x['id'] == str(paid.id))
+        self.assertEqual((v['billing']['state'], v['billing']['reconciled']['by'], v['status']), ('PAID_AT_DESK', 'Asha Nair', 'COMPLETED'))
+
+
+class PayerContractGovernanceTestCase(APITestCase):
+    """Billing Admin owns payer contracts: only admins add insurers, and every contract change is audited."""
+
+    def setUp(self):
+        self.admin = User.objects.create_user(username='billing.admin.pc', password='x', role=RoleType.BILLING_ADMIN)
+        self.cashier = User.objects.create_user(username='cashier.pc', password='x', role=RoleType.CASHIER)
+
+    def test_insurer_creation_is_admin_only_and_audited(self):
+        from .models import BillingAuditEvent
+        url = '/api/v1/billing/insurance/payers'
+        body = {'code': 'TPA-NEW', 'name': 'New Health TPA', 'credit_limit': 500000, 'co_pay_percentage': 10}
+        self.client.force_authenticate(self.cashier)
+        self.assertEqual(self.client.post(url, body, format='json').status_code, 403)
+        self.client.force_authenticate(self.admin)
+        r = self.client.post(url, body, format='json')
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(r.json()['account_type'], 'TPA_INSURANCE')
+        self.assertTrue(BillingAuditEvent.objects.filter(event_type='CONTRACT_CHANGE', reference='TPA-NEW', title__contains='added').exists())
+
+    def test_corporate_terms_change_is_audited(self):
+        from .models import BillingAuditEvent
+        self.client.force_authenticate(self.admin)
+        r = self.client.post('/api/v1/billing/corporate-accounts', {'code': 'CORP-PC', 'name': 'Acme Corp', 'account_type': 'CORPORATE', 'credit_limit': 100000}, format='json')
+        self.assertEqual(r.status_code, 201, r.content)
+        r = self.client.patch('/api/v1/billing/corporate-accounts/CORP-PC', {'credit_limit': 250000, 'is_active': False}, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+        ev = BillingAuditEvent.objects.filter(event_type='CONTRACT_CHANGE', reference='CORP-PC').order_by('-occurred_at').first()
+        self.assertIn('suspended', ev.title)
+        self.assertIn('credit limit', ev.detail)
+        self.assertEqual(ev.severity, 'MEDIUM')
+        # A save with nothing changed writes nothing
+        n = BillingAuditEvent.objects.filter(reference='CORP-PC').count()
+        self.client.patch('/api/v1/billing/corporate-accounts/CORP-PC', {'credit_limit': 250000}, format='json')
+        self.assertEqual(BillingAuditEvent.objects.filter(reference='CORP-PC').count(), n)
+        self.client.force_authenticate(self.cashier)
+        self.assertEqual(self.client.patch('/api/v1/billing/corporate-accounts/CORP-PC', {'credit_limit': 1}, format='json').status_code, 403)

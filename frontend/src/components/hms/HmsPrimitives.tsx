@@ -314,23 +314,24 @@ export const HmsKpiRow: React.FC<{ items: [HmsKpi, HmsKpi, HmsKpi, HmsKpi] }> = 
 /* Completion bar — hidden once complete (19.6)                        */
 /* ------------------------------------------------------------------ */
 
-export const HmsProgress: React.FC<{ pct: number; doneLabel: string; label?: string; height?: number; tone?: 'blue' | 'amber' | 'red' }> = ({
+export const HmsProgress: React.FC<{ pct: number; doneLabel: string; label?: string; height?: number; tone?: 'blue' | 'amber' | 'red'; showLabel?: boolean }> = ({
   pct,
   doneLabel,
   label,
   height = 6,
   tone = 'blue',
+  showLabel,
 }) => {
   const clamped = Math.max(0, Math.min(100, Math.round(pct)));
   if (clamped >= 100) {
     return (
       <span className="hms-fade-in" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', fontWeight: 600, color: '#15803d' }}>
-        <CheckCircle2 size={14} /> {doneLabel}
+        <CheckCircle2 size={14} /> {showLabel && label ? `${label} · ${doneLabel}` : doneLabel}
       </span>
     );
   }
   const fill = tone === 'red' ? '#dc2626' : tone === 'amber' ? '#f59e0b' : HMS.primary;
-  return (
+  const bar = (
     <span
       role="progressbar"
       aria-valuenow={clamped}
@@ -340,6 +341,17 @@ export const HmsProgress: React.FC<{ pct: number; doneLabel: string; label?: str
       style={{ display: 'block', height: `${height}px`, borderRadius: `${height / 2}px`, background: HMS.divider, overflow: 'hidden' }}
     >
       <span className="hms-bar" style={{ display: 'block', height: `${height}px`, width: `${clamped}%`, borderRadius: `${height / 2}px`, background: fill }} />
+    </span>
+  );
+  if (!showLabel || !label) return bar;
+  // Visible caption: what the bar measures on the left, the value on the right
+  return (
+    <span style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+      <span style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '13px', color: HMS.textSecondary }}>
+        <span>{label}</span>
+        <span style={{ fontWeight: 600, color: HMS.text }}>{clamped}%</span>
+      </span>
+      {bar}
     </span>
   );
 };
@@ -520,38 +532,47 @@ export const HmsField: React.FC<{ label: string; hint?: string; required?: boole
   </div>
 );
 
-export const HmsToggle: React.FC<{ checked: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean }> = ({
+export const HmsToggle: React.FC<{ checked: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean; showLabel?: boolean }> = ({
   checked,
   onChange,
   label,
   disabled,
-}) => (
-  <button
-    type="button"
-    role="switch"
-    aria-checked={checked}
-    aria-label={label}
-    disabled={disabled}
-    onClick={() => onChange(!checked)}
-    className="hms-switch"
-    style={{
-      width: '40px',
-      height: '24px',
-      borderRadius: '9999px',
-      border: 'none',
-      padding: '2px',
-      background: checked ? HMS.primary : '#d1d5db',
-      cursor: disabled ? 'not-allowed' : 'pointer',
-      opacity: disabled ? 0.6 : 1,
-      display: 'flex',
-      justifyContent: checked ? 'flex-end' : 'flex-start',
-      flexShrink: 0,
-      transition: 'background-color 150ms ease-out',
-    }}
-  >
-    <span style={{ width: '20px', height: '20px', borderRadius: '50%', background: '#ffffff', boxShadow: '0 1px 2px rgba(0,0,0,0.2)' }} />
-  </button>
-);
+  showLabel,
+}) => {
+  const control = (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className="hms-switch"
+      style={{
+        position: 'relative',
+        width: '40px',
+        height: '24px',
+        borderRadius: '9999px',
+        border: 'none',
+        padding: 0,
+        background: checked ? HMS.primary : '#d1d5db',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.6 : 1,
+        flexShrink: 0,
+      }}
+    >
+      {/* Knob slides with transform (19.10: 150ms ease-out, opacity/transform only) */}
+      <span className="hms-switch-knob" style={{ transform: checked ? 'translateX(16px)' : 'translateX(0)' }} />
+    </button>
+  );
+  if (!showLabel) return control;
+  return (
+    <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: HMS.text, cursor: disabled ? 'not-allowed' : 'pointer' }}>
+      {control}
+      <span>{label}</span>
+    </label>
+  );
+};
 
 /* ------------------------------------------------------------------ */
 /* Dialog (19.8 — role, focus, Esc)                                    */

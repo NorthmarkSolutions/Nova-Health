@@ -1,6 +1,7 @@
 // Lab Admin workspace — HMS design bible Section 19 (reference: Pharmacy Admin).
 // Sidebar in priority order, large profile control, 4 clickable KPIs and master-detail sections.
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { onLabApiError } from '../../../services/labService';
 import { useSearchParams } from 'react-router-dom';
 import { Activity, Users, CalendarDays, Cpu, Package, Receipt, BarChart3, Settings } from 'lucide-react';
 import {
@@ -59,6 +60,8 @@ export const LabAdminWorkspace: React.FC = () => {
   const data = useLabAdminData();
   const { state, orders, analyzers, catalog, tariffs } = data;
   const { toast, show, clear } = useHmsToast();
+  // Steps the lab server refuses (wrong stage, role, unpaid bill…) are shown here and the data reloads
+  useEffect(() => onLabApiError((msg) => show(msg, 'error')), [show]);
   const [newSignal, setNewSignal] = useState<Record<string, number>>({});
 
   const initialFilter = searchParams.get('filter') || undefined;
@@ -84,11 +87,11 @@ export const LabAdminWorkspace: React.FC = () => {
     const credDue = state.staff.filter((s) => ['expired', 'expiring'].includes(credentialState(s)));
     const credExpired = state.staff.filter((s) => credentialState(s) === 'expired');
     const stockAlerts = state.stock.filter((i) => ['Below reorder', 'Expired'].includes(stockState(i).label));
-    const prices = buildPriceRows(state, catalog, tariffs);
+    const prices = buildPriceRows(state, catalog, tariffs, data.pendingPrices);
     const noPrice = prices.filter((p) => p.status === 'No price');
     const pendingPrice = prices.filter((p) => p.status === 'Pending sync');
     return { active, review, critical, stat, offline, maintenance, online, gaps, onDuty, pendingRequests, credDue, credExpired, stockAlerts, noPrice, pendingPrice };
-  }, [orders, analyzers, state, catalog, tariffs]);
+  }, [orders, analyzers, state, catalog, tariffs, data.pendingPrices]);
 
   const navGroups: HmsNavGroup[] = [
     { label: 'Overview', items: [{ key: 'overview', label: 'Live orders', icon: Activity, count: m.active.length, alert: m.critical.length > 0 }] },

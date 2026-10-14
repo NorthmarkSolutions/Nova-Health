@@ -82,7 +82,17 @@
 .hms-kpi:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
 .hms-kpi:active { transform: scale(0.99); }
 
+/* Toggle switch: track colour fades, knob slides; a short press squeeze confirms the tap */
+.hms-switch { transition: background-color 150ms ease-out, box-shadow 150ms ease-out; }
+.hms-switch-knob { position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: #ffffff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); transition: transform 150ms ease-out; }
+.hms-switch:not(:disabled):hover { box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.10); }
+.hms-switch:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+.hms-switch:not(:disabled):active .hms-switch-knob { transition-duration: 60ms; }
+.hms-switch[aria-checked="false"]:not(:disabled):active .hms-switch-knob { transform: translateX(0) scaleX(1.15) !important; transform-origin: left center; }
+.hms-switch[aria-checked="true"]:not(:disabled):active .hms-switch-knob { transform: translateX(16px) scaleX(1.15) !important; transform-origin: right center; }
+
 @media (prefers-reduced-motion: reduce) {
+  .hms-switch, .hms-switch-knob { transition: none !important; }
   .hms-motion *, .hms-motion *::before, .hms-motion *::after,
   .hms-backdrop, .hms-backdrop > *, .hms-toast {
     animation-duration: 0.01ms !important;

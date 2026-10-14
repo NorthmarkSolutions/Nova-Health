@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { RoleType, DepartmentWorkspace } from '../../types';
 import { getDepartmentWorkspaceById } from './departmentWorkspaceStore';
@@ -14,7 +14,6 @@ import { DepartmentReports } from './DepartmentReports';
 import { DepartmentOpdOperations } from './DepartmentOpdOperations';
 import { LabAdminWorkspace } from '../lab/admin/LabAdminWorkspace';
 import { PharmacyAdminWorkspace } from '../pharmacy/admin/PharmacyAdminWorkspace';
-import { BillingAdminWorkspace } from '../billing/admin/BillingAdminWorkspace';
 
 export const DepartmentWorkspaceContainer: React.FC = () => {
   const { deptId } = useParams<{ deptId?: string }>();
@@ -162,7 +161,8 @@ export const DepartmentWorkspaceContainer: React.FC = () => {
     workspace?.id === 'ws-billing';
 
   if (isBillingWorkspace) {
-    return <BillingAdminWorkspace />;
+    // The billing admin desk lives at /billing/admin on its own HMS shell
+    return <Navigate to="/billing/admin" replace />;
   }
 
   return (

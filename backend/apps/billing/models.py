@@ -1024,6 +1024,7 @@ class AuditEventType(models.TextChoices):
     PERIOD_LOCK_DENIED = 'PERIOD_LOCK_DENIED', 'Entry refused in locked period'
     REPORT_EXPORTED = 'REPORT_EXPORTED', 'Report exported'
     ERP_JOURNAL = 'ERP_JOURNAL', 'ERP journal posted'
+    CONTRACT_CHANGE = 'CONTRACT_CHANGE', 'Payer contract changed'
 
 
 class BillingAuditEvent(models.Model):

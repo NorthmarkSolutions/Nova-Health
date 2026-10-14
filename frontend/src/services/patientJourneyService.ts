@@ -1,5 +1,6 @@
 // Shared Patient Journey Store for cross-department persistence
 import api from './api';
+import { LabApi, labApiMode } from './labService';
 import { Gender, RoleType, AppointmentStatus } from '../types';
 import {
   getCampusBuildings,
@@ -370,6 +371,34 @@ const DEFAULT_PATIENTS: SharedPatient[] = [
     outstandingDue: 0.0,
   },
 ];
+
+// ---- OPD front desk → billing bridge ----
+// Tokens the desk issues (ids `apt-<ms>` / `tok-<ms>`) are mirrored to the server so the consultation charge reaches the
+// Billing cashier. Seeded demo tokens (`apt-001` …) never leave the browser.
+const DESK_TOKEN_ID = /^(apt|tok)-(\d{13})$/;
+const pendingOpdSync = new Map<string, SharedQueueToken & { date: string }>();
+let opdSyncTimer: ReturnType<typeof setTimeout> | null = null;
+
+const localDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+function queueOpdSync(tokens: SharedQueueToken[]) {
+  for (const t of tokens) {
+    const m = DESK_TOKEN_ID.exec(t?.id || '');
+    if (!m) continue;
+    pendingOpdSync.set(t.id, { ...t, date: localDay(new Date(Number(m[2]))) });
+  }
+  if (!pendingOpdSync.size || opdSyncTimer) return;
+  opdSyncTimer = setTimeout(() => {
+    const batch = Array.from(pendingOpdSync.values());
+    pendingOpdSync.clear();
+    opdSyncTimer = null;
+    api.post('/billing/opd/front-desk/sync', { tokens: batch }).catch((err) => {
+      // Keep them for the next change so a dropped connection does not lose the visit
+      for (const t of batch) if (!pendingOpdSync.has(t.id)) pendingOpdSync.set(t.id, t);
+      console.warn('OPD billing sync failed:', err?.message || err);
+    });
+  }, 800);
+}
 
 const DEFAULT_QUEUE: SharedQueueToken[] = [
   {
@@ -1073,7 +1102,17 @@ export const patientJourneyService = {
     const updated = [token, ...list.filter((q) => q.token !== token.token)];
     localStorage.setItem('nh_queue', JSON.stringify(updated));
     window.dispatchEvent(new Event('nh_data_sync'));
+    queueOpdSync([token]);
     return token;
+  },
+
+  /** Push today's desk-issued tokens to billing (run once when the reception desk opens). */
+  syncTodayQueueToBilling(): void {
+    const today = localDay(new Date());
+    queueOpdSync(this.getQueue().filter((q) => {
+      const m = DESK_TOKEN_ID.exec(q.id || '');
+      return !!m && localDay(new Date(Number(m[2]))) === today;
+    }));
   },
 
   updateQueueStatus(tokenNo: number, status: string): void {
@@ -1081,6 +1120,7 @@ export const patientJourneyService = {
     const updated = list.map((q) => (q.token === tokenNo ? { ...q, status } : q));
     localStorage.setItem('nh_queue', JSON.stringify(updated));
     window.dispatchEvent(new Event('nh_data_sync'));
+    queueOpdSync(updated.filter((q) => q.token === tokenNo));
   },
 
   updateQueueToken(tokenNo: number, updates: Partial<SharedQueueToken>): void {
@@ -1088,6 +1128,7 @@ export const patientJourneyService = {
     const updated = list.map((q) => (q.token === tokenNo ? { ...q, ...updates } : q));
     localStorage.setItem('nh_queue', JSON.stringify(updated));
     window.dispatchEvent(new Event('nh_data_sync'));
+    queueOpdSync(updated.filter((q) => q.token === tokenNo));
   },
 
   deleteQueueToken(tokenNo: number): void {
@@ -1095,10 +1136,15 @@ export const patientJourneyService = {
     const updated = list.filter((q) => q.token !== tokenNo);
     localStorage.setItem('nh_queue', JSON.stringify(updated));
     window.dispatchEvent(new Event('nh_data_sync'));
+    // A removed token releases its consultation charge at the cashier
+    queueOpdSync(list.filter((q) => q.token === tokenNo).map((q) => ({ ...q, status: 'CANCELLED' })));
   },
 
   // --- Laboratory Orders & Tariffs ---
   getLabTariffs(): Record<string, LabTariffItem> {
+    // Signed in against the server: the live Billing price (once loaded)
+    const server = labApiMode() ? LabApi.pricing() : null;
+    if (server) return server.tariffs;
     const raw = localStorage.getItem('nh_lab_tariffs');
     if (!raw) {
       localStorage.setItem('nh_lab_tariffs', JSON.stringify(DEFAULT_LAB_TARIFFS));
@@ -1140,6 +1186,14 @@ export const patientJourneyService = {
   },
 
   getLabOrders(): SharedLabOrder[] {
+    if (labApiMode()) {
+      // Lab orders come from the server; radiology requests are not lab tests and stay local
+      return [...LabApi.sharedOrders(), ...this.getLocalLabOrders().filter((o) => o.category === 'Radiology')];
+    }
+    return this.getLocalLabOrders();
+  },
+
+  getLocalLabOrders(): SharedLabOrder[] {
     const raw = localStorage.getItem('nh_lab_orders');
     if (!raw) {
       localStorage.setItem('nh_lab_orders', JSON.stringify(DEFAULT_LAB_ORDERS));
@@ -1152,8 +1206,19 @@ export const patientJourneyService = {
     }
   },
 
-  addLabOrder(order: SharedLabOrder): SharedLabOrder {
-    const list = this.getLabOrders();
+  /** location / clinicalNotes are sent to the lab with the order (where to collect, why it was ordered). */
+  addLabOrder(order: SharedLabOrder, context: { location?: string; clinicalNotes?: string } = {}): SharedLabOrder {
+    if (labApiMode() && order.category !== 'Radiology') {
+      void LabApi.createOrder({
+        uhid: order.uhid,
+        testName: order.testName,
+        priority: order.priority || 'ROUTINE',
+        location: context.location,
+        clinicalNotes: context.clinicalNotes,
+      });
+      return order;
+    }
+    const list = this.getLocalLabOrders();
     const updated = [order, ...list.filter((o) => o.id !== order.id)];
     localStorage.setItem('nh_lab_orders', JSON.stringify(updated));
     window.dispatchEvent(new Event('nh_data_sync'));
@@ -1162,7 +1227,7 @@ export const patientJourneyService = {
   },
 
   updateLabOrder(orderId: string, updates: Partial<SharedLabOrder>): void {
-    const list = this.getLabOrders();
+    const list = this.getLocalLabOrders();
     const updated = list.map((o) => (o.id === orderId ? { ...o, ...updates } : o));
     localStorage.setItem('nh_lab_orders', JSON.stringify(updated));
     window.dispatchEvent(new Event('nh_data_sync'));
@@ -1170,7 +1235,12 @@ export const patientJourneyService = {
   },
 
   collectSample(orderId: string, collectorName: string = 'Nurse Clara Adams'): SharedLabOrder | null {
-    const list = this.getLabOrders();
+    if (labApiMode() && LabApi.raw(orderId)) {
+      // Billing clears collection on the server; a refusal comes back as a lab error message
+      void LabApi.collect(orderId);
+      return this.getLabOrders().find((o) => o.id === orderId) || null;
+    }
+    const list = this.getLocalLabOrders();
     const target = list.find((o) => o.id === orderId);
     if (!target) return null;
 
@@ -1190,7 +1260,11 @@ export const patientJourneyService = {
   },
 
   acknowledgeCriticalLabOrder(orderId: string, doctorName: string, ackNote?: string): SharedLabOrder | null {
-    const list = this.getLabOrders();
+    if (labApiMode() && LabApi.raw(orderId)) {
+      void LabApi.acknowledgeCritical(orderId, ackNote || `Acknowledged by ${doctorName}`);
+      return this.getLabOrders().find((o) => o.id === orderId) || null;
+    }
+    const list = this.getLocalLabOrders();
     const target = list.find((o) => o.id === orderId);
     if (!target) return null;
 

@@ -37,3 +37,7 @@ htmlcov/
 
 # Logs
 *.log
+
+# SQLite write-ahead log files (WAL mode)
+*.sqlite3-wal
+*.sqlite3-shm

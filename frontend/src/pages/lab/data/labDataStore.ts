@@ -1,6 +1,7 @@
 // Lab Department Data Store & Real-time State Service
 // Implements 8-step specimen pipeline, analyzer telemetry, parameter reference ranges, and domain events.
 import { patientJourneyService, SharedLabOrder } from '../../../services/patientJourneyService';
+import { LabApi, labApiMode } from '../../../services/labService';
 
 export type SpecimenStep =
   | 'ORDERED'
@@ -137,6 +138,21 @@ export interface SignedReportItem {
   keyFindings: string;
   interpretation: string;
   auditTrail: AuditTrailItem[];
+  /** Server reports only: tamper-evident signature, numbered addenda and the call-back record. */
+  signature?: {
+    hash: string;
+    designation: string;
+    version: number;
+    amendments: { number: number; text: string; signedByName: string; signedAt: string }[];
+  };
+  callback?: {
+    status: 'PENDING' | 'ACKNOWLEDGED';
+    ackWindowMinutes: number;
+    receivedByName: string;
+    receivedByRole: string;
+    readBackConfirmed: boolean;
+    attempts: { at: string; outcome: string; note: string; byName: string | null }[];
+  };
 }
 
 export interface CatalogRangeItem {
@@ -167,6 +183,8 @@ export interface CatalogTestItem {
   draftRanges?: Record<'adultMale' | 'adultFemale' | 'child', CatalogRangeItem[]>;
   draftSavedBy?: string;
   recentQc: { level: string; meta: string; time: string; result: string; pass: boolean }[];
+  /** Server catalog only: published / retired range versions, newest first. */
+  versionHistory?: { version: number; status: string; publishedAt: string | null; publishedByName: string | null; notes: string }[];
 }
 
 const STORAGE_KEY_ORDERS = 'nh_lab_orders_v2';
@@ -1134,9 +1152,13 @@ export function convertSharedToWorkbench(shared: SharedLabOrder): LabQueueOrder 
   };
 }
 
+/** "34y M" — or just the sex / "Age not recorded" when the server has no date of birth. */
+export const ageSex = (age: number, gender: string) => [age > 0 ? `${age}y` : '', gender].filter(Boolean).join(' ') || 'Age not recorded';
+
 export class LabDataStore {
   // Orders
   static getOrders(): LabQueueOrder[] {
+    if (labApiMode()) return LabApi.queueOrders();
     let workbenchOrders: LabQueueOrder[] = [];
     try {
       const raw = localStorage.getItem(STORAGE_KEY_ORDERS);
@@ -1200,6 +1222,11 @@ export class LabDataStore {
   }
 
   static updateOrder(orderId: string, updates: Partial<LabQueueOrder>): LabQueueOrder | undefined {
+    if (labApiMode()) {
+      // Only the pathologist's draft interpretation is edited directly; every other change has its own action
+      if (updates.pathologistInterpretation !== undefined) void LabApi.saveInterpretation(orderId, updates.pathologistInterpretation);
+      return this.getOrderById(orderId);
+    }
     const orders = this.getOrders();
     const idx = orders.findIndex((o) => o.id === orderId || o.orderNumber === orderId);
     if (idx === -1) return undefined;
@@ -1266,6 +1293,7 @@ export class LabDataStore {
 
   // Analyzers
   static getAnalyzers(): AnalyzerItem[] {
+    if (labApiMode()) return LabApi.analyzers();
     try {
       const raw = localStorage.getItem(STORAGE_KEY_ANALYZERS);
       if (raw) return JSON.parse(raw);
@@ -1275,6 +1303,10 @@ export class LabDataStore {
   }
 
   static saveAnalyzers(analyzers: AnalyzerItem[]) {
+    if (labApiMode()) {
+      LabApi.unsupported('Registering or editing analyzers moves to the server with Lab Admin (Phase 4); this change was not saved.');
+      return;
+    }
     try {
       localStorage.setItem(STORAGE_KEY_ANALYZERS, JSON.stringify(analyzers));
       window.dispatchEvent(new Event('nh_lab_sync'));
@@ -1312,6 +1344,12 @@ export class LabDataStore {
 
   /** Returns false when collection is blocked (bill not settled). */
   static collectSample(orderId: string, by: string): boolean {
+    if (labApiMode()) {
+      const o = this.getOrderById(orderId);
+      if (!o || o.billingStatus === 'UNPAID') return false;
+      void LabApi.collect(o.id);
+      return true;
+    }
     const o = this.getOrderById(orderId);
     if (!o || o.billingStatus === 'UNPAID' || o.isPaid === false) return false;
     this.updateOrder(o.id, { stage: 'COLLECTED', collectedAt: this.now(), sampleRejectedReason: undefined });
@@ -1320,6 +1358,10 @@ export class LabDataStore {
   }
 
   static receiveSample(orderId: string, by: string) {
+    if (labApiMode()) {
+      void LabApi.receive(orderId);
+      return;
+    }
     const o = this.getOrderById(orderId);
     if (!o) return;
     this.updateOrder(o.id, { stage: 'RECEIVED', receivedAt: this.now() });
@@ -1327,6 +1369,10 @@ export class LabDataStore {
   }
 
   static rejectSample(orderId: string, reason: string, by: string) {
+    if (labApiMode()) {
+      void LabApi.reject(orderId, reason);
+      return;
+    }
     const o = this.getOrderById(orderId);
     if (!o) return;
     this.updateOrder(o.id, { stage: 'ORDERED', collectedAt: undefined, receivedAt: undefined, sampleRejectedReason: reason });
@@ -1343,6 +1389,11 @@ export class LabDataStore {
   }
 
   static loadOnAnalyzer(orderId: string, analyzerId: string, by: string) {
+    if (labApiMode()) {
+      // The server checks the analyzer is up and in QC control, and counts its queue
+      void LabApi.startAnalysis(orderId, analyzerId);
+      return;
+    }
     const o = this.getOrderById(orderId);
     const a = this.getAnalyzers().find((x) => x.id === analyzerId);
     if (!o || !a) return;
@@ -1361,10 +1412,18 @@ export class LabDataStore {
   }
 
   static saveResultDraft(orderId: string, parameters: TestParameterResult[], technicianNote: string) {
+    if (labApiMode()) {
+      void LabApi.saveResults(orderId, parameters, technicianNote, false);
+      return;
+    }
     this.updateOrder(orderId, { parameters, technicianNote });
   }
 
   static submitResults(orderId: string, parameters: TestParameterResult[], technicianNote: string, by: string) {
+    if (labApiMode()) {
+      void LabApi.saveResults(orderId, parameters, technicianNote, true);
+      return;
+    }
     const o = this.getOrderById(orderId);
     if (!o) return;
     const isCrit = parameters.some((p) => {
@@ -1377,6 +1436,10 @@ export class LabDataStore {
   }
 
   static logQc(analyzerId: string, entry: Omit<AnalyzerQcEntry, 'id' | 'time'>) {
+    if (labApiMode()) {
+      void LabApi.logQc(analyzerId, { level: entry.level, lot: entry.lot, pass: entry.pass, note: entry.note });
+      return;
+    }
     const analyzers = this.getAnalyzers();
     const a = analyzers.find((x) => x.id === analyzerId);
     if (!a) return;
@@ -1396,6 +1459,10 @@ export class LabDataStore {
   }
 
   static reportFault(analyzerId: string, description: string, by: string) {
+    if (labApiMode()) {
+      void LabApi.reportFault(analyzerId, description);
+      return;
+    }
     const analyzers = this.getAnalyzers();
     const a = analyzers.find((x) => x.id === analyzerId);
     if (!a) return;
@@ -1408,6 +1475,10 @@ export class LabDataStore {
 
   /** Back in service after a fault; QC must pass before patient samples run again. */
   static returnToService(analyzerId: string, by: string) {
+    if (labApiMode()) {
+      void LabApi.returnToService(analyzerId);
+      return;
+    }
     const analyzers = this.getAnalyzers();
     const a = analyzers.find((x) => x.id === analyzerId);
     if (!a) return;
@@ -1447,6 +1518,7 @@ export class LabDataStore {
 
   // Signed Reports
   static getSignedReports(): SignedReportItem[] {
+    if (labApiMode()) return LabApi.signedReports();
     try {
       const raw = localStorage.getItem(STORAGE_KEY_REPORTS);
       if (raw) return JSON.parse(raw);
@@ -1464,6 +1536,10 @@ export class LabDataStore {
 
   // Pathologist Domain Actions
   static signOffOrder(orderId: string, interpretation: string, signedBy: string = 'Dr. Kavitha Menon'): SignedReportItem | undefined {
+    if (labApiMode()) {
+      void LabApi.signOff(orderId, interpretation);
+      return undefined;
+    }
     const order = this.getOrderById(orderId);
     if (!order) return undefined;
 
@@ -1539,6 +1615,10 @@ export class LabDataStore {
   }
 
   static requestRetest(orderId: string, reason: string, returnedBy: string = 'Dr. Kavitha Menon') {
+    if (labApiMode()) {
+      void LabApi.retest(orderId, reason);
+      return;
+    }
     const order = this.getOrderById(orderId);
     if (!order) return;
 
@@ -1553,6 +1633,11 @@ export class LabDataStore {
   }
 
   static flagCritical(orderId: string, interpretation: string, flaggedBy: string = 'Dr. Kavitha Menon') {
+    if (labApiMode()) {
+      // The server marks the order critical from the entered results and opens the call-back
+      void LabApi.signOff(orderId, interpretation);
+      return;
+    }
     const order = this.getOrderById(orderId);
     if (!order) return;
 
@@ -1566,6 +1651,10 @@ export class LabDataStore {
   }
 
   static issueAmendment(reportId: string, amendmentNote: string, by: string = 'Dr. Kavitha Menon'): SignedReportItem | undefined {
+    if (labApiMode()) {
+      void LabApi.amend(reportId, amendmentNote);
+      return undefined;
+    }
     const reports = this.getSignedReports();
     const idx = reports.findIndex((r) => r.id === reportId || r.reportNumber === reportId);
     if (idx === -1) return undefined;
@@ -1598,6 +1687,7 @@ export class LabDataStore {
 
   // Test Catalog
   static getCatalog(): CatalogTestItem[] {
+    if (labApiMode()) return LabApi.catalog();
     try {
       const raw = localStorage.getItem(STORAGE_KEY_CATALOG);
       if (raw) return JSON.parse(raw);
@@ -1614,6 +1704,10 @@ export class LabDataStore {
   }
 
   static publishRangeChanges(code: string, by: string = 'Pathologist') {
+    if (labApiMode()) {
+      void LabApi.publishRanges(code);
+      return;
+    }
     const catalog = this.getCatalog();
     const idx = catalog.findIndex((t) => t.code === code);
     if (idx === -1) return;
@@ -1649,6 +1743,10 @@ export class LabDataStore {
   }
 
   static saveRangeDraft(code: string, ranges: CatalogTestItem['ranges'], by: string) {
+    if (labApiMode()) {
+      void LabApi.saveRangeDraft(code, ranges);
+      return;
+    }
     const catalog = this.getCatalog();
     const idx = catalog.findIndex((t) => t.code === code);
     if (idx === -1) return;
@@ -1658,6 +1756,10 @@ export class LabDataStore {
   }
 
   static discardRangeDraft(code: string, by: string) {
+    if (labApiMode()) {
+      void LabApi.discardRangeDraft(code);
+      return;
+    }
     const catalog = this.getCatalog();
     const idx = catalog.findIndex((t) => t.code === code);
     if (idx === -1) return;
@@ -1677,6 +1779,11 @@ export class LabDataStore {
   }
 
   static addCatalogTest(test: CatalogTestItem, by: string): boolean {
+    if (labApiMode()) {
+      if (LabApi.catalog().some((t) => t.code.toUpperCase() === test.code.toUpperCase())) return false;
+      void LabApi.createTest(test);
+      return true;
+    }
     const catalog = this.getCatalog();
     if (catalog.some((t) => t.code.toUpperCase() === test.code.toUpperCase())) return false;
     this.saveCatalog([test, ...catalog]);
@@ -1686,6 +1793,10 @@ export class LabDataStore {
 
   // Critical result call-back (read-back acknowledgement by the receiving clinician)
   static acknowledgeCritical(reportId: string, receivedBy: string, receiverRole: string, by: string): SignedReportItem | undefined {
+    if (labApiMode()) {
+      void LabApi.acknowledgeCritical(reportId, `${receivedBy} (${receiverRole}) · read back`, { name: receivedBy, role: receiverRole });
+      return undefined;
+    }
     const reports = this.getSignedReports();
     const idx = reports.findIndex((r) => r.id === reportId);
     if (idx === -1) return undefined;
@@ -1712,6 +1823,10 @@ export class LabDataStore {
   }
 
   static logCallAttempt(reportId: string, note: string, by: string) {
+    if (labApiMode()) {
+      void LabApi.logCall(reportId, note);
+      return;
+    }
     const reports = this.getSignedReports();
     const idx = reports.findIndex((r) => r.id === reportId);
     if (idx === -1) return;
