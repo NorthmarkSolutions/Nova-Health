@@ -151,6 +151,11 @@ export const ReceptionDashboard: React.FC = () => {
   const [bedStatusFilter, setBedStatusFilter] = useState<'ALL' | 'AVAILABLE' | 'OCCUPIED' | 'CLEANING' | 'RESERVED'>('ALL');
   const [bedSearchQuery, setBedSearchQuery] = useState('');
 
+  // Push today's OPD tokens to Billing once when the desk opens (later changes sync as they happen)
+  useEffect(() => {
+    patientJourneyService.syncTodayQueueToBilling();
+  }, []);
+
   // Live Auto-Sync Listener for Campus Infrastructure Updates (from Admin or cross-tab)
   useEffect(() => {
     const syncCampusState = () => {

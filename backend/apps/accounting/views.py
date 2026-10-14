@@ -2621,18 +2621,7 @@ class AuditEngagementsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        from .models import AuditEngagement
-        def run():
-            AuditComplianceService.require_governance(request.user)
-            AuditComplianceService.ensure_seed_data()
-            return [{'engagement_no': e.engagement_no, 'type': e.type, 'auditor_firm': e.auditor_firm, 'status': e.status,
-                     'period_from': str(e.period_from), 'period_to': str(e.period_to),
-                     'fieldwork_from': str(e.fieldwork_from), 'fieldwork_to': str(e.fieldwork_to),
-                     'grants': [{'id': str(g.id), 'auditor': g.auditor.username, 'valid_from': g.valid_from.isoformat(),
-                                 'valid_until': g.valid_until.isoformat(), 'active': g.is_active(),
-                                 'revoked_at': g.revoked_at.isoformat() if g.revoked_at else ''} for g in e.grants.select_related('auditor')]}
-                    for e in AuditEngagement.objects.order_by('-fieldwork_from')]
-        return _domain(run)
+        return _domain(lambda: AuditComplianceService.list_engagements(request.user))
 
     def post(self, request):
         def run():
@@ -2646,8 +2635,24 @@ class AuditorGrantView(APIView):
 
     def post(self, request, pk=None):
         def run():
-            g = AuditComplianceService.grant_access(request.user, str(pk), request.data.get('auditor_username', ''))
+            g = AuditComplianceService.grant_access(request.user, str(pk), request.data.get('auditor_username', ''),
+                                                    days=request.data.get('days'))
             return {'id': str(g.id), 'auditor': g.auditor.username, 'valid_until': g.valid_until.isoformat()}
+        return _domain(run)
+
+
+class AuditorUsersView(APIView):
+    """Finance Controller / CFO: list Auditor logins and create new ones"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return _domain(lambda: AuditComplianceService.list_auditors(request.user))
+
+    def post(self, request):
+        def run():
+            u, password = AuditComplianceService.create_auditor(request.user, request.data)
+            return {'id': str(u.id), 'username': u.username, 'name': u.get_full_name() or u.username, 'email': u.email or '',
+                    'role': u.role, 'temporary_password': password}
         return _domain(run)
 
 

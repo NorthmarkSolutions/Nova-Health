@@ -1131,6 +1131,39 @@ export const accountsService = {
     return res.data;
   },
 
+  // === Audit governance (Finance Controller / CFO): engagements, auditor logins, time-boxed access ===
+  getAuditEngagements: async (): Promise<AuditEngagementItem[]> => {
+    const res = await api.get('/accounts/audit/engagements/');
+    return listOf(res.data);
+  },
+
+  createAuditEngagement: async (payload: { engagement_no?: string; auditor_firm: string; type: string; period_from: string; period_to: string; fieldwork_from: string; fieldwork_to: string }): Promise<{ engagement_no: string; auditor_firm: string }> => {
+    const res = await api.post('/accounts/audit/engagements/', payload);
+    return res.data;
+  },
+
+  /** days: 1, 7, 15 or 30 — the server caps access at the engagement's fieldwork end. */
+  grantAuditorAccess: async (engagementNo: string, auditorUsername: string, days: 1 | 7 | 15 | 30): Promise<{ id: string; auditor: string; valid_until: string }> => {
+    const res = await api.post(`/accounts/audit/engagements/${encodeURIComponent(engagementNo)}/grants/`, { auditor_username: auditorUsername, days });
+    return res.data;
+  },
+
+  revokeAuditorGrant: async (grantId: string): Promise<{ id: string; revoked_at: string }> => {
+    const res = await api.post(`/accounts/audit/grants/${grantId}/revoke/`);
+    return res.data;
+  },
+
+  getAuditorUsers: async (): Promise<AuditorUserItem[]> => {
+    const res = await api.get('/accounts/audit/auditors/');
+    return listOf(res.data);
+  },
+
+  /** Returns the new login with a one-time temporary password to hand to the auditor. */
+  createAuditorUser: async (payload: { first_name: string; last_name: string; email?: string; username?: string; kind?: 'external' | 'internal' }): Promise<AuditorUserItem & { temporary_password: string }> => {
+    const res = await api.post('/accounts/audit/auditors/', payload);
+    return res.data;
+  },
+
   // === Phase 6: Chief Financial Officer (CFO) Strategy APIs ===
   getCfoDashboard: async (): Promise<CfoDashboardData> => {
     const res = await api.get('/accounts/cfo/dashboard/');
@@ -1760,6 +1793,43 @@ export interface PolicyMasterItem {
   change_data: { what?: string; by?: string; why?: string } | null;
   key_values: Array<[string, string]>;
   trail: TrailEntry[];
+}
+
+// === Audit governance types ===
+export interface AuditGrantItem {
+  id: string;
+  auditor: string;
+  auditor_name: string;
+  valid_from: string;
+  valid_until: string;
+  active: boolean;
+  status: 'active' | 'scheduled' | 'expired' | 'revoked';
+  granted_by: string;
+  revoked_at: string;
+  revoked_by: string;
+}
+
+export interface AuditEngagementItem {
+  engagement_no: string;
+  type: string;
+  auditor_firm: string;
+  status: string;
+  period_from: string;
+  period_to: string;
+  fieldwork_from: string;
+  fieldwork_to: string;
+  grants: AuditGrantItem[];
+}
+
+export interface AuditorUserItem {
+  id: string;
+  username: string;
+  name: string;
+  email: string;
+  role: string;
+  is_active: boolean;
+  active_grants: number;
+  last_login: string;
 }
 
 // === Phase 6: Chief Financial Officer (CFO) Strategy Types ===

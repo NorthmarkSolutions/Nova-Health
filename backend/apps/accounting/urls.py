@@ -61,7 +61,7 @@ from .views import (
     # Phase 11: Audit & Compliance Views
     AuditorMeView, AuditorPBCListView, AuditorPBCEvidenceView, AuditorControlsView, AuditorLogsView,
     AuditorIntegrityView, AuditorLedgerView, AuditorJournalTraceView, AuditEngagementsView,
-    AuditorGrantView, AuditorGrantRevokeView, AuditRequestAttachEvidenceView, AuditChainVerifyView,
+    AuditorGrantView, AuditorGrantRevokeView, AuditorUsersView, AuditRequestAttachEvidenceView, AuditChainVerifyView,
     AuditWormExportView, ControlMonitorRunView, RetentionStatusView,
     # Phase 12: Simulation & Acceptance Views
     MonthReplaySimulationView, MonthCloseSequenceView,
@@ -258,6 +258,7 @@ urlpatterns = [
 
     # Phase 11: Audit governance (Finance Controller / CFO)
     *route('audit/engagements', AuditEngagementsView.as_view(), 'accounts-audit-engagements'),
+    *route('audit/auditors', AuditorUsersView.as_view(), 'accounts-audit-auditors'),
     *route('audit/engagements/<str:pk>/grants', AuditorGrantView.as_view(), 'accounts-audit-grant'),
     *route('audit/grants/<str:pk>/revoke', AuditorGrantRevokeView.as_view(), 'accounts-audit-grant-revoke'),
     *route('audit/requests/<str:pk>/evidence', AuditRequestAttachEvidenceView.as_view(), 'accounts-audit-request-attach'),

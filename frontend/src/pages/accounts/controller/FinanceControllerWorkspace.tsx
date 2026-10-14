@@ -1,6 +1,8 @@
 // Finance Controller workspace — HMS design bible Section 19 (reference: Lab Admin, Pharmacy Admin).
 // Integrity and close owner: period close and locks, payment release, bank control, statements,
 // tax compliance, audit readiness and financial governance.
+import { UserRound } from 'lucide-react';
+import { AuditorAccessView } from '../shared/AuditorAccessView';
 import React, { useMemo } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -68,6 +70,7 @@ const VIEWS: Record<string, React.FC<ControllerViewProps>> = {
   highrisk: ControllerHighRiskView,
   exceptions: ControllerExceptionsView,
   policies: ControllerPoliciesView,
+  auditors: AuditorAccessView,
   audit: ControllerAuditView,
 };
 // The server's dashboard links use the old screen keys; 'dashboard' maps to the overview
@@ -172,6 +175,7 @@ export const FinanceControllerWorkspace: React.FC<FinanceControllerWorkspaceProp
         { key: 'highrisk', label: 'High-risk review', icon: ShieldAlert, count: m.hrAwaiting.length },
         { key: 'exceptions', label: 'Exception governance', icon: TriangleAlert, count: m.openExc.length, alert: m.unassignedExc.length > 0 },
         { key: 'policies', label: 'Financial policies', icon: BookLock, count: m.policyChanges.length },
+        { key: 'auditors', label: 'Auditor access', icon: UserRound },
       ],
     },
     { label: 'Tracking', items: [{ key: 'audit', label: 'Audit trail', icon: ScrollText }] },

@@ -1,3 +1,5 @@
+import uuid
+from decimal import InvalidOperation
 from datetime import timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from rest_framework import status
@@ -502,6 +504,26 @@ class MarkupScheduleDetailView(APIView):
         except (ValueError, ArithmeticError) as ve:
             return _bad_request(ve)
 
+# Payer contract terms the counters bill by: every create / change is written to the audit log
+CONTRACT_FIELDS = ('name', 'credit_limit', 'co_pay_percentage', 'deductible_amount', 'room_rent_ceiling', 'tariff_discount_percent',
+                   'settlement_tat_days', 'valid_until', 'billing_cycle', 'contract_reference', 'is_active')
+
+
+def _audit_contract(user, corp, before=None):
+    from .models import AuditEventType, AuditSeverity
+    kind = 'Insurer / TPA' if corp.account_type == 'TPA_INSURANCE' else 'Corporate'
+    if before is None:
+        title, detail, severity = f"{kind} contract added · {corp.name}", f"Credit limit {corp.credit_limit} · co-pay {corp.co_pay_percentage}%", AuditSeverity.MEDIUM
+    else:
+        changes = [f"{f.replace('_', ' ')} {before[f]} → {getattr(corp, f)}" for f in CONTRACT_FIELDS if str(before[f]) != str(getattr(corp, f))]
+        if not changes:
+            return
+        title = f"{kind} contract {'suspended' if before['is_active'] and not corp.is_active else 'changed'} · {corp.name}"
+        detail = ' · '.join(changes)
+        severity = AuditSeverity.MEDIUM if str(before['credit_limit']) != str(corp.credit_limit) or before['is_active'] != corp.is_active else AuditSeverity.LOW
+    SupervisorGovernanceService.audit(AuditEventType.CONTRACT_CHANGE, title, detail, severity, user, reference=corp.code)
+
+
 class CorporateAccountListCreateView(APIView):
     permission_classes = [IsStaffReadAdminWrite]
 
@@ -516,25 +538,35 @@ class CorporateAccountListCreateView(APIView):
         serializer = CorporateAccountSerializer(data=request.data)
         if serializer.is_valid():
             corp = serializer.save()
+            _audit_contract(request.user, corp)
             return Response(CorporateAccountSerializer(corp).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+def _corporate_by_id_or_code(pk):
+    try:
+        return CorporateAccount.objects.filter(id=uuid.UUID(str(pk))).first()
+    except ValueError:
+        return CorporateAccount.objects.filter(code__iexact=pk).first()
+
 
 class CorporateAccountDetailView(APIView):
     permission_classes = [IsStaffReadAdminWrite]
 
     def get(self, request, pk):
-        corp = CorporateAccount.objects.filter(Q(id=pk) | Q(code=pk)).first()
+        corp = _corporate_by_id_or_code(pk)
         if not corp:
             return Response({'error': 'Corporate Account not found'}, status=status.HTTP_404_NOT_FOUND)
         return Response(CorporateAccountSerializer(corp).data)
 
     def patch(self, request, pk):
-        corp = CorporateAccount.objects.filter(Q(id=pk) | Q(code=pk)).first()
+        corp = _corporate_by_id_or_code(pk)
         if not corp:
             return Response({'error': 'Corporate Account not found'}, status=status.HTTP_404_NOT_FOUND)
+        before = {f: getattr(corp, f) for f in CONTRACT_FIELDS}
         serializer = CorporateAccountSerializer(corp, data=request.data, partial=True)
         if serializer.is_valid():
             updated = serializer.save()
+            _audit_contract(request.user, updated, before)
             return Response(CorporateAccountSerializer(updated).data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1332,6 +1364,46 @@ class CashierLiveQueueView(APIView):
         return Response(data, status=status.HTTP_200_OK)
 
 
+class OpdFrontDeskSyncView(APIView):
+    """Reception pushes its OPD tokens here; each becomes an appointment and, unless the desk took the fee, a cashier charge."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from apps.accounts.models import RoleType
+        from .opd_sync import OpdFrontDeskSyncService
+        from .permissions import CASHIER_OR_ABOVE_ROLES
+        allowed = set(CASHIER_OR_ABOVE_ROLES) | {RoleType.RECEPTIONIST, RoleType.RECEPTION_SUPERVISOR}
+        if not (request.user.is_superuser or getattr(request.user, 'role', None) in allowed):
+            return Response({'error': 'Only the front desk or billing can sync OPD visits.'}, status=status.HTTP_403_FORBIDDEN)
+        tokens = request.data.get('tokens')
+        if not isinstance(tokens, list):
+            return Response({'error': 'tokens must be a list'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(OpdFrontDeskSyncService.sync_tokens(tokens[:500], user=request.user), status=status.HTTP_200_OK)
+
+
+class CashierOpdVisitsView(APIView):
+    """Today's OPD visits (front desk and online) with where each stands with the cashier."""
+    permission_classes = [IsCashierOrAbove]
+
+    def get(self, request):
+        from .opd_sync import OpdFrontDeskSyncService
+        return Response(OpdFrontDeskSyncService.list_visits(request.query_params.get('date')), status=status.HTTP_200_OK)
+
+
+class SupervisorOpdDeskReconcileView(APIView):
+    """Billing supervisor confirms front-desk OPD fees were handed over to billing (stamped per visit, audited)."""
+    permission_classes = [IsBillingSupervisorOrAbove]
+
+    def post(self, request):
+        from .opd_sync import OpdFrontDeskSyncService
+        try:
+            return Response(OpdFrontDeskSyncService.reconcile_desk_cash(
+                request.data.get('appointment_ids'), request.user, request.data.get('note', '')
+            ), status=status.HTTP_200_OK)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+
 class CashierPatientWorkspaceView(APIView):
     permission_classes = [IsCashierOrAbove]
 
@@ -1988,6 +2060,13 @@ class TPAClaimsListView(APIView):
 
     def post(self, request):
         data = request.data
+        if not str(data.get('policy_number') or '').strip():
+            return Response({'error': 'Policy number is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            if Decimal(str(data.get('requested_amount') or 0)) <= 0:
+                raise ArithmeticError
+        except (ArithmeticError, ValueError, TypeError, InvalidOperation):
+            return Response({'error': 'Enter the estimated amount to request from the insurer.'}, status=status.HTTP_400_BAD_REQUEST)
         try:
             claim = TPACorporateBillingService.register_pre_auth(
                 patient_id=data.get('patient') or data.get('patient_id'),
@@ -2053,6 +2132,22 @@ class TPAClaimPreAuthDetailView(APIView):
         return self.patch(request, pk)
 
 
+class TPAClaimSettleView(APIView):
+    """Record the insurer's payment on an approved or filed claim."""
+    permission_classes = [IsCashierOrAbove]
+
+    def post(self, request, pk):
+        try:
+            claim = TPACorporateBillingService.settle_claim(
+                pk, request.data.get('settled_amount'), reference=request.data.get('reference', ''),
+                note=request.data.get('note', ''), user=request.user)
+            return Response(TPAClaimRecordSerializer(claim).data, status=status.HTTP_200_OK)
+        except TPAClaimRecord.DoesNotExist:
+            return Response({'error': 'Claim record not found'}, status=status.HTTP_404_NOT_FOUND)
+        except ValueError as ve:
+            return Response({'error': str(ve)}, status=status.HTTP_400_BAD_REQUEST)
+
+
 class TPAClaimDossierView(APIView):
     """Compile and export digital claims pack (invoices, lab reports, discharge summary)."""
     permission_classes = [IsCashierOrAbove]
@@ -2116,9 +2211,13 @@ class InsurancePayersListView(APIView):
         return Response(result, status=status.HTTP_200_OK)
 
     def post(self, request):
+        # Reading payers is for every billing desk; adding an insurer contract is a Billing Admin decision
+        if not IsBillingAdminOrAbove().has_permission(request, self):
+            return Response({'error': 'Only a Billing Admin can add an insurer or TPA.'}, status=status.HTTP_403_FORBIDDEN)
         serializer = CorporateAccountSerializer(data=request.data)
         if serializer.is_valid():
             p = serializer.save(account_type='TPA_INSURANCE')
+            _audit_contract(request.user, p)
             return Response(CorporateAccountSerializer(p).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

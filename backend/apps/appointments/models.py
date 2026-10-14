@@ -29,6 +29,10 @@ class Appointment(models.Model):
     type = models.CharField(max_length=20, choices=AppointmentType.choices, default=AppointmentType.WALK_IN)
     status = models.CharField(max_length=30, choices=AppointmentStatus.choices, default=AppointmentStatus.WAITING)
     notes = models.TextField(blank=True, null=True)
+    # Front-desk sync: where the visit was booked, the desk's own token id, and any fee the desk collected itself
+    source = models.CharField(max_length=20, default='API', db_index=True)
+    external_ref = models.CharField(max_length=64, blank=True, default='', db_index=True)
+    desk_payment = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

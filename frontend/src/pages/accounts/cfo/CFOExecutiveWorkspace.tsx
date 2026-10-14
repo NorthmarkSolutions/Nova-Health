@@ -1,5 +1,7 @@
 // CFO workspace — HMS design bible Section 19 (reference: Lab Admin, Pharmacy Admin).
 // Financial health, performance, planning, investments, board reporting and risk — all from /accounts/cfo/*.
+import { UserRound } from 'lucide-react';
+import { AuditorAccessView } from '../shared/AuditorAccessView';
 import React, { useMemo } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -53,6 +55,7 @@ const VIEWS: Record<string, React.FC<CfoViewProps>> = {
   growth: CfoGrowthView,
   risks: CfoRisksView,
   alerts: CfoAlertsView,
+  auditors: AuditorAccessView,
   decisions: CfoDecisionsView,
 };
 // The server's links use the old screen keys
@@ -160,6 +163,7 @@ export const CFOExecutiveWorkspace: React.FC<CFOExecutiveWorkspaceProps> = ({ on
       items: [
         { key: 'risks', label: 'Strategic risks', icon: ShieldAlert, count: m.risksCritical.length, alert: m.risksCritical.length > 0 },
         { key: 'alerts', label: 'Financial alerts', icon: BellRing, count: m.alertsOpen.length, alert: m.alertsCritical.length > 0 },
+        { key: 'auditors', label: 'Auditor access', icon: UserRound },
       ],
     },
     { label: 'Tracking', items: [{ key: 'decisions', label: 'Executive decisions', icon: ScrollText }] },

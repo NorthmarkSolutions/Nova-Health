@@ -3468,6 +3468,55 @@ class AuditCompliancePhase11TestCase(TestCase):
         self.assertEqual(status_rows['audit_logs']['eligible_for_purge'], 0)
         self.assertIn('journals', status_rows)
 
+    def test_20_auditor_access_management(self):
+        """Controller / CFO pick 1, 7, 15 or 30 days (capped at fieldwork end), add auditors, revoke; others are refused."""
+        from datetime import timedelta
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        # Each allowed length runs from now; fieldwork ends in 10 days, so 15 and 30 days stop there
+        for days, capped in ((1, False), (7, False), (15, True), (30, True)):
+            g = self.svc.grant_access(self.controller, 'ENG-TEST-P11', 'aud_p11', days=days)
+            if capped:
+                self.assertEqual(g.valid_until.date(), self.engagement.fieldwork_to)
+            else:
+                self.assertAlmostEqual((g.valid_until - g.valid_from).total_seconds(), days * 86400, delta=5)
+        with self.assertRaises(AccountingDomainError):
+            self.svc.grant_access(self.controller, 'ENG-TEST-P11', 'aud_p11', days=10)
+
+        # New auditor logins: unique usernames, Auditor role, a one-time password, and they can be granted access
+        a1, pw = self.svc.create_auditor(self.controller, {'first_name': 'Ravi', 'last_name': 'Kumar', 'email': 'ravi@firm.in'})
+        a2, _ = self.svc.create_auditor(self.controller, {'first_name': 'Ravi', 'last_name': 'Kumar', 'kind': 'internal'})
+        self.assertEqual((a1.username, a2.username, a1.role, a2.role), ('ravi.kumar', 'ravi.kumar2', RoleType.AUDITOR, RoleType.INTERNAL_AUDITOR))
+        self.assertTrue(a1.check_password(pw))
+        with self.assertRaises(AccountingDomainError):
+            self.svc.create_auditor(self.controller, {'first_name': 'X', 'last_name': 'Y', 'username': 'ravi.kumar'})
+        with self.assertRaises(AccountingDomainError):
+            self.svc.create_auditor(self.supervisor, {'first_name': 'X', 'last_name': 'Y'})
+        g2 = self.svc.grant_access(self.controller, 'ENG-TEST-P11', 'ravi.kumar', days=7)
+        listed = {a['username']: a for a in self.svc.list_auditors(self.controller)}
+        self.assertEqual(listed['ravi.kumar']['active_grants'], 1)
+
+        # Revoke shows up as a revoked grant in the engagement list
+        self.svc.revoke_access(self.controller, g2.id)
+        eng = next(e for e in self.svc.list_engagements(self.controller) if e['engagement_no'] == 'ENG-TEST-P11')
+        revoked = next(g for g in eng['grants'] if g['id'] == str(g2.id))
+        self.assertEqual((revoked['status'], revoked['auditor_name'], revoked['revoked_by']), ('revoked', 'Ravi Kumar', 'Anil Verma'))
+
+        # API: governance roles only, days validated
+        fc = APIClient()
+        fc.credentials(HTTP_AUTHORIZATION='Bearer ' + str(RefreshToken.for_user(self.controller).access_token))
+        r = fc.post('/api/v1/accounts/audit/engagements/ENG-TEST-P11/grants/', {'auditor_username': 'ravi.kumar', 'days': 15}, format='json')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(fc.post('/api/v1/accounts/audit/engagements/ENG-TEST-P11/grants/', {'auditor_username': 'ravi.kumar', 'days': 3}, format='json').status_code, 422)
+        r = fc.post('/api/v1/accounts/audit/auditors/', {'first_name': 'Neha', 'last_name': 'Joshi'}, format='json')
+        self.assertEqual((r.status_code, r.json()['username']), (200, 'neha.joshi'))
+        self.assertTrue(r.json()['temporary_password'])
+        self.assertEqual(fc.get('/api/v1/accounts/audit/auditors/').status_code, 200)
+        sup = APIClient()
+        sup.credentials(HTTP_AUTHORIZATION='Bearer ' + str(RefreshToken.for_user(self.supervisor).access_token))
+        self.assertEqual(sup.get('/api/v1/accounts/audit/auditors/').status_code, 403)
+        self.assertEqual(sup.get('/api/v1/accounts/audit/engagements/').status_code, 403)
+
 
 from .services import (
     EndToEndSimulationService, FinanceControllerService,

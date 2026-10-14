@@ -5722,6 +5722,16 @@ class TPACorporateBillingService:
         c_val = corporate_account_id or kwargs.get('corporate_account')
         u_val = user or kwargs.get('created_by')
 
+        adm_lookup = None
+        if not p_val and admission_id:
+            try:
+                adm_lookup = IPDRunningLedgerService._resolve_admission(admission_id)
+            except InpatientAdmission.DoesNotExist:
+                raise ValueError('Admission not found.')
+            p_val = adm_lookup.patient
+            admission_id = adm_lookup.id
+        if not p_val:
+            raise ValueError('Choose the admitted patient.')
         if isinstance(p_val, Patient):
             patient = p_val
         else:
@@ -5740,6 +5750,8 @@ class TPACorporateBillingService:
             raise ValueError("Corporate account / Insurer not found.")
 
         adm = InpatientAdmission.objects.filter(id=admission_id).first() if admission_id else None
+        if adm and TPAClaimRecord.objects.filter(admission=adm).exclude(claim_status=ClaimLifecycleStatus.DENIED).exists():
+            raise ValueError(f'{adm.admission_number} already has an open cashless claim. Record an enhancement on it instead.')
 
         req_num = next_document_number('CLM')
         now_str = timezone.now().strftime('%d %b %H:%M')
@@ -5787,6 +5799,18 @@ class TPACorporateBillingService:
             claim = TPAClaimRecord.objects.select_for_update().select_related('patient', 'corporate_account', 'admission').get(id=c_id)
             user_name = (u_val.get_full_name() or u_val.username) if u_val else 'Insurance Desk'
             now_str = timezone.now().strftime('%d %b %H:%M')
+            if claim.claim_status in (ClaimLifecycleStatus.SETTLED, ClaimLifecycleStatus.DENIED):
+                raise ValueError(f'Claim {claim.claim_number} is {claim.get_claim_status_display().lower()} and can no longer change.')
+            if status and status not in PreAuthStatus.values:
+                raise ValueError('Unknown pre-auth status.')
+            if status in (PreAuthStatus.APPROVED, PreAuthStatus.PARTIAL):
+                amt = Decimal(str(approved_amount if approved_amount is not None else claim.pre_auth_amount or 0))
+                if amt <= 0:
+                    raise ValueError('Enter the amount the insurer approved.')
+            if status == PreAuthStatus.REJECTED and not (denial_reason or claim.denial_reason).strip():
+                raise ValueError('Enter the insurer\'s reason for rejecting.')
+            if status == PreAuthStatus.QUERY_RAISED and not (note or '').strip():
+                raise ValueError('Describe the insurer\'s query.')
 
             if status:
                 claim.pre_auth_status = status
@@ -5833,6 +5857,46 @@ class TPACorporateBillingService:
             current_notes.insert(0, {'t': now_str, 'text': log_text, 'by': user_name})
             claim.tracking_notes = current_notes
             claim.save()
+            return claim
+
+    @classmethod
+    def settle_claim(cls, claim_id, settled_amount, reference: str = '', note: str = '', user=None) -> TPAClaimRecord:
+        """Records the insurer's payment against an approved / filed claim; the shortfall is booked as the deduction."""
+        with transaction.atomic():
+            claim = TPAClaimRecord.objects.select_for_update().select_related('patient', 'corporate_account').get(id=claim_id)
+            if claim.claim_status not in (ClaimLifecycleStatus.APPROVED, ClaimLifecycleStatus.CLAIM_FILED):
+                raise ValueError(f'Claim {claim.claim_number} is {claim.get_claim_status_display().lower()}; only approved or filed claims can be settled.')
+            try:
+                paid = Decimal(str(settled_amount)).quantize(Decimal('0.01'))
+            except Exception:
+                raise ValueError('Enter the amount the insurer paid.')
+            approved = claim.pre_auth_amount + (claim.enhancement_amount or Decimal('0.00'))
+            if paid <= 0:
+                raise ValueError('Enter the amount the insurer paid.')
+            if paid > approved:
+                raise ValueError(f'The insurer cannot pay more than the approved ₹{approved:,.2f}.')
+            ref = (reference or '').strip()
+            if not ref:
+                raise ValueError('Enter the payment reference (UTR / cheque number).')
+            claim.settled_amount = paid
+            claim.deduction_amount = approved - paid
+            claim.claim_status = ClaimLifecycleStatus.SETTLED
+            user_name = (user.get_full_name() or user.username) if user else 'Insurance Desk'
+            text = f"Settled ₹{paid:,.2f} · ref {ref}"
+            if claim.deduction_amount > 0:
+                text += f" · deduction ₹{claim.deduction_amount:,.2f}"
+            if note:
+                text += f" · {note.strip()}"
+            claim.tracking_notes = [{'t': timezone.now().strftime('%d %b %H:%M'), 'text': text, 'by': user_name}] + list(claim.tracking_notes or [])
+            claim.save()
+            BillingAuditEvent.objects.create(
+                event_type=AuditEventType.GOP_APPROVED,
+                severity=AuditSeverity.MEDIUM if claim.deduction_amount > 0 else AuditSeverity.LOW,
+                title=f"Insurance claim settled · {claim.corporate_account.name}",
+                detail=f"Claim {claim.claim_number}: received ₹{paid:,.2f} of ₹{approved:,.2f} approved (ref {ref}).",
+                actor=user,
+                reference=claim.claim_number,
+            )
             return claim
 
     @classmethod
@@ -6189,6 +6253,13 @@ class IPDRunningLedgerService:
     ]
 
     @classmethod
+    def _active_claim(cls, adm):
+        """The cashless claim for this stay: one linked to the admission, else the patient's latest unlinked one. Denied claims never count."""
+        qs = TPAClaimRecord.objects.select_related('corporate_account').exclude(claim_status=ClaimLifecycleStatus.DENIED)
+        return (qs.filter(admission=adm).order_by('-created_at').first()
+                or qs.filter(patient=adm.patient, admission__isnull=True).order_by('-created_at').first())
+
+    @classmethod
     def _resolve_admission(cls, admission_id_or_number) -> InpatientAdmission:
         """Resolves InpatientAdmission by UUID or admission_number."""
         if isinstance(admission_id_or_number, InpatientAdmission):
@@ -6372,6 +6443,17 @@ class IPDRunningLedgerService:
             else:
                 cat_map[key] = (e.description, e.amount)
 
+        # Department charges (lab, pharmacy, services) raised for this patient and not yet invoiced belong on the same bill
+        dept_items = list(BillableChargeItem.objects.filter(patient=adm.patient, status=ChargeItemStatus.PENDING).order_by('department', 'created_at'))
+        dept_total = sum((c.total_amount for c in dept_items), Decimal('0.00'))
+        dept_cat = {'LAB': 'LAB_TEST', 'RADIOLOGY': 'LAB_TEST', 'PHARMACY': 'PHARMACY_ISSUE', 'OT': 'OT_PROCEDURE', 'IPD': 'BED_TARIFF', 'NURSING': 'NURSING_CARE'}
+        for c in dept_items:
+            dept = (c.department or 'GENERAL').upper()
+            key = dept_cat.get(dept, 'DEPT_' + dept)
+            name, current = cat_map.get(key, (dept.title() + ' services', Decimal('0.00')))
+            cat_map[key] = (name, current + c.total_amount)
+        bill_total = gross_ledger + dept_total
+
         split_list = [
             {'category': k, 'label': label, 'amount': float(val)}
             for k, (label, val) in cat_map.items() if val > 0
@@ -6386,32 +6468,44 @@ class IPDRunningLedgerService:
         total_deposit_received = sum((d.deposit_amount for d in deposits), Decimal('0.00'))
 
         # Calculate TPA cover if present
-        tpa_claim = TPAClaimRecord.objects.filter(patient=adm.patient).order_by('-created_at').first()
+        tpa_claim = cls._active_claim(adm)
         preauth_amt = Decimal('0.00')
         tpa_settled_amt = Decimal('0.00')
         tpa_label = 'General'
         has_tpa = False
 
-        if tpa_claim and tpa_claim.pre_auth_status in [PreAuthStatus.APPROVED, PreAuthStatus.ENHANCED]:
+        if tpa_claim and tpa_claim.pre_auth_status in [PreAuthStatus.APPROVED, PreAuthStatus.PARTIAL]:
             has_tpa = True
             preauth_amt = tpa_claim.pre_auth_amount + (tpa_claim.enhancement_amount or Decimal('0.00'))
-            tpa_label = f"{tpa_claim.insurance_provider} · TPA"
+            tpa_label = f"{tpa_claim.corporate_account.name} · TPA"
             if tpa_claim.claim_status == ClaimLifecycleStatus.SETTLED and tpa_claim.settled_amount:
                 tpa_settled_amt = tpa_claim.settled_amount
 
         tpa_effective = tpa_settled_amt if tpa_settled_amt > 0 else preauth_amt
         total_cover = total_deposit_held + tpa_effective
 
+        # Clearance record and the patient's other unpaid invoices (OPD, lab, pharmacy bills raised at the counter)
+        clearance = FinancialDischargeClearance.objects.select_related('final_invoice').filter(admission=adm).first()
+        final_invoice = clearance.final_invoice if clearance else None
+        open_qs = Invoice.objects.filter(patient=adm.patient, status__in=[InvoiceStatus.UNPAID, InvoiceStatus.PARTIALLY_PAID])
+        if final_invoice is not None:
+            open_qs = open_qs.exclude(id=final_invoice.id)
+        open_invoices = list(open_qs.order_by('created_at'))
+        open_total = sum((i.balance for i in open_invoices), Decimal('0.00'))
+
+        exposure = bill_total + open_total
         if total_cover > Decimal('0.00'):
-            util_pct = min(Decimal('999.0'), (gross_ledger / total_cover * Decimal('100')).quantize(Decimal('0.1')))
+            util_pct = min(Decimal('999.0'), (exposure / total_cover * Decimal('100')).quantize(Decimal('0.1')))
         else:
-            util_pct = Decimal('100.0') if gross_ledger > 0 else Decimal('0.0')
+            util_pct = Decimal('100.0') if exposure > 0 else Decimal('0.0')
 
-        # Outstanding balance (net balance)
-        net_balance = (gross_ledger - total_deposit_held - (tpa_settled_amt if tpa_settled_amt > 0 else Decimal('0.00'))).quantize(Decimal('0.01'))
-
-        # Clearance record
-        clearance = FinancialDischargeClearance.objects.filter(admission=adm).first()
+        # Outstanding balance: once the final bill exists its live balance is the truth (deposits already applied,
+        # cashier payments reduce it); before that, every charge less deposits held and the insurer's approved cover.
+        # Unpaid counter invoices and charges raised after the final bill are always added.
+        if final_invoice is not None:
+            net_balance = (Decimal(str(final_invoice.balance)) + dept_total + open_total).quantize(Decimal('0.01'))
+        else:
+            net_balance = (bill_total + open_total - total_deposit_held - tpa_effective).quantize(Decimal('0.01'))
         is_cleared = clearance.clearance_status in [DischargeClearanceStatus.CLEARED, DischargeClearanceStatus.OVERRIDDEN] if clearance else False
 
         # Checklist status
@@ -6462,7 +6556,33 @@ class IPDRunningLedgerService:
             'checklist': checklist_items,
             'checklist_complete': checklist_done,
             'topup_demanded': bool(last_demand and last_demand.status == InterimDemandStatus.PENDING),
-            'last_demand_number': last_demand.demand_number if last_demand else None
+            'last_demand_number': last_demand.demand_number if last_demand else None,
+            'last_demand_amount': float(last_demand.demanded_amount) if last_demand else None,
+            'last_demand_at': last_demand.issued_at.isoformat() if last_demand else None,
+            'bill_total': bill_total,
+            'department_total': dept_total,
+            'department_charges': [{
+                'id': str(c.id), 'department': c.department, 'service_code': c.service_code, 'service_name': c.service_name,
+                'quantity': c.quantity, 'unit_price': float(c.unit_price), 'total': float(c.total_amount),
+                'priority': c.priority, 'created_at': c.created_at.isoformat(),
+            } for c in dept_items],
+            'open_invoices_total': open_total,
+            'open_invoices': [{
+                'id': str(i.id), 'invoice_number': i.invoice_number, 'date': str(i.date), 'category': i.category,
+                'total': float(i.total), 'paid': float(i.paid), 'balance': float(i.balance), 'status': i.status,
+            } for i in open_invoices],
+            'final_invoice_id': str(final_invoice.id) if final_invoice else None,
+            'final_invoice_balance': float(final_invoice.balance) if final_invoice else None,
+            'final_invoice_number': final_invoice.invoice_number if final_invoice else None,
+            'final_invoice_total': float(final_invoice.total) if final_invoice else None,
+            'final_invoice_paid': float(final_invoice.paid) if final_invoice else None,
+            'override_reason': clearance.override_reason if clearance else '',
+            'claim': {
+                'id': str(tpa_claim.id), 'claim_number': tpa_claim.claim_number, 'payer': tpa_claim.corporate_account.name,
+                'pre_auth_status': tpa_claim.pre_auth_status, 'claim_status': tpa_claim.claim_status,
+                'requested_amount': float(tpa_claim.requested_amount), 'approved_amount': float(preauth_amt),
+                'gop_letter_number': tpa_claim.gop_letter_number,
+            } if tpa_claim else None,
         }
 
     @classmethod
@@ -6534,12 +6654,19 @@ class IPDRunningLedgerService:
         adjusts TPA approvals, and computes net balance for patient discharge settlement.
         """
         adm = cls._resolve_admission(admission_id_or_number)
+        existing = FinancialDischargeClearance.objects.select_related('final_invoice').filter(admission=adm).first()
+        if existing and existing.final_invoice_id:
+            raise ValueError(f"The final bill for {adm.admission_number} is already consolidated as {existing.final_invoice.invoice_number}. "
+                             f"Collect the balance against that invoice.")
         unbilled_entries = list(IPDRunningLedger.objects.filter(admission=adm, is_interim_billed=False))
-        if not unbilled_entries:
-            # If all are already flagged or none exist, fetch all ledger entries
-            unbilled_entries = list(IPDRunningLedger.objects.filter(admission=adm))
+        dept_items = list(BillableChargeItem.objects.filter(patient=adm.patient, status=ChargeItemStatus.PENDING))
+        if not unbilled_entries and not dept_items:
+            raise ValueError(f"No charges are posted on {adm.admission_number}; there is nothing to bill.")
+        disc_check = Decimal(str(discount_percent or 0))
+        if disc_check < 0 or disc_check > 100:
+            raise ValueError('Discount must be between 0 and 100 percent.')
 
-        gross_amount = sum((e.amount for e in unbilled_entries), Decimal('0.00'))
+        gross_amount = sum((e.amount for e in unbilled_entries), Decimal('0.00')) + sum((c.total_amount for c in dept_items), Decimal('0.00'))
         disc_pct = Decimal(str(discount_percent))
         discount_amount = (gross_amount * disc_pct / Decimal('100')).quantize(Decimal('0.01'))
         net_amount = gross_amount - discount_amount
@@ -6580,6 +6707,14 @@ class IPDRunningLedgerService:
                 e.invoice_item = item
                 e.is_interim_billed = True
                 e.save(update_fields=['invoice_item', 'is_interim_billed'])
+            for c in dept_items:
+                InvoiceItem.objects.create(
+                    invoice=invoice, source=(c.department or 'GENERAL').upper(), department=(c.department or 'GENERAL').upper(),
+                    description=c.service_name, service_code=c.service_code, qty=c.quantity, unit_price=c.unit_price, total=c.total_amount
+                )
+                c.status = ChargeItemStatus.INVOICED
+                c.invoice = invoice
+                c.save(update_fields=['status', 'invoice', 'updated_at'])
 
             # Adjust deposits
             available_deposits = PatientDeposit.objects.filter(
@@ -6605,10 +6740,11 @@ class IPDRunningLedgerService:
                 remaining_to_pay -= can_apply
 
             # Adjust TPA cover if present
-            tpa_claim = TPAClaimRecord.objects.filter(patient=adm.patient).order_by('-created_at').first()
+            tpa_claim = cls._active_claim(adm)
             tpa_covered = Decimal('0.00')
-            if tpa_claim and tpa_claim.pre_auth_status in [PreAuthStatus.APPROVED, PreAuthStatus.ENHANCED]:
-                approved_amt = tpa_claim.settled_amount if tpa_claim.settled_amount and tpa_claim.claim_status == ClaimLifecycleStatus.SETTLED else tpa_claim.pre_auth_amount
+            if tpa_claim and tpa_claim.pre_auth_status in [PreAuthStatus.APPROVED, PreAuthStatus.PARTIAL]:
+                approved_amt = (tpa_claim.settled_amount if tpa_claim.settled_amount and tpa_claim.claim_status == ClaimLifecycleStatus.SETTLED
+                                else tpa_claim.pre_auth_amount + (tpa_claim.enhancement_amount or Decimal('0.00')))
                 tpa_covered = min(approved_amt, remaining_to_pay)
                 remaining_to_pay -= tpa_covered
 
@@ -6674,6 +6810,10 @@ class IPDRunningLedgerService:
         net_balance = summary['net_balance']
 
         has_override = bool(override_reason and len(override_reason.strip()) >= 5)
+        if has_override and net_balance > Decimal('0.00'):
+            from .permissions import SUPERVISOR_OR_ABOVE_ROLES
+            if not (getattr(cashier, 'is_superuser', False) or getattr(cashier, 'role', None) in SUPERVISOR_OR_ABOVE_ROLES):
+                raise ValueError('Only a billing supervisor can discharge a patient with a balance outstanding.')
 
         # HARD INVARIANT: Block clearance if outstanding balance > 0 and no valid override
         if net_balance > Decimal('0.00') and not has_override:
@@ -6812,9 +6952,11 @@ class IPDRunningLedgerService:
             total_deposits_held += summary['total_deposit_balance']
 
             status_val = 'RUNNING'
+            claim = summary['claim']
+            insurer_pending = bool(claim and claim['pre_auth_status'] in ('PENDING', 'QUERY_RAISED'))
             if summary['is_cleared']:
                 status_val = 'CLEARED'
-            elif summary['has_tpa'] and summary['tpa_settled_amount'] <= 0 and adm.status == 'DISCHARGE_INITIATED':
+            elif insurer_pending and adm.status == 'DISCHARGE_INITIATED':
                 status_val = 'AWAITING_TPA'
                 awaiting_tpa_count += 1
             elif adm.status == 'DISCHARGE_INITIATED' or adm.discharge_date is not None:
@@ -6839,7 +6981,8 @@ class IPDRunningLedgerService:
                 'consultant': summary['consultant'],
                 'payer': payer_label,
                 'deposit': float(summary['total_deposit_balance']),
-                'ledger': float(summary['ledger_total']),
+                'ledger': float(summary['bill_total']),
+                'open_invoices': float(summary['open_invoices_total']),
                 'status': status_val,
                 'util': summary['utilization_percent'],
                 'balance': float(summary['net_balance']),
@@ -6848,7 +6991,11 @@ class IPDRunningLedgerService:
                 'split': [[x['label'], x['amount']] for x in summary['category_split']],
                 'checklist': [c['done'] for c in summary['checklist']],
                 'topup_sent': summary['topup_demanded'],
-                'pass_token': summary['gate_pass_token']
+                'pass_token': summary['gate_pass_token'],
+                'admitted_at': summary['admission_date'],
+                'claim_number': claim['claim_number'] if claim else None,
+                'claim_status': claim['pre_auth_status'] if claim else None,
+                'final_invoice': summary['final_invoice_number'],
             })
 
         # Sort order: MEDICALLY_DISCHARGED (0), AWAITING_TPA (1), RUNNING (2), CLEARED (3)
@@ -8240,7 +8387,7 @@ class BillingAuditLogService:
                       'PERIOD_CLOSED', 'PERIOD_REOPEN', 'ERP_JOURNAL', 'FRAUD_SIGNAL', 'INVESTIGATION_EVENT'},
         'Master data': {'TARIFF_CHANGE', 'PACKAGE_CHANGE'},
         'Policy': {'POLICY_CHANGE', 'MATRIX_CHANGE', 'ROSTER_PUBLISHED'},
-        'Contract': {'GOP_APPROVED', 'CLAIM_DENIED', 'VOUCHER_VERIFIED', 'CREDIT_CAP_BLOCKED'},
+        'Contract': {'GOP_APPROVED', 'CLAIM_DENIED', 'VOUCHER_VERIFIED', 'CREDIT_CAP_BLOCKED', 'CONTRACT_CHANGE'},
         'Access': {'COUNTER_MODE', 'HARDWARE_LOCK', 'PERIOD_LOCK_DENIED', 'REPORT_EXPORTED', 'DISCHARGE_GATE_VERIFIED'},
     }
 
