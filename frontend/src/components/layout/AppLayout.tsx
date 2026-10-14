@@ -426,23 +426,23 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
   }, [isNurse, isAdmin, isAssistant, isDoctor]);
 
   const nurseNavIcons: Record<string, React.ReactNode> = {
-    'triage-queue': <Users size={18} strokeWidth={1.75} />,
+    'queue': <Users size={18} strokeWidth={1.75} />,
     'vitals': <Activity size={18} strokeWidth={1.75} />,
-    'observation-beds': <BedDouble size={18} strokeWidth={1.75} />,
-    'specimen-desk': <FlaskConical size={18} strokeWidth={1.75} />,
-    'shift-handover': <Clock size={18} strokeWidth={1.75} />,
-    'reports': <FileText size={18} strokeWidth={1.75} />,
+    'observation': <BedDouble size={18} strokeWidth={1.75} />,
+    'specimens': <FlaskConical size={18} strokeWidth={1.75} />,
+    'handover': <Clock size={18} strokeWidth={1.75} />,
+    'register': <FileText size={18} strokeWidth={1.75} />,
   };
 
   const nurseNavItems: NavItem[] = NURSE_TABS.map((tab) => ({
     label: tab.label,
     path: `/nurse?tab=${tab.key}`,
     badge:
-      tab.key === 'triage-queue' && nurseStats.waitingTriage > 0
+      tab.key === 'queue' && nurseStats.waitingTriage > 0
         ? `${nurseStats.waitingTriage}`
-        : tab.key === 'observation-beds' && nurseStats.activeBeds > 0
+        : tab.key === 'observation' && nurseStats.activeBeds > 0
         ? `${nurseStats.activeBeds}`
-        : tab.key === 'specimen-desk' && nurseStats.pendingSamples > 0
+        : tab.key === 'specimens' && nurseStats.pendingSamples > 0
         ? `${nurseStats.pendingSamples}`
         : undefined,
     icon: nurseNavIcons[tab.key] || <Activity size={18} strokeWidth={1.75} />,
