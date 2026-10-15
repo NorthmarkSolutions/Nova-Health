@@ -22,7 +22,7 @@ const STATUS: Record<SharedAppointment['status'], { label: string; tone: HmsTone
   CANCELLED: { label: 'Cancelled', tone: 'gray' },
   NO_SHOW: { label: 'No-show', tone: 'red' },
 };
-const PILLS = ['BOOKED', 'late', 'CHECKED_IN', 'NO_SHOW', 'CANCELLED', 'all'];
+const PILLS = ['all', 'late', 'BOOKED', 'CHECKED_IN', 'NO_SHOW', 'CANCELLED'];
 const VISIT: Record<string, string> = { NEW: 'New consultation', FOLLOW_UP: 'Follow-up', SECOND_OPINION: 'Second opinion' };
 
 export const RecAppointmentsView: React.FC<RecAppointmentsViewProps> = ({ data, act, initialFilter, initialSelect }) => {
@@ -183,12 +183,12 @@ export const RecAppointmentsView: React.FC<RecAppointmentsViewProps> = ({ data, 
           </HmsButton>
         }
         pills={[
-          { key: 'BOOKED', label: 'To arrive', count: day.filter((a) => a.status === 'BOOKED').length },
+          { key: 'all', label: 'All', count: day.length },
           { key: 'late', label: 'Late', count: day.filter(late).length, tone: 'amber' },
+          { key: 'BOOKED', label: 'To arrive', count: day.filter((a) => a.status === 'BOOKED').length },
           { key: 'CHECKED_IN', label: 'Checked in', count: day.filter((a) => a.status === 'CHECKED_IN').length },
           { key: 'NO_SHOW', label: 'No-show', count: day.filter((a) => a.status === 'NO_SHOW').length, tone: 'red' },
           { key: 'CANCELLED', label: 'Cancelled', count: day.filter((a) => a.status === 'CANCELLED').length },
-          { key: 'all', label: 'All', count: day.length },
         ]}
         activePill={pill}
         onPill={(k) => {

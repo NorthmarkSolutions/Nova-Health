@@ -617,7 +617,11 @@ const ensureStarted = () => {
     state.timer = setInterval(() => {
       if (!labApiMode()) return;
       if (typeof document === 'undefined' || document.visibilityState === 'visible') void refresh();
-    }, 20000);
+    }, 8000);
+    // coming back to this tab / window (e.g. after the patient paid at the counter): fetch at once
+    const wake = () => labApiMode() && document.visibilityState === 'visible' && void refresh();
+    window.addEventListener('focus', wake);
+    document.addEventListener('visibilitychange', wake);
   }
 };
 

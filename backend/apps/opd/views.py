@@ -113,7 +113,7 @@ class VisitListView(APIView):
             patient = OpdFrontDeskSyncService._patient({'uhid': d['uhid'], 'patient': d['patient_name'], 'gender': d.get('gender'),
                                                          'phone': d.get('phone'), 'bloodGroup': d.get('blood_group')})
         visit = services.issue_visit(
-            user=request.user, patient=patient, doctor=services.resolve_doctor(d.get('doctor')),
+            user=request.user, patient=patient, doctor=services.doctor_from(d),
             visit_type=d.get('visit_type') or 'NEW', priority=d.get('priority') or 'NORMAL', fee=d.get('fee'),
             fee_paid=bool(d.get('fee_paid')), payment_mode=d.get('payment_mode') or '', receipt=d.get('receipt') or '',
             chamber=d.get('chamber') or '', source_ref=d.get('source_ref') or None,
@@ -290,7 +290,7 @@ class ReassignView(APIView):
 
     def post(self, request, pk):
         get_object_or_404(OpdVisit, id=pk)
-        v = services.reassign(pk, request.user, services.resolve_doctor(request.data.get('doctor')), request.data.get('chamber'))
+        v = services.reassign(pk, request.user, services.doctor_from(request.data), request.data.get('chamber'))
         return Response(visit_dict(_qs().get(id=v.id), full=True))
 
 

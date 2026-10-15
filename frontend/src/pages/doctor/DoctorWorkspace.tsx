@@ -85,6 +85,8 @@ export const DoctorWorkspace: React.FC = () => {
     });
   };
   const startConsult = (t: SharedQueueToken) => {
+    // away at the lab: open the consultation to read it; the patient is seated again when the reports are back
+    if (t.awaitingReports) return goTo('consult', undefined, String(t.token));
     void opdActions.seat(t, doc?.room?.roomNumber || t.room).then((done) => {
       data.reload();
       if (done) goTo('consult', undefined, String(t.token));

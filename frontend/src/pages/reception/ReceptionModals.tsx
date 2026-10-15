@@ -31,6 +31,26 @@ export const PatientPicker: React.FC<{ patients: SharedPatient[]; value: string;
     ? patients.filter((p) => patientName(p).toLowerCase().includes(term) || p.uhid.toLowerCase().includes(term) || (digits.length >= 4 && p.phone.replace(/\D/g, '').includes(digits))).slice(0, 6)
     : [];
   const chosen = patients.find((p) => p.uhid === value);
+  // Once a patient is chosen the search gives way to the patient card; "Change" brings the search back
+  if (chosen) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', border: `1px solid ${HMS.primaryBorder}`, background: HMS.primaryTint, borderRadius: '10px', fontSize: '13px', color: HMS.text }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <strong>{patientName(chosen)}</strong> · <span style={MONO}>{chosen.uhid}</span> · {chosen.age ? `${chosen.age} y` : 'age —'} · {chosen.phone || 'no phone'}
+          {(chosen.allergies || []).length > 0 && <span style={{ color: '#dc2626' }}> · Allergies: {(chosen.allergies || []).join(', ')}</span>}
+        </div>
+        <HmsButton
+          size="sm"
+          onClick={() => {
+            onChange('');
+            setTimeout(() => document.getElementById(id)?.focus(), 0);
+          }}
+        >
+          Change
+        </HmsButton>
+      </div>
+    );
+  }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
       <div style={{ position: 'relative' }}>
@@ -65,12 +85,6 @@ export const PatientPicker: React.FC<{ patients: SharedPatient[]; value: string;
         <HmsNotice tone="blue" action={onRegister && <HmsButton size="sm" icon={UserPlus} onClick={onRegister}>Register</HmsButton>}>
           No patient matches “{q}”.
         </HmsNotice>
-      )}
-      {chosen && (
-        <div style={{ padding: '10px 12px', border: `1px solid ${HMS.primaryBorder}`, background: HMS.primaryTint, borderRadius: '10px', fontSize: '13px', color: HMS.text }}>
-          <strong>{patientName(chosen)}</strong> · <span style={MONO}>{chosen.uhid}</span> · {chosen.age ? `${chosen.age} y` : 'age —'} · {chosen.phone || 'no phone'}
-          {(chosen.allergies || []).length > 0 && <span style={{ color: '#dc2626' }}> · Allergies: {(chosen.allergies || []).join(', ')}</span>}
-        </div>
       )}
     </div>
   );
@@ -283,7 +297,7 @@ export const WalkInModal: React.FC<{
 }> = ({ data, presetUhid, presetDoctor, onClose, onRegister, onIssued, notify }) => {
   const { format } = useCurrency();
   const [uhid, setUhid] = useState(presetUhid || '');
-  const [doctorId, setDoctorId] = useState(() => data.doctors.find((d) => sameDoctor(d.name, presetDoctor))?.id || data.doctors[0]?.id || '');
+  const [doctorId, setDoctorId] = useState(() => data.doctors.find((d) => sameDoctor(d.name, presetDoctor))?.id || '');
   const [kind, setKind] = useState<VisitKind>('WALK_IN');
   const [urgent, setUrgent] = useState(false);
   const [complaint, setComplaint] = useState('');
@@ -389,6 +403,7 @@ export const WalkInModal: React.FC<{
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '16px' }}>
           <HmsField label="Doctor" htmlFor="wk-doc" required>
             <select id="wk-doc" style={INPUT} value={doctorId} onChange={(ev) => setDoctorId(ev.target.value)}>
+              <option value="" disabled>Choose a doctor…</option>
               {data.doctors.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name} · {d.specialty}
@@ -448,7 +463,7 @@ export const BookingModal: React.FC<{
 }> = ({ data, preset, existing, bookedBy, onClose, onRegister, onBooked, notify }) => {
   const { format } = useCurrency();
   const [uhid, setUhid] = useState(existing?.uhid || preset?.uhid || '');
-  const [doctorId, setDoctorId] = useState(() => data.doctors.find((d) => sameDoctor(d.name, existing?.doctor || preset?.doctor))?.id || data.doctors[0]?.id || '');
+  const [doctorId, setDoctorId] = useState(() => data.doctors.find((d) => sameDoctor(d.name, existing?.doctor || preset?.doctor))?.id || '');
   const [date, setDate] = useState(existing?.date || (preset?.date && preset.date >= todayIso() ? preset.date : todayIso()));
   const [slot, setSlot] = useState(existing?.slot || '');
   const [visitType, setVisitType] = useState<SharedAppointment['visitType']>(existing?.visitType || preset?.visitType || 'NEW');
@@ -522,6 +537,7 @@ export const BookingModal: React.FC<{
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr)', gap: '16px' }}>
           <HmsField label="Doctor" htmlFor="bk-doc" required>
             <select id="bk-doc" style={INPUT} value={doctorId} onChange={(ev) => { setDoctorId(ev.target.value); setSlot(''); }}>
+              <option value="" disabled>Choose a doctor…</option>
               {data.doctors.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name} · {d.specialty}
@@ -765,7 +781,7 @@ export const ShiftModal: React.FC<{
 
 export const AllocateBedModal: React.FC<{ bed: FlatCampusBed; data: ReceptionData; onClose: () => void; onDone: (patient: string) => void }> = ({ bed, data, onClose, onDone }) => {
   const [uhid, setUhid] = useState(() => data.queue.find((t) => isWithDoctor(t))?.uhid || '');
-  const [doctor, setDoctor] = useState(data.doctors[0]?.name || '');
+  const [doctor, setDoctor] = useState('');
   const [nurse, setNurse] = useState('');
   const [reason, setReason] = useState('');
   const p = data.patients.find((x) => x.uhid === uhid);
@@ -799,7 +815,7 @@ export const AllocateBedModal: React.FC<{ bed: FlatCampusBed; data: ReceptionDat
                 cleanlinessStatus: 'SANITIZED',
               });
               const docRef = data.doctors.find((d) => d.name === doctor)?.id || doctor;
-              void opdActions.allocateBed(bed, { uhid: p.uhid, doctor: docRef, nurse: nurse.trim(), reason: reason.trim() }, allocateLocal).then((done) => done && onDone(patientName(p)));
+              void opdActions.allocateBed(bed, { uhid: p.uhid, doctor: docRef, doctorName: doctor, nurse: nurse.trim(), reason: reason.trim() }, allocateLocal).then((done) => done && onDone(patientName(p)));
             }}
           >
             Allocate bed
@@ -814,6 +830,7 @@ export const AllocateBedModal: React.FC<{ bed: FlatCampusBed; data: ReceptionDat
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '16px' }}>
           <HmsField label="Ordering doctor" htmlFor="ab-doc" required>
             <select id="ab-doc" style={INPUT} value={doctor} onChange={(e) => setDoctor(e.target.value)}>
+              <option value="" disabled>Choose a doctor…</option>
               {data.doctors.map((d) => (
                 <option key={d.id}>{d.name}</option>
               ))}

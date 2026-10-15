@@ -31,7 +31,7 @@ export const opdActions = {
   deskFee: (t: SharedQueueToken, mode: string, receipt: string, total: number) =>
     opdApiMode() ? ok(OpdApi.deskFee(t, mode, receipt, total)) : local(t, { feePaid: true, paymentMode: mode, invoiceNo: receipt, totalFee: total }),
   reassign: (t: SharedQueueToken, doctorRef: string, doctorLabel: string, room: string) =>
-    opdApiMode() ? ok(OpdApi.reassign(t, doctorRef, room)) : local(t, { doctor: doctorLabel, room, callingStatus: 'IDLE' }),
+    opdApiMode() ? ok(OpdApi.reassign(t, doctorRef, room, doctorLabel)) : local(t, { doctor: doctorLabel, room, callingStatus: 'IDLE' }),
   cancel(t: SharedQueueToken, reason: string) {
     if (opdApiMode()) return ok(OpdApi.cancel(t, reason));
     patientJourneyService.deleteQueueToken(t.token);
@@ -100,7 +100,7 @@ export const opdActions = {
       if (a.followUpId) patientJourneyService.updateFollowUpStatus(a.followUpId, 'BOOKED', `${a.date} ${a.slot}`);
       return a;
     }
-    const body = { uhid: a.uhid, doctor: doctorRef, date: a.date, slot: a.slot, visit_type: a.visitType, fee: a.fee, room: a.room, notes: a.notes || '', follow_up_id: existingId ? undefined : a.followUpId };
+    const body = { uhid: a.uhid, doctor: doctorRef, doctor_name: a.doctor, date: a.date, slot: a.slot, visit_type: a.visitType, fee: a.fee, room: a.room, notes: a.notes || '', follow_up_id: existingId ? undefined : a.followUpId };
     const r = existingId ? await OpdApi.bookingCall('put', `/opd/bookings/${existingId}/`, body) : await OpdApi.bookingCall('post', '/opd/bookings/', body);
     return r ? OpdApi.appointments().find((x) => x.id === r.id) || null : null;
   },
@@ -127,12 +127,12 @@ export const opdActions = {
   },
 
   // ---- day-care beds
-  allocateBed(bed: FlatCampusBed, o: { uhid: string; doctor: string; nurse: string; reason: string }, local: () => void) {
+  allocateBed(bed: FlatCampusBed, o: { uhid: string; doctor: string; doctorName?: string; nurse: string; reason: string }, local: () => void) {
     if (!opdApiMode()) {
       local();
       return Promise.resolve(true);
     }
-    return ok(OpdApi.stayAction('/opd/daycare/stays/', { uhid: o.uhid, bed_ref: bed.bed.id, bed_label: bed.bed.bedNumber, ward_name: bed.wardName, doctor: o.doctor, nurse: o.nurse, reason: o.reason }));
+    return ok(OpdApi.stayAction('/opd/daycare/stays/', { uhid: o.uhid, bed_ref: bed.bed.id, bed_label: bed.bed.bedNumber, ward_name: bed.wardName, doctor: o.doctor, doctor_name: o.doctorName, nurse: o.nurse, reason: o.reason }));
   },
   dischargeBed(bed: FlatCampusBed, outcome: string) {
     const s = opdApiMode() ? OpdApi.stayForBed(bed.bed.id) : null;

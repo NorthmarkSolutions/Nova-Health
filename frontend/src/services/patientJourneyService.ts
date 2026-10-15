@@ -83,6 +83,8 @@ export interface SharedQueueToken {
   /** Chamber desk checkout after the consultation: where the patient was sent next */
   handoff?: { at: string; by: string; routes: string[]; note?: string };
   checkoutTime?: string;
+  /** Sent for tests by the doctor and not back yet (server visit AWAITING_REPORTS) */
+  awaitingReports?: boolean;
   allergies?: string[];
   chronicConditions?: string[];
   medicalHistory?: string[];

@@ -19,7 +19,7 @@ export interface AstQueueViewProps {
   initialSelect?: string;
 }
 
-const PILLS = ['waiting', 'chamber', 'hold', 'seen', 'all'];
+const PILLS = ['all', 'chamber', 'waiting', 'hold', 'seen'];
 
 export const AstQueueView: React.FC<AstQueueViewProps> = ({ data, act, initialFilter, initialSelect }) => {
   const [search, setSearch] = useState('');
@@ -173,11 +173,11 @@ export const AstQueueView: React.FC<AstQueueViewProps> = ({ data, act, initialFi
         onSearch={setSearch}
         searchPlaceholder="Search name, UHID, token or phone"
         pills={[
-          { key: 'waiting', label: 'Waiting', count: all.filter(isWaitingForDoctor).length, tone: all.some((t) => isWaitingForDoctor(t) && isEmergencyTok(t)) ? 'red' : undefined },
+          { key: 'all', label: 'All', count: all.length },
           { key: 'chamber', label: 'In chamber', count: all.filter(match.chamber).length },
+          { key: 'waiting', label: 'Waiting', count: all.filter(isWaitingForDoctor).length, tone: all.some((t) => isWaitingForDoctor(t) && isEmergencyTok(t)) ? 'red' : undefined },
           { key: 'hold', label: 'On hold', count: all.filter(isOnHold).length },
           { key: 'seen', label: 'Seen', count: all.filter(isSeen).length },
-          { key: 'all', label: 'All', count: all.length },
         ]}
         activePill={pill}
         onPill={(k) => {

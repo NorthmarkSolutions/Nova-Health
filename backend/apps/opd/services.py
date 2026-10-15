@@ -131,6 +131,10 @@ def resolve_doctor(ref):
     hit = qs.filter(staff_ref=ref).first()
     if hit:
         return hit
+    # desk doctor ids are '<dept>-<staff id>', e.g. 'doc-1-stf-1'
+    m = re.search(r'(stf-[\w-]+)$', ref)
+    if m and (hit := qs.filter(staff_ref=m.group(1)).first()):
+        return hit
     if re.fullmatch(r'[0-9a-fA-F-]{32,36}', ref):
         hit = qs.filter(id=ref).first()
         if hit:
@@ -140,6 +144,11 @@ def resolve_doctor(ref):
     if len(parts) > 1:
         hit = qs.filter(user__first_name__iexact=parts[0], user__last_name__iexact=' '.join(parts[1:])).first()
     return hit or (qs.filter(user__last_name__iexact=parts[-1]).first() if parts else None)
+
+
+def doctor_from(data):
+    """The desk sends its own doctor id plus the doctor's name; either is enough to find the server doctor."""
+    return resolve_doctor(data.get('doctor')) or resolve_doctor(data.get('doctor_name'))
 
 
 # --------------------------------------------------------------------------- issue
@@ -937,7 +946,7 @@ def allocate_bed(user, data):
         raise ValidationError({'uhid': 'This patient already has a day-care bed.'})
     visit = OpdVisit.objects.filter(patient=patient, visit_date=timezone.localdate()).exclude(
         status__in=[S.CANCELLED, S.NO_SHOW]).order_by('-token_number').first()
-    doctor = resolve_doctor(data.get('doctor')) or (visit.doctor if visit else None)
+    doctor = doctor_from(data) or (visit.doctor if visit else None)
     n = DaycareStay.objects.filter(admitted_at__date=timezone.localdate()).count() + 1
     stay = DaycareStay.objects.create(
         stay_number=f"DC-{timezone.localdate():%Y%m%d}-{n:03d}", visit=visit, patient=patient, doctor=doctor, bed_ref=bed_ref,
@@ -1130,7 +1139,7 @@ def book(user, data, booking_id=None):
     patient = existing.patient if existing else Patient.objects.filter(uhid__iexact=str(data.get('uhid') or '')).first()
     if not patient:
         raise ValidationError({'uhid': 'Select a registered patient.'})
-    doctor = resolve_doctor(data.get('doctor')) or (existing.doctor if existing else None)
+    doctor = doctor_from(data) or (existing.doctor if existing else None)
     if not doctor:
         raise ValidationError({'doctor': 'Select an OPD doctor.'})
     day = _date(data.get('date') or (existing and existing.date))
@@ -1462,7 +1471,7 @@ def admission_checks(patient, doctor, visit_type, day, from_booking=False):
 @transaction.atomic
 def add_block(user, data):
     from .models import OpdDoctorBlock
-    doctor = resolve_doctor(data.get('doctor'))
+    doctor = doctor_from(data)
     if not doctor:
         raise ValidationError({'doctor': 'Select an OPD doctor.'})
     if not (_role(user) in CONFIG_EDITORS | RECEPTION or _is_admin(user)):
@@ -1492,7 +1501,7 @@ def remove_block(block_id, user):
 @transaction.atomic
 def set_doctor_status(user, data):
     from .models import OpdDoctorStatus
-    doctor = resolve_doctor(data.get('doctor'))
+    doctor = doctor_from(data)
     if not doctor:
         raise ValidationError({'doctor': 'Select an OPD doctor.'})
     if not (_role(user) in CONFIG_EDITORS | RECEPTION or _is_admin(user)):

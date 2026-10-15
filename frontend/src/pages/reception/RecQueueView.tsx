@@ -2,7 +2,7 @@
 // collect the fee, print the token slip, mark a no-show (and restore it), check the patient out. Long waits are flagged.
 import React, { useState } from 'react';
 import { Ticket, Megaphone, Banknote, Shuffle, Printer, UserX, LogOut, RotateCcw, Siren, Trash2, ClipboardCheck } from 'lucide-react';
-import { HmsMasterDetail, HmsListRow, HmsBadge, HmsButton, HmsDetailHeader, HmsStatStrip, HmsDetailBody, HmsDetailFooter, HmsSection, HmsRow, HmsNotice, HmsEmpty } from '../../components/hms';
+import { HmsMasterDetail, HmsListRow, HmsBadge, HmsButton, HmsDetailHeader, HmsStatStrip, HmsDetailBody, HmsDetailFooter, HmsSection, HmsRow, HmsNotice, HmsEmpty  } from '../../components/hms';
 import { patientJourneyService, SharedQueueToken } from '../../services/patientJourneyService';
 import { opdActions } from '../../services/opdActions';
 import { useCurrency } from '../../config/currency';
@@ -16,7 +16,7 @@ export interface RecQueueViewProps {
   initialSelect?: string;
 }
 
-const PILLS = ['waiting', 'doctor', 'unpaid', 'priority', 'done', 'all'];
+const PILLS = ['all', 'priority', 'waiting', 'doctor', 'unpaid', 'done'];
 const rank = (t: SharedQueueToken) => (t.priority === 'EMERGENCY' || t.status === 'EMERGENCY' ? 0 : t.priority === 'URGENT' || t.priority === 'VIP' ? 1 : 2);
 
 export const RecQueueView: React.FC<RecQueueViewProps> = ({ data, act, initialFilter, initialSelect }) => {
@@ -103,27 +103,51 @@ export const RecQueueView: React.FC<RecQueueViewProps> = ({ data, act, initialFi
           </HmsSection>
         </HmsDetailBody>
         <HmsDetailFooter>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
             {waiting && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '10px' }}>
-                <HmsButton variant="primary" icon={Megaphone} block onClick={() => act.callToken(t)}>
-                  Call to room
-                </HmsButton>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px', width: '100%' }}>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <HmsButton variant="primary" icon={Megaphone} block onClick={() => act.callToken(t)}>
+                    Call to room
+                  </HmsButton>
+                </div>
+                {feeDue(t) && (
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <HmsButton icon={Banknote} block onClick={() => act.collectFee(t)}>
+                      Collect {format(t.totalFee || 0)}
+                    </HmsButton>
+                  </div>
+                )}
                 <HmsButton icon={Shuffle} block onClick={() => act.reassign(t)}>
                   Change doctor
                 </HmsButton>
-                {feeDue(t) ? (
-                  <HmsButton icon={Banknote} block onClick={() => act.collectFee(t)}>
-                    Collect {format(t.totalFee || 0)}
+                <HmsButton icon={Printer} block onClick={() => printToken(t)}>
+                  Print slip
+                </HmsButton>
+                <HmsButton icon={Siren} block disabled={rank(t) < 2} title={rank(t) < 2 ? 'Already a priority patient' : undefined} onClick={() => run(opdActions.prioritize(t), `${tokenLabel(t.token)} moved up as priority`)}>
+                  Priority
+                </HmsButton>
+                {!opdActions.server() && (
+                  <HmsButton icon={ClipboardCheck} block disabled={t.status === 'TRIAGED' || t.status === 'READY_FOR_DOCTOR'} title="When the nurse confirms vitals are done" onClick={() => run(opdActions.saveTriage(t, { status: 'TRIAGED' }, false), `${tokenLabel(t.token)} marked triaged`)}>
+                    Triaged
                   </HmsButton>
-                ) : (
-                  <HmsButton icon={Printer} block onClick={() => printToken(t)}>
-                    Print slip
+                )}
+                <HmsButton variant="danger" icon={UserX} block onClick={() => run(opdActions.noShow(t, 'Not present at the desk when called'), `${tokenLabel(t.token)} marked no-show`)}>
+                  No-show
+                </HmsButton>
+                {act.supervisor && (
+                  <HmsButton variant="danger" icon={Trash2} block title="Cancel a token issued in error (supervisor)" onClick={() => setCancelling(t)}>
+                    Cancel token
                   </HmsButton>
                 )}
               </div>
             )}
-            {(calling || isWithDoctor(t)) && (
+            {t.awaitingReports && (
+              <HmsButton icon={Printer} block onClick={() => printToken(t)}>
+                Print slip
+              </HmsButton>
+            )}
+            {(calling || isWithDoctor(t)) && !t.awaitingReports && (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '10px' }}>
                 <HmsButton icon={Megaphone} block onClick={() => act.callToken(t)}>
                   Call again
@@ -159,24 +183,6 @@ export const RecQueueView: React.FC<RecQueueViewProps> = ({ data, act, initialFi
                 Patient arrived — back to the queue
               </HmsButton>
             )}
-            {waiting && (
-              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${act.supervisor ? 4 : 3}, minmax(0, 1fr))`, gap: '10px' }}>
-                <HmsButton icon={Siren} block disabled={rank(t) < 2} onClick={() => run(opdActions.prioritize(t), `${tokenLabel(t.token)} moved up as priority`)}>
-                  Priority
-                </HmsButton>
-                <HmsButton icon={ClipboardCheck} block disabled={opdActions.server() || t.status === 'TRIAGED' || t.status === 'READY_FOR_DOCTOR'} title={opdActions.server() ? 'The nurse sends the patient to the doctor from the triage desk' : 'When the nurse confirms vitals are done'} onClick={() => run(opdActions.saveTriage(t, { status: 'TRIAGED' }, false), `${tokenLabel(t.token)} marked triaged`)}>
-                  Triaged
-                </HmsButton>
-                <HmsButton variant="danger" icon={UserX} block onClick={() => run(opdActions.noShow(t, 'Not present at the desk when called'), `${tokenLabel(t.token)} marked no-show`)}>
-                  No-show
-                </HmsButton>
-                {act.supervisor && (
-                  <HmsButton variant="danger" icon={Trash2} block title="Cancel a token issued in error (supervisor)" onClick={() => setCancelling(t)}>
-                    Cancel
-                  </HmsButton>
-                )}
-              </div>
-            )}
           </div>
         </HmsDetailFooter>
       </>
@@ -200,12 +206,12 @@ export const RecQueueView: React.FC<RecQueueViewProps> = ({ data, act, initialFi
           </HmsButton>
         }
         pills={[
+          { key: 'all', label: 'All', count: data.queue.length },
+          { key: 'priority', label: 'Priority', count: data.queue.filter((t) => match(t, 'priority')).length, tone: 'red' },
           { key: 'waiting', label: 'Waiting', count: data.queue.filter((t) => match(t, 'waiting')).length },
           { key: 'doctor', label: 'With doctor', count: data.queue.filter(isWithDoctor).length },
-          { key: 'unpaid', label: 'Fee due', count: data.queue.filter(feeDue).length, tone: 'amber' },
-          { key: 'priority', label: 'Priority', count: data.queue.filter((t) => match(t, 'priority')).length, tone: 'red' },
+          { key: 'unpaid', label: 'Fees due', count: data.queue.filter(feeDue).length, tone: 'amber' },
           { key: 'done', label: 'Done', count: data.queue.filter((t) => isDone(t) || isCancelled(t)).length },
-          { key: 'all', label: 'All', count: data.queue.length },
         ]}
         activePill={pill}
         onPill={(k) => {

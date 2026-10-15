@@ -11,7 +11,7 @@ import { OpdApi } from '../../services/opdService';
 import { opdActions } from '../../services/opdActions';
 import { pharmacyInventoryService, AllergyEvaluationResponse, MedicineItem } from '../../services/pharmacyInventoryService';
 import { LabApi, labApiMode } from '../../services/labService';
-import { MONO, tokenLabel, fmtDate } from '../reception/receptionData';
+import { MONO, tokenLabel, fmtDate, sameDoctor } from '../reception/receptionData';
 import { NEWS_BAND, bandOfScore, categoryOf, clock } from '../nurse/nurseData';
 import { Choice } from '../nurse/NurseModals';
 import { isCalledIn, isInChamber } from '../assistant/assistantData';
@@ -243,8 +243,20 @@ const ConsultForm: React.FC<{ t: SharedQueueToken; data: DoctorData; act: Doctor
     !!d.referTo && d.referReason.trim().length < 5 && 'a reason for the referral',
   ].filter(Boolean) as string[];
 
+  const [confirmTests, setConfirmTests] = useState(false);
+  const away = !!t.awaitingReports;
+  const nextPatient = () => {
+    const next = data.queue
+      .filter((q) => q.id !== t.id && sameDoctor(q.doctor, doctor.name) && !q.awaitingReports && !q.chamberHold && (q.status === 'READY_FOR_DOCTOR' || q.status === 'TRIAGED' || q.status === 'WAITING' || q.status === 'EMERGENCY'))
+      .sort((a, b) => (a.priority === 'EMERGENCY' ? 0 : 1) - (b.priority === 'EMERGENCY' ? 0 : 1) || a.token - b.token)[0];
+    if (next) {
+      act.callIn(next);
+      act.goTo('queue', undefined, String(next.token));
+    } else act.goTo('queue');
+  };
   const sendForTests = () => {
     if (!d.labTests.length && !d.radiology.length) return act.notify('Choose the tests first', 'error');
+    setConfirmTests(false);
     if (opdActions.server()) {
       // Lab tests go to the server with the visit (charges staged, visit waits for the reports); imaging stays a local order
       const radio = d.radiology.length ? sendOrders(true) : 0;
@@ -254,7 +266,7 @@ const ConsultForm: React.FC<{ t: SharedQueueToken; data: DoctorData; act: Doctor
         if (tests.length && !v) return;
         const n = tests.length + radio;
         act.notify(`${n} test${n === 1 ? '' : 's'} ordered · ${t.patient} will come back with the reports`);
-        act.goTo('queue');
+        setDirty(false);
       });
       return;
     }
@@ -450,26 +462,13 @@ const ConsultForm: React.FC<{ t: SharedQueueToken; data: DoctorData; act: Doctor
             <HmsSection title="Diagnosis">
               <div style={{ padding: '14px', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 140px', gap: '12px' }}>
                 <HmsField label="Diagnosis" htmlFor="cs-dx" required>
-                  <input
-                    id="cs-dx"
-                    list="cs-icd"
-                    style={INPUT}
+                  <DiagnosisInput
                     value={d.diagnosis}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      const hit = ICD10.find(([code, name]) => name.toLowerCase() === v.toLowerCase() || `${name} (${code})`.toLowerCase() === v.toLowerCase());
-                      setD((p) => ({ ...p, diagnosis: hit ? hit[1] : v, diagnosisCode: hit ? hit[0] : p.diagnosisCode }));
+                    onChange={(v, code) => {
+                      setD((p) => ({ ...p, diagnosis: v, diagnosisCode: code ?? p.diagnosisCode }));
                       setDirty(true);
                     }}
-                    placeholder="Type or pick a common diagnosis"
                   />
-                  <datalist id="cs-icd">
-                    {ICD10.map(([code, name]) => (
-                      <option key={code} value={name}>
-                        {code}
-                      </option>
-                    ))}
-                  </datalist>
                 </HmsField>
                 <HmsField label="ICD-10" htmlFor="cs-icdcode">
                   <input id="cs-icdcode" style={INPUT} value={d.diagnosisCode} onChange={(e) => set('diagnosisCode', e.target.value.toUpperCase())} placeholder="e.g. J06.9" />
@@ -508,19 +507,34 @@ const ConsultForm: React.FC<{ t: SharedQueueToken; data: DoctorData; act: Doctor
                       </div>
                     )}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '8px' }}>
-                      <input aria-label={`Dose for ${l.medicineName}`} style={SMALL} value={l.dosage} onChange={(e) => setLine(l.key, { dosage: e.target.value })} placeholder="Dose e.g. 1 tab" />
-                      <select aria-label={`Frequency for ${l.medicineName}`} style={SMALL} value={l.frequency} onChange={(e) => setLine(l.key, { frequency: e.target.value })}>
-                        {Array.from(new Set([l.frequency, ...FREQUENCIES].filter(Boolean))).map((f) => (
-                          <option key={f}>{f}</option>
-                        ))}
-                      </select>
-                      <select aria-label={`When to take ${l.medicineName}`} style={SMALL} value={l.timing} onChange={(e) => setLine(l.key, { timing: e.target.value })}>
-                        {Array.from(new Set([l.timing, ...TIMINGS].filter(Boolean))).map((f) => (
-                          <option key={f}>{f}</option>
-                        ))}
-                      </select>
-                      <input aria-label={`Days for ${l.medicineName}`} inputMode="numeric" style={SMALL} value={l.durationDays} onChange={(e) => setLine(l.key, { durationDays: e.target.value.replace(/\D/g, '') })} placeholder="Days" />
-                      <input aria-label={`Instructions for ${l.medicineName}`} style={{ ...SMALL, gridColumn: 'span 2' }} value={l.instructions} onChange={(e) => setLine(l.key, { instructions: e.target.value })} placeholder="Instructions" />
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', fontWeight: 600, color: HMS.textSecondary }}>
+                        Dose
+                        <input aria-label={`Dose for ${l.medicineName}`} style={SMALL} value={l.dosage} onChange={(e) => setLine(l.key, { dosage: e.target.value })} placeholder="e.g. 1 tab" />
+                      </label>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', fontWeight: 600, color: HMS.textSecondary }}>
+                        Frequency
+                        <select aria-label={`Frequency for ${l.medicineName}`} style={SMALL} value={l.frequency} onChange={(e) => setLine(l.key, { frequency: e.target.value })}>
+                          {Array.from(new Set([l.frequency, ...FREQUENCIES].filter(Boolean))).map((f) => (
+                            <option key={f}>{f}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', fontWeight: 600, color: HMS.textSecondary }}>
+                        When to take
+                        <select aria-label={`When to take ${l.medicineName}`} style={SMALL} value={l.timing} onChange={(e) => setLine(l.key, { timing: e.target.value })}>
+                          {Array.from(new Set([l.timing, ...TIMINGS].filter(Boolean))).map((f) => (
+                            <option key={f}>{f}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', fontWeight: 600, color: HMS.textSecondary }}>
+                        Days
+                        <input aria-label={`Days for ${l.medicineName}`} inputMode="numeric" style={SMALL} value={l.durationDays} onChange={(e) => setLine(l.key, { durationDays: e.target.value.replace(/\D/g, '') })} placeholder="e.g. 5" />
+                      </label>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', fontWeight: 600, color: HMS.textSecondary, gridColumn: 'span 2' }}>
+                        Instructions
+                        <input aria-label={`Instructions for ${l.medicineName}`} style={SMALL} value={l.instructions} onChange={(e) => setLine(l.key, { instructions: e.target.value })} placeholder="e.g. with warm water" />
+                      </label>
                     </div>
                   </div>
                 ))}
@@ -609,20 +623,58 @@ const ConsultForm: React.FC<{ t: SharedQueueToken; data: DoctorData; act: Doctor
             </HmsSection>
           </div>
           <div style={{ position: 'sticky', bottom: 0, background: '#ffffff', borderTop: `1px solid ${HMS.border}`, padding: '14px 20px', display: 'flex', flexDirection: 'column', gap: '8px', borderRadius: '0 0 12px 12px' }}>
+            {away ? (
+              <>
+                <HmsNotice tone="blue">Sent for tests — {t.chamberHold ? t.chamberHold.replace(/^Waiting for reports · /, '') : 'reports pending'}. {t.patient} comes back to your queue when every report is signed; finish the consultation then.</HmsNotice>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '10px' }}>
+                  <HmsButton icon={Save} block onClick={() => saveDraft()}>
+                    Save notes
+                  </HmsButton>
+                  <HmsButton variant="primary" icon={CheckCircle2} block onClick={nextPatient}>
+                    Close — next patient
+                  </HmsButton>
+                </div>
+              </>
+            ) : (
+            <>
             {problems.length > 0 && <div style={{ fontSize: '12px', color: HMS.textSecondary }}>To complete, add {problems.join(', ')}.</div>}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '10px' }}>
               <HmsButton icon={Save} block onClick={() => saveDraft()}>
                 Save draft
               </HmsButton>
-              <HmsButton icon={FlaskConical} block disabled={!d.labTests.length && !d.radiology.length} title="Order the tests now; the patient comes back with the reports" onClick={sendForTests}>
+              <HmsButton icon={FlaskConical} block disabled={!d.labTests.length && !d.radiology.length} title="Order the tests now; the patient comes back with the reports" onClick={() => setConfirmTests(true)}>
                 Send for tests
               </HmsButton>
               <HmsButton variant="primary" icon={d.referTo ? Send : CheckCircle2} block disabled={problems.length > 0 || busy || isCalledIn(t)} title={isCalledIn(t) ? 'Start when the patient is in the room' : undefined} onClick={complete}>
                 {busy ? 'Saving…' : 'Complete consultation'}
               </HmsButton>
             </div>
+            </>
+            )}
           </div>
         </section>
+        {confirmTests && (
+          <HmsModal
+            title={`Send ${t.patient} for tests?`}
+            description="The tests are ordered now and their charges go to the cash counter. The patient leaves your room and comes back to your queue when every report is signed; your notes are kept."
+            onClose={() => setConfirmTests(false)}
+            footer={
+              <>
+                <HmsButton onClick={() => setConfirmTests(false)}>Cancel</HmsButton>
+                <HmsButton variant="primary" icon={FlaskConical} onClick={sendForTests}>
+                  Confirm — send for tests
+                </HmsButton>
+              </>
+            }
+          >
+            <HmsSection title="Ordering">
+              {[...d.labTests.map((n) => [n, 'Lab']), ...d.radiology.map((n) => [n, 'Imaging'])].map(([n, kind], i, arr) => (
+                <HmsRow key={n} label={n} value={kind} last={i === arr.length - 1} />
+              ))}
+            </HmsSection>
+            <div style={{ marginTop: '10px', fontSize: '13px', color: HMS.textSecondary }}>Priority: {d.orderPriority.toLowerCase()}</div>
+          </HmsModal>
+        )}
 
         {/* ---------- right: reports & alerts ---------- */}
         <aside aria-label="Reports and alerts" style={COL}>
@@ -716,5 +768,65 @@ const ConsultForm: React.FC<{ t: SharedQueueToken; data: DoctorData; act: Doctor
         />
       )}
     </>
+  );
+};
+
+
+/** Diagnosis box with common ICD-10 suggestions in the HMS style (not the browser's own popup). */
+const DiagnosisInput: React.FC<{ value: string; onChange: (v: string, code?: string) => void }> = ({ value, onChange }) => {
+  const [open, setOpen] = useState(false);
+  const [hi, setHi] = useState(0);
+  const q = value.trim().toLowerCase();
+  const hits = (q ? ICD10.filter(([code, name]) => name.toLowerCase().includes(q) || code.toLowerCase().startsWith(q)) : ICD10).slice(0, 8);
+  const pick = (code: string, name: string) => {
+    onChange(name, code);
+    setOpen(false);
+  };
+  return (
+    <div style={{ position: 'relative' }}>
+      <input
+        id="cs-dx"
+        style={INPUT}
+        value={value}
+        autoComplete="off"
+        role="combobox"
+        aria-expanded={open && hits.length > 0}
+        aria-controls="cs-dx-list"
+        onFocus={() => setOpen(true)}
+        onBlur={() => window.setTimeout(() => setOpen(false), 150)}
+        onChange={(e) => {
+          onChange(e.target.value);
+          setOpen(true);
+          setHi(0);
+        }}
+        onKeyDown={(e) => {
+          if (!open || !hits.length) return;
+          if (e.key === 'ArrowDown') { e.preventDefault(); setHi((h) => Math.min(h + 1, hits.length - 1)); }
+          else if (e.key === 'ArrowUp') { e.preventDefault(); setHi((h) => Math.max(h - 1, 0)); }
+          else if (e.key === 'Enter') { e.preventDefault(); pick(hits[hi][0], hits[hi][1]); }
+          else if (e.key === 'Escape') setOpen(false);
+        }}
+        placeholder="Type or pick a common diagnosis"
+      />
+      {open && hits.length > 0 && (
+        <div id="cs-dx-list" role="listbox" style={{ position: 'absolute', zIndex: 20, top: 'calc(100% + 4px)', left: 0, right: 0, background: '#ffffff', border: `1px solid ${HMS.border}`, borderRadius: '10px', boxShadow: '0 8px 24px rgba(15, 23, 42, 0.12)', maxHeight: '280px', overflowY: 'auto' }}>
+          {hits.map(([code, name], i) => (
+            <button
+              key={code}
+              type="button"
+              role="option"
+              aria-selected={i === hi}
+              onMouseDown={(e) => e.preventDefault()}
+              onMouseEnter={() => setHi(i)}
+              onClick={() => pick(code, name)}
+              style={{ width: '100%', display: 'flex', justifyContent: 'space-between', gap: '12px', padding: '9px 12px', border: 'none', borderBottom: `1px solid ${HMS.divider}`, background: i === hi ? HMS.primaryTint : '#ffffff', cursor: 'pointer', fontSize: '13px', color: HMS.text, textAlign: 'left' }}
+            >
+              <span>{name}</span>
+              <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: '12px', color: HMS.textSecondary }}>{code}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 };

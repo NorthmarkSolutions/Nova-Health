@@ -161,7 +161,10 @@ const ensureStarted = () => {
   if (!state.timer) {
     state.timer = setInterval(() => {
       if (opdApiMode() && document.visibilityState === 'visible') void refresh();
-    }, 10000);
+    }, 8000);
+    const wake = () => opdApiMode() && document.visibilityState === 'visible' && void refresh();
+    window.addEventListener('focus', wake);
+    document.addEventListener('visibilitychange', wake);
   }
 };
 
@@ -245,6 +248,7 @@ export function visitToToken(v: ApiVisit): SharedQueueToken {
     type: v.visitType === 'NEW' ? 'WALK_IN' : v.visitType,
     ...tokenStatus(v),
     priority: v.priority as SharedQueueToken['priority'],
+    awaitingReports: v.status === 'AWAITING_REPORTS' || undefined,
     feePaid: ['PAID', 'CREDITED', 'REFUNDED'].includes(v.feeStatus),
     totalFee: v.fee,
     paymentMode: v.deskPayment?.paid ? v.deskPayment.mode || 'CASH' : v.feeStatus === 'PAID' ? 'CASHIER' : 'UNPAID',
@@ -496,12 +500,12 @@ export const OpdApi = {
   issue: (t: SharedQueueToken, opts: { doctorRef: string; payNow: boolean; mode: string; receipt?: string }) =>
     send('/opd/visits/', {
       uhid: t.uhid, patient_name: t.patient, gender: t.gender, phone: t.phone, blood_group: t.bloodGroup,
-      doctor: opts.doctorRef || t.doctor, visit_type: t.type === 'WALK_IN' || t.type === 'SCHEDULED' ? 'NEW' : t.type,
+      doctor: opts.doctorRef || t.doctor, doctor_name: t.doctor, visit_type: t.type === 'WALK_IN' || t.type === 'SCHEDULED' ? 'NEW' : t.type,
       priority: t.priority || 'NORMAL', fee: t.totalFee ?? undefined, fee_paid: opts.payNow,
       payment_mode: opts.payNow ? opts.mode : '', receipt: opts.receipt || '', chamber: t.room === 'Chamber not assigned' ? '' : t.room,
     }),
   deskFee: (t: SharedQueueToken, mode: string, receipt: string, amount?: number) => send(`/opd/visits/${t.id}/desk-fee/`, { mode, receipt, amount }),
-  reassign: (t: SharedQueueToken, doctorRef: string, chamber?: string) => send(`/opd/visits/${t.id}/reassign/`, { doctor: doctorRef, chamber }),
+  reassign: (t: SharedQueueToken, doctorRef: string, chamber?: string, doctorName?: string) => send(`/opd/visits/${t.id}/reassign/`, { doctor: doctorRef, doctor_name: doctorName, chamber }),
   cancel: (t: SharedQueueToken, reason: string) => tx(t, 'cancel', reason),
   noShow: (t: SharedQueueToken, reason: string) => tx(t, 'no_show', reason),
   reopen: (t: SharedQueueToken) => tx(t, 'reopen'),

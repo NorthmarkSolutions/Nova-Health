@@ -15,7 +15,7 @@ export interface DocQueueViewProps {
   initialFilter?: string;
 }
 
-const PILLS = ['waiting', 'reports', 'room', 'seen', 'all'];
+const PILLS = ['all', 'room', 'waiting', 'reports', 'seen'];
 
 export const DocQueueView: React.FC<DocQueueViewProps> = ({ data, act, initialFilter }) => {
   const [search, setSearch] = useState('');
@@ -88,19 +88,21 @@ export const DocQueueView: React.FC<DocQueueViewProps> = ({ data, act, initialFi
         {!isSeen(t) && (
           <HmsDetailFooter>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px', width: '100%' }}>
-              {(isWaitingForDoctor(t) || sentForTests(t)) && (
-                <HmsButton icon={Megaphone} block disabled={!!busy} title={busy ? `${busy.patient} is in the room` : undefined} onClick={() => act.callIn(t)}>
-                  Call in
+              <div style={{ gridColumn: '1 / -1' }}>
+                <HmsButton variant="primary" icon={Stethoscope} block onClick={() => (isInChamber(t) ? act.goTo('consult', undefined, String(t.token)) : act.startConsult(t))} disabled={!!busy && !isInChamber(t) && !isCalledIn(t)} title={busy && !isInChamber(t) && !isCalledIn(t) ? `Finish with ${busy.patient} first` : undefined}>
+                  {isInChamber(t) ? 'Open consultation' : draft ? 'Resume consultation' : 'Consult'}
                 </HmsButton>
+              </div>
+              {(isWaitingForDoctor(t) || sentForTests(t)) && (
+                <div style={{ gridColumn: '1 / -1' }}><HmsButton icon={Megaphone} block disabled={!!busy} title={busy ? `${busy.patient} is in the room` : undefined} onClick={() => act.callIn(t)}>
+                  Call in
+                </HmsButton></div>
               )}
               {isCalledIn(t) && (
-                <HmsButton icon={Play} block onClick={() => act.startConsult(t)}>
+                <div style={{ gridColumn: '1 / -1' }}><HmsButton icon={Play} block onClick={() => act.startConsult(t)}>
                   Patient is here — start
-                </HmsButton>
+                </HmsButton></div>
               )}
-              <HmsButton variant="primary" icon={Stethoscope} block onClick={() => (isInChamber(t) ? act.goTo('consult', undefined, String(t.token)) : act.startConsult(t))} disabled={!!busy && !isInChamber(t) && !isCalledIn(t)} title={busy && !isInChamber(t) && !isCalledIn(t) ? `Finish with ${busy.patient} first` : undefined}>
-                {isInChamber(t) ? 'Open consultation' : draft ? 'Resume consultation' : 'Consult'}
-              </HmsButton>
             </div>
           </HmsDetailFooter>
         )}
@@ -119,11 +121,11 @@ export const DocQueueView: React.FC<DocQueueViewProps> = ({ data, act, initialFi
       onSearch={setSearch}
       searchPlaceholder="Search name, UHID or token"
       pills={[
+        { key: 'all', label: 'All', count: all.length },
+        { key: 'room', label: 'In room', count: all.filter(match.room).length },
         { key: 'waiting', label: 'Waiting', count: all.filter(waitingish).length, tone: all.some((t) => waitingish(t) && isEmergencyTok(t)) ? 'red' : undefined },
         { key: 'reports', label: 'Sent for tests', count: all.filter(sentForTests).length },
-        { key: 'room', label: 'In room', count: all.filter(match.room).length },
         { key: 'seen', label: 'Seen', count: all.filter(isSeen).length },
-        { key: 'all', label: 'All', count: all.length },
       ]}
       activePill={pill}
       onPill={(k) => {

@@ -101,8 +101,9 @@ export function sameDoctor(a?: string | null, b?: string | null) {
 }
 
 export const ACTIVE = ['WAITING', 'IN_TRIAGE', 'TRIAGED', 'READY_FOR_DOCTOR', 'HOLD', 'EMERGENCY'];
-export const isWaiting = (t: SharedQueueToken) => ACTIVE.includes(t.status) && t.callingStatus !== 'CALLING';
-export const isWithDoctor = (t: SharedQueueToken) => t.status === 'IN_CONSULTATION';
+// A patient the doctor sent for tests is in the doctor's care (at the lab), not waiting in the lobby
+export const isWaiting = (t: SharedQueueToken) => ACTIVE.includes(t.status) && t.callingStatus !== 'CALLING' && !t.awaitingReports;
+export const isWithDoctor = (t: SharedQueueToken) => t.status === 'IN_CONSULTATION' || !!t.awaitingReports;
 export const isDone = (t: SharedQueueToken) => t.status === 'COMPLETED';
 export const isCancelled = (t: SharedQueueToken) => t.status === 'NO_SHOW' || t.status === 'CANCELLED';
 export const feeDue = (t: SharedQueueToken) => !t.feePaid && !isCancelled(t) && (t.totalFee || 0) > 0;
@@ -119,7 +120,13 @@ export const STATUS: Record<string, { label: string; tone: 'gray' | 'green' | 'a
   NO_SHOW: { label: 'No-show', tone: 'gray' },
   CANCELLED: { label: 'Cancelled', tone: 'gray' },
 };
-export const statusOf = (t: SharedQueueToken) => (t.callingStatus === 'CALLING' && t.status !== 'COMPLETED' ? { label: 'Being called', tone: 'green' as const } : STATUS[t.status] || { label: t.status, tone: 'gray' as const });
+export const statusOf = (t: SharedQueueToken) => {
+  if (t.awaitingReports) return { label: 'At lab · reports pending', tone: 'blue' as const };
+  if (t.callingStatus === 'CALLING' && t.status !== 'COMPLETED') return { label: t.callPoint ? 'Called to triage' : 'Called to chamber', tone: 'green' as const };
+  if (t.chamberHold && t.status !== 'COMPLETED') return { label: 'On hold', tone: 'gray' as const };
+  if (t.status === 'IN_CONSULTATION' && t.callingStatus === 'ACCEPTED') return { label: 'With doctor', tone: 'green' as const };
+  return STATUS[t.status] || { label: t.status, tone: 'gray' as const };
+};
 
 /** When the token was issued: explicit waiting start, else the timestamp inside a desk token id (tok-/apt-<ms>). */
 export const issuedAt = (t: SharedQueueToken): Date | null => {
