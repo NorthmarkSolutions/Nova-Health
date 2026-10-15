@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'apps.pharmacy',
     'apps.audit',
     'apps.accounting',
+    'apps.opd',
 ]
 
 MIDDLEWARE = [

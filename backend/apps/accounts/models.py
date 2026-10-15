@@ -52,6 +52,10 @@ class DoctorProfile(models.Model):
     department = models.CharField(max_length=100)
     qualification = models.CharField(max_length=100)
     consultation_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    follow_up_fee = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)  # OPD fee master
+    emergency_fee = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    # Links the server doctor to the OPD master (staff id, e.g. 'stf-1') used by the department fee/roster screens
+    staff_ref = models.CharField(max_length=40, blank=True, default='', db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

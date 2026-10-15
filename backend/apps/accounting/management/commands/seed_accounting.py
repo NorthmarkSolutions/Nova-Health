@@ -217,27 +217,7 @@ class Command(BaseCommand):
         )
         exec_user = User.objects.get(username='accounts_exec')
 
-        events_data = [
-            ('EVT-2026-001', 'billing', 'BILL-IPD-8891', 'BILLING_INVOICE_GENERATED', Decimal('84500.00'), 'Discharge invoice for patient Priya Sharma (IPD-402)'),
-            ('EVT-2026-002', 'pharmacy', 'PHARM-SALE-4402', 'PHARMACY_SALE', Decimal('3250.00'), 'Counter dispense for OPD prescription Rx-9912'),
-            ('EVT-2026-003', 'lab', 'LAB-REQ-7781', 'LAB_ORDER_FULFILLED', Decimal('4800.00'), 'Comprehensive Metabolic Panel + Lipid Profile'),
-            ('EVT-2026-004', 'billing', 'RCPT-CASH-1002', 'BILLING_PAYMENT_COLLECTED', Decimal('25000.00'), 'Initial cash advance deposit collected at IPD counter'),
-        ]
-        for eid, src_dept, sref, etype, amt, desc in events_data:
-            FinancialEvent.objects.update_or_create(
-                event_id=eid,
-                defaults={
-                    'source_department': src_dept,
-                    'source_reference': sref,
-                    'event_type': etype,
-                    'idempotency_key': f"IDEMP-{eid}",
-                    'business_date': timezone.now().date(),
-                    'payload': {'description': desc, 'patient_uhid': 'UHID-2026-0199', 'amount': str(amt)},
-                    'amount': amt,
-                    'status': EventStatus.PENDING_VALIDATION
-                }
-            )
-        self.stdout.write(self.style.SUCCESS(f"  + Seeded {len(events_data)} incoming financial events."))
+        # The executive inbox fills from real departmental events (Billing -> Accounts bridge); none are invented here.
 
         # 8. Phase 2: Draft Journals
         j1, _ = Journal.objects.update_or_create(

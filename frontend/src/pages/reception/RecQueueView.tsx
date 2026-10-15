@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Ticket, Megaphone, Banknote, Shuffle, Printer, UserX, LogOut, RotateCcw, Siren, Trash2, ClipboardCheck } from 'lucide-react';
 import { HmsMasterDetail, HmsListRow, HmsBadge, HmsButton, HmsDetailHeader, HmsStatStrip, HmsDetailBody, HmsDetailFooter, HmsSection, HmsRow, HmsNotice, HmsEmpty } from '../../components/hms';
 import { patientJourneyService, SharedQueueToken } from '../../services/patientJourneyService';
+import { opdActions } from '../../services/opdActions';
 import { useCurrency } from '../../config/currency';
 import { ReasonModal } from './ReceptionModals';
 import { DeskActions, ReceptionData, LONG_WAIT_MIN, MONO, feeDue, fmtWait, isCancelled, isDone, isWaiting, isWithDoctor, nowTime, printSlip, statusOf, tokenLabel, waitMinutes } from './receptionData';
@@ -50,11 +51,11 @@ export const RecQueueView: React.FC<RecQueueViewProps> = ({ data, act, initialFi
     };
   });
 
-  const update = (t: SharedQueueToken, patch: Partial<SharedQueueToken>, msg: string) => {
-    patientJourneyService.updateQueueToken(t.token, patch);
-    data.reload();
-    act.notify(msg);
-  };
+  const run = (p: Promise<boolean>, msg: string) =>
+    void p.then((done) => {
+      data.reload();
+      if (done) act.notify(msg);
+    });
 
   const printToken = (t: SharedQueueToken) => {
     const ok = printSlip('OPD token', [
@@ -136,7 +137,7 @@ export const RecQueueView: React.FC<RecQueueViewProps> = ({ data, act, initialFi
                     Print slip
                   </HmsButton>
                 )}
-                <HmsButton variant="primary" icon={LogOut} block onClick={() => update(t, { status: 'COMPLETED', callingStatus: 'IDLE', checkoutTime: nowTime() }, `${t.patient} checked out`)}>
+                <HmsButton variant="primary" icon={LogOut} block onClick={() => run(opdActions.receptionCheckout(t, nowTime()), `${t.patient} checked out`)}>
                   Check out
                 </HmsButton>
               </div>
@@ -154,19 +155,19 @@ export const RecQueueView: React.FC<RecQueueViewProps> = ({ data, act, initialFi
               </div>
             )}
             {isCancelled(t) && (
-              <HmsButton icon={RotateCcw} block onClick={() => update(t, { status: 'WAITING', callingStatus: 'IDLE', waitingStartTime: new Date().toISOString() }, `${tokenLabel(t.token)} back in the queue`)}>
+              <HmsButton icon={RotateCcw} block onClick={() => run(opdActions.reopen(t), `${tokenLabel(t.token)} back in the queue`)}>
                 Patient arrived — back to the queue
               </HmsButton>
             )}
             {waiting && (
               <div style={{ display: 'grid', gridTemplateColumns: `repeat(${act.supervisor ? 4 : 3}, minmax(0, 1fr))`, gap: '10px' }}>
-                <HmsButton icon={Siren} block disabled={rank(t) < 2} onClick={() => update(t, { priority: 'URGENT' }, `${tokenLabel(t.token)} moved up as priority`)}>
+                <HmsButton icon={Siren} block disabled={rank(t) < 2} onClick={() => run(opdActions.prioritize(t), `${tokenLabel(t.token)} moved up as priority`)}>
                   Priority
                 </HmsButton>
-                <HmsButton icon={ClipboardCheck} block disabled={t.status === 'TRIAGED' || t.status === 'READY_FOR_DOCTOR'} title="When the nurse confirms vitals are done" onClick={() => update(t, { status: 'TRIAGED' }, `${tokenLabel(t.token)} marked triaged`)}>
+                <HmsButton icon={ClipboardCheck} block disabled={opdActions.server() || t.status === 'TRIAGED' || t.status === 'READY_FOR_DOCTOR'} title={opdActions.server() ? 'The nurse sends the patient to the doctor from the triage desk' : 'When the nurse confirms vitals are done'} onClick={() => run(opdActions.saveTriage(t, { status: 'TRIAGED' }, false), `${tokenLabel(t.token)} marked triaged`)}>
                   Triaged
                 </HmsButton>
-                <HmsButton variant="danger" icon={UserX} block onClick={() => update(t, { status: 'NO_SHOW', callingStatus: 'IDLE' }, `${tokenLabel(t.token)} marked no-show`)}>
+                <HmsButton variant="danger" icon={UserX} block onClick={() => run(opdActions.noShow(t, 'Not present at the desk when called'), `${tokenLabel(t.token)} marked no-show`)}>
                   No-show
                 </HmsButton>
                 {act.supervisor && (
@@ -232,11 +233,14 @@ export const RecQueueView: React.FC<RecQueueViewProps> = ({ data, act, initialFi
           options={['Issued in error', 'Duplicate token', 'Patient left before registration', 'Wrong patient selected']}
           onClose={() => setCancelling(null)}
           onConfirm={(reason) => {
-            patientJourneyService.deleteQueueToken(cancelling.token);
-            act.notify(`${tokenLabel(cancelling.token)} cancelled · ${reason}`);
+            const t = cancelling;
             setCancelling(null);
-            setSelected(null);
-            data.reload();
+            void opdActions.cancel(t, reason).then((done) => {
+              data.reload();
+              if (!done) return;
+              act.notify(`${tokenLabel(t.token)} cancelled · ${reason}`);
+              setSelected(null);
+            });
           }}
         />
       )}

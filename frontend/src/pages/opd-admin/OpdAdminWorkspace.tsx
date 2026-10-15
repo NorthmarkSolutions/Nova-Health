@@ -5,6 +5,7 @@ import React, { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Activity, Stethoscope, DoorOpen, Users, CalendarDays, IndianRupee, Settings2, BarChart3, History, UserPlus, RefreshCw } from 'lucide-react';
 import { HmsShell, HmsNavGroup, HmsPageHeader, HmsKpiRow, HmsToast, useHmsToast, HmsBadge, HMS } from '../../components/hms';
+import { useOpdApiErrors } from '../../services/opdActions';
 import { useAuth } from '../../context/AuthContext';
 import { useCurrency } from '../../config/currency';
 import { LONG_WAIT_MIN, fmtWait, isWaiting, sameDoctor, todayIso, waitMinutes } from '../reception/receptionData';
@@ -36,6 +37,7 @@ export const OpdAdminWorkspace: React.FC = () => {
   const initialFilter = params.get('filter') || undefined;
   const data = useOpdAdminData();
   const { toast, show, clear } = useHmsToast();
+  useOpdApiErrors(show);
   const [newSignal, setNewSignal] = useState(0);
   const userName = (user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username : '') || 'OPD admin';
 

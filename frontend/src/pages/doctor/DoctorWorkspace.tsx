@@ -8,6 +8,7 @@ import { useSearchParams } from 'react-router-dom';
 import { ListOrdered, Stethoscope, FileText, Users, BedDouble, Siren, CalendarOff, BarChart3, Megaphone, UserCheck, CalendarX2, RefreshCw } from 'lucide-react';
 import { HmsShell, HmsNavGroup, HmsPageHeader, HmsKpiRow, HmsToast, useHmsToast, HmsBadge, HmsNotice, HmsField, INPUT, HMS, PANEL } from '../../components/hms';
 import { patientJourneyService, SharedQueueToken } from '../../services/patientJourneyService';
+import { opdActions, useOpdApiErrors } from '../../services/opdActions';
 import { useAuth } from '../../context/AuthContext';
 import { RoleType } from '../../types';
 import { LONG_WAIT_MIN, fmtWait, tokenLabel, waitMinutes } from '../reception/receptionData';
@@ -62,6 +63,7 @@ export const DoctorWorkspace: React.FC = () => {
   const userName = (user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username : '') || 'Doctor';
   const data = useDoctorData(user?.id ? String(user.id) : user?.username || '', role === RoleType.DOCTOR ? userName : '');
   const { toast, show, clear } = useHmsToast();
+  useOpdApiErrors(show);
   const [session, setSession] = useState(false);
   const [newSignal, setNewSignal] = useState(0);
   const doc = data.doctor;
@@ -75,16 +77,18 @@ export const DoctorWorkspace: React.FC = () => {
   };
 
   const callIn = (t: SharedQueueToken) => {
-    patientJourneyService.updateQueueToken(t.token, { status: 'IN_CONSULTATION', callingStatus: 'CALLING', callPoint: undefined, chamberHold: undefined, calledAt: new Date().toISOString(), room: doc?.room?.roomNumber || t.room });
-    chime();
-    data.reload();
-    show(`${tokenLabel(t.token)} · ${t.patient} called to ${doc?.room?.roomNumber || t.room}`);
+    void opdActions.callIn(t, doc?.room?.roomNumber || t.room).then((done) => {
+      data.reload();
+      if (!done) return;
+      chime();
+      show(`${tokenLabel(t.token)} · ${t.patient} called to ${doc?.room?.roomNumber || t.room}`);
+    });
   };
   const startConsult = (t: SharedQueueToken) => {
-    const now = new Date().toISOString();
-    patientJourneyService.updateQueueToken(t.token, { status: 'IN_CONSULTATION', callingStatus: 'ACCEPTED', callPoint: undefined, chamberHold: undefined, calledAt: t.calledAt || now, seatedAt: t.seatedAt || now, room: doc?.room?.roomNumber || t.room });
-    data.reload();
-    goTo('consult', undefined, String(t.token));
+    void opdActions.seat(t, doc?.room?.roomNumber || t.room).then((done) => {
+      data.reload();
+      if (done) goTo('consult', undefined, String(t.token));
+    });
   };
   const act: DoctorActions = { notify: show, goTo, userName, callIn, startConsult };
 

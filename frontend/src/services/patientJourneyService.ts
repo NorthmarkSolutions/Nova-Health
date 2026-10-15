@@ -1,6 +1,7 @@
 // Shared Patient Journey Store for cross-department persistence
 import api from './api';
 import { LabApi, labApiMode } from './labService';
+import { OpdApi, opdApiMode } from './opdService';
 import { Gender, RoleType, AppointmentStatus } from '../types';
 import {
   getCampusBuildings,
@@ -391,6 +392,7 @@ export interface SharedEmergencyAlert {
   triagePriority: 'RED_IMMEDIATE' | 'YELLOW_URGENT';
   presentingCondition: string;
   status: 'ACTIVE' | 'ATTENDED';
+  attendedBy?: string;
 }
 
 /** One entry on a day-care / observation bed's nursing chart (keyed to the bed and the stay). */
@@ -1239,6 +1241,9 @@ const DEFAULT_NURSE_SHIFT: NurseShiftRecord = {
   completedTasksCount: 8,
 };
 
+/** Day-care / observation wards (OPD day-care A/B or a ward named day-care / observation). */
+export const isDaycareWardBed = (b: FlatCampusBed) => b.wardId === 'wd-opd-a' || b.wardId === 'wd-opd-b' || /daycare|day care|observation/i.test(b.wardName || '');
+
 export const patientJourneyService = {
   // --- Patients ---
   getPatients(): SharedPatient[] {
@@ -1279,6 +1284,8 @@ export const patientJourneyService = {
 
   // --- Queue ---
   getQueue(): SharedQueueToken[] {
+    // Signed in: today's OPD visits from the server (the browser queue is not used)
+    if (opdApiMode()) return OpdApi.queue();
     const raw = localStorage.getItem('nh_queue');
     if (!raw) {
       localStorage.setItem('nh_queue', JSON.stringify(DEFAULT_QUEUE));
@@ -1292,6 +1299,10 @@ export const patientJourneyService = {
   },
 
   addQueueToken(token: SharedQueueToken): SharedQueueToken {
+    if (opdApiMode()) {
+      console.warn('addQueueToken is browser-only; signed in, issue visits through opdActions.issue');
+      return token;
+    }
     const list = this.getQueue();
     const updated = [token, ...list.filter((q) => q.token !== token.token)];
     localStorage.setItem('nh_queue', JSON.stringify(updated));
@@ -1302,6 +1313,7 @@ export const patientJourneyService = {
 
   /** Push today's desk-issued tokens to billing (run once when the reception desk opens). */
   syncTodayQueueToBilling(): void {
+    if (opdApiMode()) return; // visits are already on the server
     const today = localDay(new Date());
     queueOpdSync(this.getQueue().filter((q) => {
       const m = DESK_TOKEN_ID.exec(q.id || '');
@@ -1310,6 +1322,10 @@ export const patientJourneyService = {
   },
 
   updateQueueStatus(tokenNo: number, status: string): void {
+    if (opdApiMode()) {
+      console.warn('updateQueueStatus is browser-only; signed in, use opdActions');
+      return;
+    }
     const list = this.getQueue();
     const updated = list.map((q) => (q.token === tokenNo ? { ...q, status } : q));
     localStorage.setItem('nh_queue', JSON.stringify(updated));
@@ -1318,6 +1334,10 @@ export const patientJourneyService = {
   },
 
   updateQueueToken(tokenNo: number, updates: Partial<SharedQueueToken>): void {
+    if (opdApiMode()) {
+      console.warn('updateQueueToken is browser-only; signed in, use opdActions', updates);
+      return;
+    }
     const list = this.getQueue();
     const updated = list.map((q) => (q.token === tokenNo ? { ...q, ...updates } : q));
     localStorage.setItem('nh_queue', JSON.stringify(updated));
@@ -1326,6 +1346,10 @@ export const patientJourneyService = {
   },
 
   deleteQueueToken(tokenNo: number): void {
+    if (opdApiMode()) {
+      console.warn('deleteQueueToken is browser-only; signed in, cancel through opdActions');
+      return;
+    }
     const list = this.getQueue();
     const updated = list.filter((q) => q.token !== tokenNo);
     localStorage.setItem('nh_queue', JSON.stringify(updated));
@@ -1564,6 +1588,7 @@ export const patientJourneyService = {
 
   // --- Advance appointments (front desk) ---
   getAppointments(): SharedAppointment[] {
+    if (opdApiMode()) return OpdApi.appointments();
     try {
       return JSON.parse(localStorage.getItem('nh_appointments') || '[]');
     } catch {
@@ -1590,6 +1615,7 @@ export const patientJourneyService = {
 
   // --- Nurse station: bed charts, treatment room, handovers ---
   getNurseChart(): NurseChartEntry[] {
+    if (opdApiMode()) return OpdApi.chart();
     try {
       return JSON.parse(localStorage.getItem('nh_nurse_chart') || '[]');
     } catch {
@@ -1604,6 +1630,7 @@ export const patientJourneyService = {
   },
 
   getNurseProcedures(): NurseProcedure[] {
+    if (opdApiMode()) return OpdApi.procedures();
     try {
       return JSON.parse(localStorage.getItem('nh_nurse_procedures') || '[]');
     } catch {
@@ -1652,6 +1679,7 @@ export const patientJourneyService = {
   },
 
   getDoctorSessions(): Record<string, DoctorSession> {
+    if (opdApiMode()) return OpdApi.sessions();
     try {
       return JSON.parse(localStorage.getItem('nh_doctor_sessions') || '{}');
     } catch {
@@ -1660,6 +1688,10 @@ export const patientJourneyService = {
   },
 
   setDoctorSession(session: DoctorSession): DoctorSession {
+    if (opdApiMode()) {
+      void OpdApi.call('put', '/opd/doctor-status/', { doctor: session.doctor, status: session.status, until: session.until, note: session.note });
+      return session;
+    }
     localStorage.setItem('nh_doctor_sessions', JSON.stringify({ ...this.getDoctorSessions(), [session.doctor]: session }));
     window.dispatchEvent(new Event('nh_data_sync'));
     return session;
@@ -1680,6 +1712,7 @@ export const patientJourneyService = {
   },
 
   getConsultDraft<T = unknown>(tokenId: string): T | null {
+    if (opdApiMode() && OpdApi.visit(tokenId)) return (OpdApi.draftOf(tokenId) as T) ?? null;
     try {
       return (JSON.parse(localStorage.getItem('nh_consult_drafts') || '{}') as Record<string, T>)[tokenId] ?? null;
     } catch {
@@ -1700,6 +1733,7 @@ export const patientJourneyService = {
   },
 
   getRoundNotes(): RoundNote[] {
+    if (opdApiMode()) return OpdApi.rounds();
     try {
       return JSON.parse(localStorage.getItem('nh_round_notes') || '[]');
     } catch {
@@ -1714,6 +1748,7 @@ export const patientJourneyService = {
   },
 
   getDoctorBlocks(): DoctorBlock[] {
+    if (opdApiMode()) return OpdApi.blocks();
     try {
       return JSON.parse(localStorage.getItem('nh_doctor_blocks') || '[]');
     } catch {
@@ -1722,17 +1757,26 @@ export const patientJourneyService = {
   },
 
   addDoctorBlock(b: DoctorBlock): DoctorBlock {
+    if (opdApiMode()) {
+      void OpdApi.call('post', '/opd/doctor-blocks/', { doctor: b.doctor, date: b.date, all_day: b.allDay, from: b.from, to: b.to, reason: b.reason });
+      return b;
+    }
     localStorage.setItem('nh_doctor_blocks', JSON.stringify([b, ...this.getDoctorBlocks()]));
     window.dispatchEvent(new Event('nh_data_sync'));
     return b;
   },
 
   removeDoctorBlock(id: string): void {
+    if (opdApiMode()) {
+      void OpdApi.call('delete', `/opd/doctor-blocks/${id}/`);
+      return;
+    }
     localStorage.setItem('nh_doctor_blocks', JSON.stringify(this.getDoctorBlocks().filter((b) => b.id !== id)));
     window.dispatchEvent(new Event('nh_data_sync'));
   },
 
   getOpdAdminLog(): OpdAdminLogEntry[] {
+    if (opdApiMode()) return OpdApi.auditLog();
     try {
       return JSON.parse(localStorage.getItem('nh_opd_admin_log') || '[]');
     } catch {
@@ -1741,6 +1785,11 @@ export const patientJourneyService = {
   },
 
   addOpdAdminLog(e: OpdAdminLogEntry): OpdAdminLogEntry {
+    if (opdApiMode()) {
+      // the desk's own wording of the change, kept beside the server's record of the published settings
+      void OpdApi.call('post', '/opd/admin-audit/', { kind: e.kind, subject: e.subject, change: e.change, before: e.before, after: e.after });
+      return e;
+    }
     localStorage.setItem('nh_opd_admin_log', JSON.stringify([e, ...this.getOpdAdminLog()].slice(0, 3000)));
     window.dispatchEvent(new Event('nh_data_sync'));
     return e;
@@ -1826,6 +1875,12 @@ export const patientJourneyService = {
   },
 
   getFlatBedsList(): FlatCampusBed[] {
+    const list = this.getLocalFlatBedsList();
+    // Signed in: who is in a day-care bed comes from the server
+    return opdApiMode() ? OpdApi.overlayBeds(list, isDaycareWardBed) : list;
+  },
+
+  getLocalFlatBedsList(): FlatCampusBed[] {
     const buildings = getCampusBuildings();
     const result: FlatCampusBed[] = [];
 
@@ -2060,6 +2115,18 @@ export const patientJourneyService = {
 
   // --- Doctor Prescriptions ---
   getPrescriptions(): SharedPrescription[] {
+    if (opdApiMode()) {
+      // Today's from the server; older ones (and anything not yet on the server) from this browser's copy
+      const server = OpdApi.prescriptions();
+      const seen = new Set(server.map((r) => r.prescriptionNo));
+      let local: SharedPrescription[] = [];
+      try {
+        local = JSON.parse(localStorage.getItem('nh_prescriptions') || '[]');
+      } catch {
+        local = [];
+      }
+      return [...server, ...local.filter((r) => !seen.has(r.prescriptionNo) && !(r.tokenId && OpdApi.visit(r.tokenId)))];
+    }
     const raw = localStorage.getItem('nh_prescriptions');
     if (!raw) {
       localStorage.setItem('nh_prescriptions', JSON.stringify(DEFAULT_PRESCRIPTIONS));
@@ -2082,6 +2149,7 @@ export const patientJourneyService = {
 
   // --- Doctor Follow-ups ---
   getFollowUps(): SharedDoctorFollowUp[] {
+    if (opdApiMode()) return OpdApi.followUps();
     const raw = localStorage.getItem('nh_doctor_followups');
     if (!raw) {
       localStorage.setItem('nh_doctor_followups', JSON.stringify(DEFAULT_FOLLOW_UPS));
@@ -2095,6 +2163,7 @@ export const patientJourneyService = {
   },
 
   addFollowUp(fu: SharedDoctorFollowUp): SharedDoctorFollowUp {
+    if (opdApiMode()) return fu; // signed in, the server records the follow-up when the consultation is completed
     const list = this.getFollowUps();
     const updated = [fu, ...list];
     localStorage.setItem('nh_doctor_followups', JSON.stringify(updated));
@@ -2103,6 +2172,7 @@ export const patientJourneyService = {
   },
 
   updateFollowUpStatus(id: string, status: 'PENDING_BOOKING' | 'BOOKED' | 'COMPLETED', bookedSlot?: string): boolean {
+    if (opdApiMode()) return false; // the server moves follow-ups with their bookings
     const list = this.getFollowUps();
     const updated = list.map((f) => (f.id === id ? { ...f, status, bookedSlot: bookedSlot || f.bookedSlot } : f));
     localStorage.setItem('nh_doctor_followups', JSON.stringify(updated));
@@ -2134,6 +2204,7 @@ export const patientJourneyService = {
 
   // --- Emergency Alerts ---
   getEmergencyAlerts(): SharedEmergencyAlert[] {
+    if (opdApiMode()) return OpdApi.alerts();
     const raw = localStorage.getItem('nh_emergency_alerts');
     if (!raw) {
       localStorage.setItem('nh_emergency_alerts', JSON.stringify(DEFAULT_EMERGENCY_ALERTS));

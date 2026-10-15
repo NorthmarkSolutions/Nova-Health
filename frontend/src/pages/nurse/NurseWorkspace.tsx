@@ -7,6 +7,8 @@ import { useSearchParams } from 'react-router-dom';
 import { ListOrdered, Activity, BedDouble, Syringe, FlaskConical, FileText, ClipboardList, ClipboardCheck, Megaphone, Siren, PlayCircle, RefreshCw, Clock, AlertTriangle } from 'lucide-react';
 import { HmsShell, HmsNavGroup, HmsPageHeader, HmsKpiRow, HmsToast, useHmsToast, HmsBadge, HMS } from '../../components/hms';
 import { patientJourneyService, SharedQueueToken } from '../../services/patientJourneyService';
+import { opdApiMode } from '../../services/opdService';
+import { opdActions, useOpdApiErrors } from '../../services/opdActions';
 import { useAuth } from '../../context/AuthContext';
 import { RoleType } from '../../types';
 import { fmtWait, LONG_WAIT_MIN, tokenLabel, waitMinutes } from '../reception/receptionData';
@@ -66,6 +68,7 @@ export const NurseWorkspace: React.FC = () => {
   const initialSelect = params.get('select') || undefined;
   const data = useNurseData();
   const { toast, show, clear } = useHmsToast();
+  useOpdApiErrors(show);
   const [codeBlue, setCodeBlue] = useState<{ preset?: CodeBluePreset } | null>(null);
   const [newSignal, setNewSignal] = useState(0);
   const userName = (user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username : '') || 'Duty nurse';
@@ -80,14 +83,16 @@ export const NurseWorkspace: React.FC = () => {
   };
 
   const callToTriage = (t: SharedQueueToken) => {
-    patientJourneyService.updateQueueToken(t.token, { callingStatus: 'CALLING', callPoint: TRIAGE_POINT });
-    chime();
-    data.reload();
-    show(`${tokenLabel(t.token)} · ${t.patient} called to the triage station`);
+    void opdActions.callToTriage(t, TRIAGE_POINT).then((done) => {
+      data.reload();
+      if (!done) return;
+      chime();
+      show(`${tokenLabel(t.token)} · ${t.patient} called to the triage station`);
+    });
   };
   const startTriage = (t: SharedQueueToken) => {
-    if (!isReadyForDoctor(t)) patientJourneyService.updateQueueToken(t.token, { status: 'IN_TRIAGE', callingStatus: 'ACCEPTED', callPoint: undefined, triageStartTime: t.triageStartTime || new Date().toISOString() });
-    data.reload();
+    if (!isReadyForDoctor(t)) void opdActions.startTriage(t).then(() => data.reload());
+    else data.reload();
     goTo('vitals', isReadyForDoctor(t) ? 'ready' : 'intriage', String(t.token));
   };
 
@@ -118,7 +123,7 @@ export const NurseWorkspace: React.FC = () => {
     const stat = collect.filter((o) => o.priority === 'STAT').length;
     const crit = opd.filter(criticalOpen).length;
     const toGive = clinicDoses(data.prescriptions, data.procedures).filter((d) => !d.done).length;
-    const myAlerts = data.alerts.filter((a) => /^eal-\d{13}$/.test(a.id) && a.status === 'ACTIVE').length;
+    const myAlerts = data.alerts.filter((a) => (opdApiMode() || /^eal-\d{13}$/.test(a.id)) && a.status === 'ACTIVE').length;
     return { toTriage, longest, long, emergWaiting, inTriage, ready, triaged, avgToTriage: avgMin(triaged.map(timeToTriage)), obsDueNow, highNews, collect, blocked, stat, crit, inLab: opd.filter(inLab).length, toGive, myAlerts };
   }, [data, now]);
   const shift = currentShift(data.lastSync);

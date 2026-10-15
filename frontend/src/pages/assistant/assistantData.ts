@@ -13,6 +13,8 @@ import {
   SharedQueueToken,
 } from '../../services/patientJourneyService';
 import { LabApi, labApiMode } from '../../services/labService';
+import api from '../../services/api';
+import { opdApiMode } from '../../services/opdService';
 import { useReceptionData, ReceptionData, DeskDoctor, sameDoctor, issuedAt } from '../reception/receptionData';
 import { isTodayIso } from '../nurse/nurseData';
 
@@ -76,6 +78,17 @@ export const useAssistantData = (userId: string, opts: { storagePrefix?: string;
     };
   }, []);
 
+  // Signed in: the doctors this login may act for come from the server (assistant -> assigned doctors)
+  const [assigned, setAssigned] = useState<string[] | null>(null);
+  useEffect(() => {
+    if (!opdApiMode()) return;
+    let live = true;
+    api.get<{ doctors: Array<{ name: string }> }>('/opd/my-doctors/').then((r) => live && setAssigned(r.data.doctors.map((d) => d.name))).catch(() => live && setAssigned(null));
+    return () => {
+      live = false;
+    };
+  }, [userId]);
+
   const setDoctorId = (id: string) => {
     try {
       localStorage.setItem(keyFor(userId, opts.storagePrefix), id);
@@ -85,7 +98,13 @@ export const useAssistantData = (userId: string, opts: { storagePrefix?: string;
     setDoctorIdState(id);
   };
 
-  const doctor = base.doctors.find((d) => d.id === doctorId) || (opts.preferName ? base.doctors.find((d) => sameDoctor(d.name, opts.preferName)) : undefined) || null;
+  const allowed = (d: DeskDoctor) => !assigned || assigned.some((n) => sameDoctor(d.name, n));
+  const doctors = assigned ? base.doctors.filter(allowed) : base.doctors;
+  const doctor =
+    doctors.find((d) => d.id === doctorId) ||
+    (opts.preferName ? doctors.find((d) => sameDoctor(d.name, opts.preferName)) : undefined) ||
+    (assigned && doctors.length === 1 ? doctors[0] : undefined) ||
+    null;
   const now = base.lastSync.getTime();
   const labOrders = useMemo(
     () =>
@@ -100,6 +119,7 @@ export const useAssistantData = (userId: string, opts: { storagePrefix?: string;
 
   return {
     ...base,
+    doctors,
     reload,
     doctor,
     setDoctorId,

@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { BedDouble, NotebookPen } from 'lucide-react';
 import { HmsMasterDetail, HmsListRow, HmsBadge, HmsButton, HmsDetailHeader, HmsStatStrip, HmsDetailBody, HmsDetailFooter, HmsSection, HmsRow, HmsNotice, HmsEmpty, HmsModal, HmsField, TEXTAREA, HMS } from '../../components/hms';
 import { patientJourneyService, FlatCampusBed } from '../../services/patientJourneyService';
+import { opdActions } from '../../services/opdActions';
 import { MONO } from '../reception/receptionData';
 import { Choice } from '../nurse/NurseModals';
 import { NEWS_BAND, bandOfScore, chartFor, clock, isTodayDate } from '../nurse/nurseData';
@@ -135,10 +136,13 @@ export const DocWardView: React.FC<DocWardViewProps> = ({ data, act, initialFilt
                 disabled={note.trim().length < 5}
                 onClick={() => {
                   const occ = writing.bed.inpatientDetails!;
-                  patientJourneyService.addRoundNote({ id: `rn-${new Date().getTime()}`, bedId: writing.bed.id, admissionNo: occ.ipdAdmissionNo, uhid: occ.uhid, patientName: occ.patientName, doctor: data.doctor?.name || act.userName, at: new Date().toISOString(), note: note.trim(), plan });
-                  setWriting(null);
-                  data.reload();
-                  act.notify(`Round note saved for ${occ.patientName}`);
+                  const w = writing;
+                  void opdActions.roundNote(w, note.trim(), plan, () => patientJourneyService.addRoundNote({ id: `rn-${new Date().getTime()}`, bedId: w.bed.id, admissionNo: occ.ipdAdmissionNo, uhid: occ.uhid, patientName: occ.patientName, doctor: data.doctor?.name || act.userName, at: new Date().toISOString(), note: note.trim(), plan })).then((ok) => {
+                    data.reload();
+                    if (!ok) return;
+                    setWriting(null);
+                    act.notify(`Round note saved for ${occ.patientName}`);
+                  });
                 }}
               >
                 Save note

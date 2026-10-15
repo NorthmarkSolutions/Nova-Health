@@ -5,6 +5,7 @@ import React, { useRef, useState } from 'react';
 import { Save, Send, X, Plus, Megaphone } from 'lucide-react';
 import { HmsMasterDetail, HmsListRow, HmsBadge, HmsButton, HmsDetailHeader, HmsStatStrip, HmsDetailBody, HmsDetailFooter, HmsSection, HmsNotice, HmsEmpty, HmsField, HmsToggle, INPUT, TEXTAREA, HMS, initialsOf } from '../../components/hms';
 import { patientJourneyService, SharedQueueToken } from '../../services/patientJourneyService';
+import { opdActions } from '../../services/opdActions';
 import { MONO, fmtWait, tokenLabel, waitMinutes } from '../reception/receptionData';
 import { Choice, ObsFields, NewsPanel } from './NurseModals';
 import { NurseActions, NurseData, CATEGORIES, TriageCategory, EMPTY_OBS, ObsForm, obsOf, news2, suggestedCategory, categoryOf, byTriageOrder, isInTriage, isToTriage, isReadyForDoctor, isEmergency, nurseStatusOf, parseBp, TRIAGE_POINT } from './nurseData';
@@ -209,8 +210,8 @@ const TriageForm: React.FC<{ t: SharedQueueToken; data: NurseData; act: NurseAct
     return updates;
   };
 
-  const save = (send: boolean) => {
-    patientJourneyService.updateQueueToken(t.token, payload(send));
+  const save = async (send: boolean) => {
+    if (!(await opdActions.saveTriage(t, payload(send), send))) return; // refused: the reason is shown, the form is kept
     drafts.current.delete(t.id);
     setDirty(false);
     onDirty(t.id, false);

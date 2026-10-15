@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { FileUp, Activity, UserCheck } from 'lucide-react';
 import { HmsModal, HmsButton, HmsField, HmsNotice, INPUT, HMS } from '../../components/hms';
 import { patientJourneyService, DoctorSession, PatientDocument, SharedQueueToken } from '../../services/patientJourneyService';
+import { opdActions } from '../../services/opdActions';
 import { PatientPicker } from '../reception/ReceptionModals';
 import { patientName, todayIso, tokenLabel } from '../reception/receptionData';
 import { Choice, ObsFields, NewsPanel } from '../nurse/NurseModals';
@@ -153,9 +154,9 @@ export const BasicVitalsModal: React.FC<{ token: SharedQueueToken; userName: str
             onClick={() => {
               const o = obsOf(f);
               const r = news2(o, token.age);
-              patientJourneyService.updateQueueToken(token.token, {
+              void opdActions.saveTriage(token, {
                 vitals: { ...(token.vitals || {}), bp: `${f.sys}/${f.dia}`, pulse: o.pulse, temp: o.tempF, spo2: o.spo2, respiratoryRate: o.rr, avpu: o.avpu, onOxygen: f.onOxygen || undefined, news2: r?.score, weight: weight ? Number(weight) : token.vitals?.weight, recordedAt: new Date().toISOString(), recordedBy: `${userName} (chamber desk)` } as SharedQueueToken['vitals'],
-              });
+              }, false);
               onDone();
             }}
           >

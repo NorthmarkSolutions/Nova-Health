@@ -3,6 +3,7 @@ from django.db import models
 from apps.patients.models import Patient
 from apps.accounts.models import DoctorProfile
 from apps.appointments.models import Appointment
+from apps.accounts.models import User
 
 class Consultation(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -16,6 +17,15 @@ class Consultation(models.Model):
     icd10_codes = models.JSONField(default=list, blank=True)
     clinical_notes = models.TextField(blank=True, null=True)
     follow_up_date = models.DateField(null=True, blank=True)
+    visit = models.OneToOneField('opd.OpdVisit', on_delete=models.SET_NULL, null=True, blank=True, related_name='consultation')
+    advice = models.TextField(blank=True, default='')
+    referral = models.JSONField(null=True, blank=True)
+    status = models.CharField(max_length=10, default='FINAL')
+    # performed_by = who typed it; on_behalf_of = the doctor when the assistant entered it (co-sign queue)
+    performed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    on_behalf_of = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    co_signed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    co_signed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -35,6 +45,9 @@ class Prescription(models.Model):
     instructions = models.TextField(blank=True, null=True)
     follow_up_instructions = models.TextField(blank=True, null=True)
     status = models.CharField(max_length=20, default='ACTIVE')
+    visit = models.ForeignKey('opd.OpdVisit', on_delete=models.SET_NULL, null=True, blank=True, related_name='prescriptions')
+    performed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    on_behalf_of = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -53,6 +66,9 @@ class PrescriptionItem(models.Model):
     duration_days = models.IntegerField(default=5)
     route = models.CharField(max_length=50, default='ORAL')
     instructions = models.CharField(max_length=255, blank=True, null=True)
+    timing = models.CharField(max_length=40, blank=True, default='')
+    is_clinic_dose = models.BooleanField(default=False)
+    line_no = models.PositiveSmallIntegerField(default=0)  # order on the prescription as written
 
     class Meta:
         db_table = 'prescription_items'

@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { BedDouble, UserPlus, ArrowRightLeft, LogOut, Sparkles } from 'lucide-react';
 import { HmsMasterDetail, HmsListRow, HmsBadge, HmsButton, HmsDetailHeader, HmsStatStrip, HmsDetailBody, HmsDetailFooter, HmsSection, HmsRow, HmsNotice, HmsEmpty, HmsField, HmsTone, INPUT } from '../../components/hms';
 import { patientJourneyService, FlatCampusBed } from '../../services/patientJourneyService';
+import { opdActions } from '../../services/opdActions';
 import { useCurrency } from '../../config/currency';
 import { AllocateBedModal, TransferBedModal, ReasonModal } from './ReceptionModals';
 import { DeskActions, ReceptionData, MONO, bedState, isDaycareBed } from './receptionData';
@@ -118,8 +119,7 @@ export const RecBedsView: React.FC<RecBedsViewProps> = ({ data, act, initialFilt
               icon={Sparkles}
               block
               onClick={() => {
-                patientJourneyService.markCampusBedCleaned(b.bed.id, act.userName);
-                done(`${b.bed.bedNumber} is clean and available`);
+                void opdActions.bedCleaned(b, act.userName).then((ok) => ok && done(`${b.bed.bedNumber} is clean and available`));
               }}
             >
               Mark cleaned
@@ -179,8 +179,9 @@ export const RecBedsView: React.FC<RecBedsViewProps> = ({ data, act, initialFilt
           options={['Treatment completed — home', 'Referred for admission (IPD)', 'Left against medical advice', 'Transferred out']}
           onClose={() => setDischarge(null)}
           onConfirm={(reason) => {
-            patientJourneyService.dischargeCampusBed(discharge.buildingId, discharge.floorId, discharge.wardId, discharge.bed.id);
-            done(`${discharge.bed.bedNumber} discharged · ${reason.toLowerCase()}`);
+            const b = discharge;
+            setDischarge(null);
+            void opdActions.dischargeBed(b, reason).then((ok) => ok && done(`${b.bed.bedNumber} discharged · ${reason.toLowerCase()}`));
           }}
         />
       )}

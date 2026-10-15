@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { BedDouble, Activity, ShieldAlert, LogOut, Printer } from 'lucide-react';
 import { HmsMasterDetail, HmsListRow, HmsBadge, HmsButton, HmsDetailHeader, HmsStatStrip, HmsDetailBody, HmsDetailFooter, HmsSection, HmsRow, HmsNotice, HmsEmpty, HMS } from '../../components/hms';
 import { patientJourneyService, FlatCampusBed } from '../../services/patientJourneyService';
+import { opdActions } from '../../services/opdActions';
 import { ReasonModal } from '../reception/ReceptionModals';
 import { MONO, printSlip } from '../reception/receptionData';
 import { ObservationModal, EscalateModal } from './NurseModals';
@@ -234,11 +235,12 @@ export const NurseObservationView: React.FC<NurseObservationViewProps> = ({ data
           onClose={() => setDischarge(null)}
           onConfirm={(reason) => {
             const b = discharge;
-            patientJourneyService.addNurseChartEntry({ id: `chart-${new Date().getTime()}`, chartKey: `${b.bed.id}|${b.bed.inpatientDetails?.ipdAdmissionNo || ''}`, bedId: b.bed.id, uhid: b.bed.inpatientDetails?.uhid || '', patientName: b.bed.inpatientDetails?.patientName || '', kind: 'NOTE', at: new Date().toISOString(), by: act.userName, note: `Discharged: ${reason}` });
-            patientJourneyService.dischargeCampusBed(b.buildingId, b.floorId, b.wardId, b.bed.id);
             setDischarge(null);
-            data.reload();
-            act.notify(`${b.bed.bedNumber} discharged · ${reason.toLowerCase()}`);
+            if (!opdActions.server()) patientJourneyService.addNurseChartEntry({ id: `chart-${new Date().getTime()}`, chartKey: `${b.bed.id}|${b.bed.inpatientDetails?.ipdAdmissionNo || ''}`, bedId: b.bed.id, uhid: b.bed.inpatientDetails?.uhid || '', patientName: b.bed.inpatientDetails?.patientName || '', kind: 'NOTE', at: new Date().toISOString(), by: act.userName, note: `Discharged: ${reason}` });
+            void opdActions.dischargeBed(b, reason).then((ok) => {
+              data.reload();
+              if (ok) act.notify(`${b.bed.bedNumber} discharged · ${reason.toLowerCase()}`);
+            });
           }}
         />
       )}

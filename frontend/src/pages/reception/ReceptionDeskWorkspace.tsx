@@ -4,9 +4,10 @@
 // store the clinical desks read, and desk tokens reach Billing automatically.
 import React, { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ListOrdered, CalendarCheck, Stethoscope, Users, CalendarHeart, Receipt, BedDouble, Store, Ticket, CalendarPlus, Megaphone, Tv, RefreshCw } from 'lucide-react';
+import { ListOrdered, CalendarCheck, Stethoscope, Users, CalendarHeart, Receipt, BedDouble, Store, Ticket, CalendarPlus, Megaphone, Tv, RefreshCw, BadgeIndianRupee } from 'lucide-react';
 import { HmsShell, HmsNavGroup, HmsPageHeader, HmsKpiRow, HmsToast, useHmsToast, HmsBadge, HmsNotice, HmsButton, HMS } from '../../components/hms';
 import { patientJourneyService, SharedAppointment, SharedPatient, SharedQueueToken } from '../../services/patientJourneyService';
+import { opdActions, useOpdApiErrors } from '../../services/opdActions';
 import { useAuth } from '../../context/AuthContext';
 import { useCurrency } from '../../config/currency';
 import { RoleType } from '../../types';
@@ -17,13 +18,14 @@ import { RecAppointmentsView } from './RecAppointmentsView';
 import { RecDoctorsView } from './RecDoctorsView';
 import { RecPatientsView } from './RecPatientsView';
 import { RecFollowUpsView } from './RecFollowUpsView';
+import { RecNoShowFeesView } from './RecNoShowFeesView';
 import { RecFeesView } from './RecFeesView';
 import { RecBedsView } from './RecBedsView';
 import { RecShiftView } from './RecShiftView';
 import { deskCollections } from './deskFees';
 import { ReceptionTvBoard } from './ReceptionTvBoard';
 
-const TABS = ['queue', 'appointments', 'doctors', 'patients', 'followups', 'fees', 'beds', 'shift'] as const;
+const TABS = ['queue', 'appointments', 'doctors', 'patients', 'followups', 'fees', 'noshow', 'beds', 'shift'] as const;
 type Tab = (typeof TABS)[number];
 // Old ?tab= values keep working
 const LEGACY: Record<string, Tab> = { billing: 'fees', search: 'patients', daycare: 'beds' };
@@ -89,6 +91,7 @@ const Desk: React.FC<{ params: URLSearchParams; setParams: ReturnType<typeof use
   const initialSelect = params.get('select') || undefined;
   const data = useReceptionData();
   const { toast, show, clear } = useHmsToast();
+  useOpdApiErrors(show);
   const [dialog, setDialog] = useState<Dialog>(null);
   const userName = (user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username : '') || 'Front desk';
   const supervisor = SUPERVISOR_ROLES.includes(role);
@@ -102,10 +105,12 @@ const Desk: React.FC<{ params: URLSearchParams; setParams: ReturnType<typeof use
   };
 
   const callToken = (t: SharedQueueToken) => {
-    patientJourneyService.updateQueueToken(t.token, { status: 'IN_CONSULTATION', callingStatus: 'CALLING', callPoint: undefined });
-    chime();
-    data.reload();
-    show(`Token ${tokenLabel(t.token)} · ${t.patient} called to ${t.room}`);
+    void opdActions.callIn(t, t.room).then((done) => {
+      data.reload();
+      if (!done) return;
+      chime();
+      show(`Token ${tokenLabel(t.token)} · ${t.patient} called to ${t.room}`);
+    });
   };
 
   const act: DeskActions = {
@@ -161,6 +166,7 @@ const Desk: React.FC<{ params: URLSearchParams; setParams: ReturnType<typeof use
       label: 'Money & beds',
       items: [
         { key: 'fees', label: 'Fee collection', icon: Receipt, count: m.due.length || undefined, alert: m.due.some((t) => t.status === 'COMPLETED') },
+        { key: 'noshow', label: 'No-show fees', icon: BadgeIndianRupee },
         { key: 'beds', label: 'Day-care beds', icon: BedDouble, count: m.bedsFree || undefined, alert: m.bedsCleaning > 0 },
         { key: 'shift', label: 'Shift & cash', icon: Store, alert: !shiftOpen },
       ],
@@ -310,6 +316,7 @@ const Desk: React.FC<{ params: URLSearchParams; setParams: ReturnType<typeof use
       {activeTab === 'patients' && <RecPatientsView key={key} data={data} act={act} initialFilter={initialFilter} initialSelect={initialSelect} />}
       {activeTab === 'followups' && <RecFollowUpsView key={key} data={data} act={act} initialFilter={initialFilter} />}
       {activeTab === 'fees' && <RecFeesView key={key} data={data} act={act} initialFilter={initialFilter} />}
+      {activeTab === 'noshow' && <RecNoShowFeesView key={key} act={act} initialFilter={initialFilter} />}
       {activeTab === 'beds' && <RecBedsView key={key} data={data} act={act} initialFilter={initialFilter} />}
       {activeTab === 'shift' && <RecShiftView key={key} data={data} act={act} onOpenShift={() => setDialog({ kind: 'shift', mode: 'open' })} onCloseShift={() => setDialog({ kind: 'shift', mode: 'close' })} />}
 

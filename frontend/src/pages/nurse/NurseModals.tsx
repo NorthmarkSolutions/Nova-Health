@@ -4,6 +4,7 @@ import React, { useMemo, useState } from 'react';
 import { Activity, Siren, FlaskConical, PhoneCall, Syringe, Send, ShieldAlert } from 'lucide-react';
 import { HmsModal, HmsButton, HmsField, HmsToggle, HmsNotice, HmsBadge, INPUT, TEXTAREA, HMS } from '../../components/hms';
 import { patientJourneyService, FlatCampusBed, NurseHandover, NurseProcedure } from '../../services/patientJourneyService';
+import { opdActions } from '../../services/opdActions';
 import { getVitalFlagDetails } from './vitalRanges';
 import { NurseData, NurseLabOrder, ClinicDose, NEWS_BAND, PROC_KIND, SHIFTS, HANDOVER_CHECKS, EMPTY_OBS, ObsForm, chartKeyOf, news2, obsOf, kindOfItem, Obs } from './nurseData';
 import { tokenLabel } from '../reception/receptionData';
@@ -129,7 +130,7 @@ export const ObservationModal: React.FC<{ bed: FlatCampusBed; userName: string; 
             disabled={!ok}
             title={ok ? undefined : 'BP, pulse and SpO₂ are required'}
             onClick={() => {
-              patientJourneyService.addNurseChartEntry({
+              void opdActions.chartEntry(bed, {
                 id: `chart-${new Date().getTime()}`,
                 chartKey: chartKeyOf(bed),
                 bedId: bed.bed.id,
@@ -148,8 +149,7 @@ export const ObservationModal: React.FC<{ bed: FlatCampusBed; userName: string; 
                 pain: pain === '' ? undefined : Number(pain),
                 news2: r?.score,
                 note: note.trim() || undefined,
-              });
-              onDone(r?.score ?? null);
+              }).then((res) => res.ok && onDone(r?.score ?? null));
             }}
           >
             Save observation
@@ -198,8 +198,8 @@ export const EscalateModal: React.FC<{ bed: FlatCampusBed; data: NurseData; user
             disabled={!to || reason.trim().length < 5}
             onClick={() => {
               const now = new Date();
-              patientJourneyService.addNurseChartEntry({ id: `chart-${now.getTime()}`, chartKey: chartKeyOf(bed), bedId: bed.bed.id, uhid: occ.uhid, patientName: occ.patientName, kind: 'ESCALATION', at: now.toISOString(), by: userName, escalatedTo: to, note: reason.trim() });
-              patientJourneyService.raiseEmergencyAlert({ id: `eal-${now.getTime()}`, callTime: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), location: `${bed.wardName} · ${bed.bed.bedNumber}`, patientName: occ.patientName, age: occ.age, gender: occ.gender, triagePriority: urgency, presentingCondition: `Nurse escalation to ${to}: ${reason.trim()}`, status: 'ACTIVE' });
+              void opdActions.chartEntry(bed, { id: `chart-${now.getTime()}`, chartKey: chartKeyOf(bed), bedId: bed.bed.id, uhid: occ.uhid, patientName: occ.patientName, kind: 'ESCALATION', at: now.toISOString(), by: userName, escalatedTo: to, note: reason.trim() });
+              void opdActions.raiseAlert({ id: `eal-${now.getTime()}`, callTime: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), location: `${bed.wardName} · ${bed.bed.bedNumber}`, patientName: occ.patientName, age: occ.age, gender: occ.gender, triagePriority: urgency, presentingCondition: opdActions.server() ? reason.trim() : `Nurse escalation to ${to}: ${reason.trim()}`, status: 'ACTIVE' }, { bedId: bed.bed.id, kind: 'ESCALATION', escalatedTo: to });
               onDone(to);
             }}
           >
@@ -253,8 +253,9 @@ export const CodeBlueModal: React.FC<{ data: NurseData; preset?: { patientName?:
             disabled={location.trim().length < 3 || condition.trim().length < 3}
             onClick={() => {
               const now = new Date();
-              patientJourneyService.raiseEmergencyAlert({ id: `eal-${now.getTime()}`, callTime: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), location: location.trim(), patientName: picked?.name || 'Unknown person', age: picked?.age || 0, gender: picked?.gender || '—', triagePriority: level, presentingCondition: condition.trim(), status: 'ACTIVE' });
-              if (picked?.token !== undefined) patientJourneyService.updateQueueToken(picked.token, { status: 'EMERGENCY', priority: 'EMERGENCY', triageNotes: `EMERGENCY: ${condition.trim()}` });
+              void opdActions.raiseAlert({ id: `eal-${now.getTime()}`, callTime: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), location: location.trim(), patientName: picked?.name || 'Unknown person', age: picked?.age || 0, gender: picked?.gender || '—', triagePriority: level, presentingCondition: condition.trim(), status: 'ACTIVE' }, { uhid: picked?.uhid, kind: 'CODE_BLUE' });
+              const tok = picked?.token !== undefined ? patientJourneyService.getQueue().find((q) => q.token === picked.token) : undefined;
+              if (tok) void opdActions.markEmergency(tok, condition.trim());
               onDone(location.trim());
             }}
           >
@@ -420,7 +421,7 @@ export const AdministerModal: React.FC<{ dose?: ClinicDose; data: NurseData; use
             disabled={!ok}
             onClick={() => {
               if (!patient) return;
-              const p = patientJourneyService.addNurseProcedure({
+              const p: NurseProcedure = {
                 id: `proc-${new Date().getTime()}`,
                 uhid: patient.uhid,
                 patientName: patient.name,
@@ -437,8 +438,8 @@ export const AdministerModal: React.FC<{ dose?: ClinicDose; data: NurseData; use
                 note: note.trim() || undefined,
                 at: new Date().toISOString(),
                 by: userName,
-              });
-              onDone(p);
+              };
+              void opdActions.recordProcedure(p, medicine && rights.every(Boolean)).then((done) => done && onDone(p));
             }}
           >
             {status === 'REFUSED' ? 'Record refusal' : 'Record as given'}

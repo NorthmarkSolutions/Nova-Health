@@ -523,6 +523,9 @@ class BillingCoreService:
                 receipt=receipt_obj
             )
 
+            from .accounts_bridge import publish_invoice_settlement
+            publish_invoice_settlement(invoice, created_payments)
+
             return {
                 'invoice': invoice,
                 'payments': created_payments,
@@ -1574,7 +1577,8 @@ class DepartmentTariffSyncService:
 
 class DepartmentChargeIntegrationService:
     @staticmethod
-    def emit_opd_consultation_charge(appointment) -> dict:
+    def emit_opd_consultation_charge(appointment, fee=None) -> dict:
+        """`fee` = the fee quoted for this visit by the OPD fee master; when given it overrides the tariff price."""
         TariffGovernanceService.sync_due_versions()
         from apps.appointments.models import Appointment
         if isinstance(appointment, (str, int)):
@@ -1638,7 +1642,7 @@ class DepartmentChargeIntegrationService:
                 }
             )
 
-        unit_price = Decimal(str(tariff.base_price))
+        unit_price = Decimal(str(fee)) if fee not in (None, '') else Decimal(str(tariff.base_price))
         tax_rate = Decimal(str(tariff.gst_rate))
         tax_amount = (unit_price * tax_rate / Decimal('100.00')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
         total_amount = unit_price + tax_amount

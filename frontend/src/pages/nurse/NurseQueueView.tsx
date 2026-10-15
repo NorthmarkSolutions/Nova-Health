@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Megaphone, Activity, ShieldAlert, ArrowRight, PauseCircle, PlayCircle, UserRound } from 'lucide-react';
 import { HmsMasterDetail, HmsListRow, HmsBadge, HmsButton, HmsDetailHeader, HmsStatStrip, HmsDetailBody, HmsDetailFooter, HmsSection, HmsRow, HmsNotice, HmsEmpty, initialsOf } from '../../components/hms';
 import { patientJourneyService, SharedQueueToken } from '../../services/patientJourneyService';
+import { opdActions } from '../../services/opdActions';
 import { ReasonModal } from '../reception/ReceptionModals';
 import { MONO, fmtWait, LONG_WAIT_MIN, tokenLabel, waitMinutes } from '../reception/receptionData';
 import { NurseActions, NurseData, NURSE_ACTIVE, NEWS_BAND, bandOfScore, byTriageOrder, categoryOf, clock, isCalledToTriage, isEmergency, isInTriage, isReadyForDoctor, isToTriage, nurseStatusOf, toCollect, isResult, criticalOpen } from './nurseData';
@@ -131,12 +132,12 @@ export const NurseQueueView: React.FC<NurseQueueViewProps> = ({ data, act, initi
               </HmsButton>
             )}
             {t.status === 'HOLD' ? (
-              <HmsButton icon={PlayCircle} block onClick={() => { patientJourneyService.updateQueueToken(t.token, { status: 'WAITING' }); data.reload(); act.notify(`${tokenLabel(t.token)} back in the triage queue`); }}>
+              <HmsButton icon={PlayCircle} block onClick={() => { void opdActions.resume(t).then((done) => { data.reload(); if (done) { act.notify(`${tokenLabel(t.token)} back in the triage queue`); } }); }}>
                 Back to queue
               </HmsButton>
             ) : (
               isToTriage(t) && !isEmergency(t) && (
-                <HmsButton icon={PauseCircle} block title="Patient stepped away (e.g. gone for X-ray or to the cashier)" onClick={() => { patientJourneyService.updateQueueToken(t.token, { status: 'HOLD', callingStatus: 'IDLE', callPoint: undefined }); data.reload(); act.notify(`${tokenLabel(t.token)} on hold`); }}>
+                <HmsButton icon={PauseCircle} block title="Patient stepped away (e.g. gone for X-ray or to the cashier)" onClick={() => { void opdActions.hold(t).then((done) => { data.reload(); if (done) { act.notify(`${tokenLabel(t.token)} on hold`); } }); }}>
                   Put on hold
                 </HmsButton>
               )
@@ -199,10 +200,9 @@ export const NurseQueueView: React.FC<NurseQueueViewProps> = ({ data, act, initi
           options={['Doctor asked to see the patient directly', 'Follow-up visit — vitals not required', 'Patient too unwell to wait — doctor informed', 'Report review only']}
           onClose={() => setFastTrack(null)}
           onConfirm={(reason) => {
-            patientJourneyService.updateQueueToken(fastTrack.token, { status: 'READY_FOR_DOCTOR', callingStatus: 'IDLE', callPoint: undefined, triageNotes: `Triage skipped: ${reason}` });
+            const t = fastTrack;
             setFastTrack(null);
-            data.reload();
-            act.notify(`${tokenLabel(fastTrack.token)} sent to ${fastTrack.doctor.replace(/\s*\(.*\)$/, '')}`);
+            void opdActions.skipTriage(t, reason).then((done) => { data.reload(); if (done) { act.notify(`${tokenLabel(t.token)} sent to ${t.doctor.replace(/\s*\(.*\)$/, '')}`); } });
           }}
         />
       )}
@@ -215,10 +215,9 @@ export const NurseQueueView: React.FC<NurseQueueViewProps> = ({ data, act, initi
           danger
           onClose={() => setEmergency(null)}
           onConfirm={(reason) => {
-            patientJourneyService.updateQueueToken(emergency.token, { status: 'EMERGENCY', priority: 'EMERGENCY', triageNotes: `EMERGENCY: ${reason}` });
+            const t = emergency;
             setEmergency(null);
-            data.reload();
-            act.notify(`${tokenLabel(emergency.token)} marked as an emergency`);
+            void opdActions.markEmergency(t, reason).then((done) => { data.reload(); if (done) { act.notify(`${tokenLabel(t.token)} marked as an emergency`); } });
           }}
         />
       )}

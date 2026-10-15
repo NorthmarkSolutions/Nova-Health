@@ -14,7 +14,8 @@ import {
   issuedAt,
   OPD_DEPT,
 } from './receptionData';
-import { VisitKind, feeFor, recordDeskPayment } from './deskFees';
+import { VisitKind, deskInvoiceNo, feeFor, recordDeskInvoice, recordDeskPayment } from './deskFees';
+import { opdActions } from '../../services/opdActions';
 
 type Notify = (message: string, tone?: 'success' | 'error') => void;
 
@@ -338,15 +339,25 @@ export const WalkInModal: React.FC<{
       chronicConditions: p.chronicConditions || [],
       triageNotes: complaint.trim() || undefined,
     };
-    patientJourneyService.addQueueToken(t);
-    if (payNow && fee.total > 0) {
-      recordDeskPayment(t, mode, [
-        [`Consultation · ${doc.name} (${kind.replace('_', ' ').toLowerCase()})`, fee.consult],
-        ['Triage & vitals', fee.triage],
-        ['Registration (first visit)', fee.reg],
-      ]);
+    const lines: Array<[string, number]> = [
+      [`Consultation · ${doc.name} (${kind.replace('_', ' ').toLowerCase()})`, fee.consult],
+      ['Triage & vitals', fee.triage],
+      ['Registration (first visit)', fee.reg],
+    ];
+    const paying = payNow && fee.total > 0;
+    if (opdActions.server()) {
+      // The server numbers the token, records a desk fee with it and stages the cashier charge otherwise
+      const receipt = paying ? deskInvoiceNo() : '';
+      void opdActions.issue(t, { doctorRef: doc.id, payNow: paying, mode, receipt }).then((issued) => {
+        if (!issued) return;
+        if (paying) recordDeskInvoice(issued, lines, receipt);
+        onIssued({ ...issued, feePaid: paying, paymentMode: paying ? mode : 'UNPAID' });
+      });
+      return;
     }
-    onIssued({ ...t, feePaid: payNow && fee.total > 0, paymentMode: payNow ? mode : 'UNPAID' });
+    patientJourneyService.addQueueToken(t);
+    if (paying) void recordDeskPayment(t, mode, lines);
+    onIssued({ ...t, feePaid: paying, paymentMode: payNow ? mode : 'UNPAID' });
   };
 
   return (
@@ -483,9 +494,7 @@ export const BookingModal: React.FC<{
       bookedBy: existing?.bookedBy || bookedBy,
       bookedAt: existing?.bookedAt || new Date().toISOString(),
     } as SharedAppointment;
-    patientJourneyService.saveAppointment(a);
-    if (a.followUpId) patientJourneyService.updateFollowUpStatus(a.followUpId, 'BOOKED', `${fmtDate(a.date)} ${a.slot}`);
-    onBooked(a);
+    void opdActions.book(a, doc.id, existing?.id).then((saved) => saved && onBooked(saved));
   };
 
   return (
@@ -586,7 +595,7 @@ export const CollectFeeModal: React.FC<{ token: SharedQueueToken; data: Receptio
       footer={
         <>
           <HmsButton onClick={onClose}>Cancel</HmsButton>
-          <HmsButton variant="primary" icon={Banknote} disabled={shiftClosed || (mode === 'CASH' && tendered !== '' && Number(tendered) < total)} onClick={() => onPaid(recordDeskPayment(token, mode, [[`Consultation & desk charges · ${token.doctor}`, total]]), mode)}>
+          <HmsButton variant="primary" icon={Banknote} disabled={shiftClosed || (mode === 'CASH' && tendered !== '' && Number(tendered) < total)} onClick={() => void recordDeskPayment(token, mode, [[`Consultation & desk charges · ${token.doctor}`, total]]).then((inv) => inv && onPaid(inv, mode))}>
             Mark paid
           </HmsButton>
         </>
@@ -635,8 +644,8 @@ export const ReassignModal: React.FC<{ token: SharedQueueToken; data: ReceptionD
             disabled={!doc}
             onClick={() => {
               if (!doc) return;
-              patientJourneyService.updateQueueToken(token.token, { doctor: `${doc.name} (${doc.specialty})`, room: doc.room ? doc.room.name || doc.room.roomNumber : 'Chamber not assigned', callingStatus: 'IDLE' });
-              onDone(doc);
+              const room = doc.room ? doc.room.name || doc.room.roomNumber : 'Chamber not assigned';
+              void opdActions.reassign(token, doc.id, `${doc.name} (${doc.specialty})`, room).then((done) => done && onDone(doc));
             }}
           >
             Move
@@ -775,7 +784,7 @@ export const AllocateBedModal: React.FC<{ bed: FlatCampusBed; data: ReceptionDat
             disabled={!p || !doctor || reason.trim().length < 3}
             onClick={() => {
               if (!p) return;
-              patientJourneyService.allocateCampusBed(bed.buildingId, bed.floorId, bed.wardId, bed.bed.id, {
+              const allocateLocal = () => patientJourneyService.allocateCampusBed(bed.buildingId, bed.floorId, bed.wardId, bed.bed.id, {
                 patientName: patientName(p),
                 uhid: p.uhid,
                 ipdAdmissionNo: `DC-${Date.now().toString().slice(-6)}`,
@@ -789,7 +798,8 @@ export const AllocateBedModal: React.FC<{ bed: FlatCampusBed; data: ReceptionDat
                 primaryNurse: { id: 'opd-nurse', name: nurse.trim() || 'Duty nurse', shift: 'Morning' },
                 cleanlinessStatus: 'SANITIZED',
               });
-              onDone(patientName(p));
+              const docRef = data.doctors.find((d) => d.name === doctor)?.id || doctor;
+              void opdActions.allocateBed(bed, { uhid: p.uhid, doctor: docRef, nurse: nurse.trim(), reason: reason.trim() }, allocateLocal).then((done) => done && onDone(patientName(p)));
             }}
           >
             Allocate bed
@@ -836,7 +846,7 @@ export const TransferBedModal: React.FC<{ bed: FlatCampusBed; data: ReceptionDat
       footer={
         <>
           <HmsButton onClick={onClose}>Cancel</HmsButton>
-          <HmsButton variant="primary" icon={ArrowRightLeft} disabled={!t} onClick={() => { patientJourneyService.transferCampusBed(bed.bed.id, target); onDone(t ? t.bed.bedNumber : ''); }}>
+          <HmsButton variant="primary" icon={ArrowRightLeft} disabled={!t} onClick={() => void opdActions.transferBed(bed, t).then((done) => done && onDone(t ? t.bed.bedNumber : ''))}>
             Move patient
           </HmsButton>
         </>

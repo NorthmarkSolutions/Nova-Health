@@ -1255,6 +1255,7 @@ export function saveDepartmentTariffMaster(tariff: DepartmentTariffMaster): void
       updatedAt: new Date().toISOString(),
     };
     localStorage.setItem(TARIFF_STORAGE_KEY, JSON.stringify(current));
+    window.dispatchEvent(new CustomEvent('north_hospital_dept_tariff_updated', { detail: tariff.departmentId }));
 
     // Synchronize doctor consultationFee back to DepartmentDoctor records
     const doctors = getDepartmentDoctors(tariff.departmentId);

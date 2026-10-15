@@ -16,5 +16,6 @@ urlpatterns = [
     re_path(r'^api/v1/accounts/?', include('apps.accounting.urls')),
     re_path(r'^api/v1/integration/?', include('apps.accounting.integration_urls')),
     re_path(r'^api/v1/pharmacy/?', include('apps.pharmacy.urls')),
+    re_path(r'^api/v1/opd/', include('apps.opd.urls')),
     re_path(r'^api/pharmacy/?', include('apps.pharmacy.urls')),
 ]

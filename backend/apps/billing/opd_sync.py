@@ -102,10 +102,13 @@ class OpdFrontDeskSyncService:
                 released = pending.update(status=ChargeItemStatus.CANCELLED)
                 charge_state = 'PAID_AT_DESK' if desk_paid else 'CANCELLED'
             else:
-                DepartmentChargeIntegrationService.emit_opd_consultation_charge(apt)
+                DepartmentChargeIntegrationService.emit_opd_consultation_charge(apt, fee=token.get('totalFee'))
                 released = 0
                 charge_state = 'TO_COLLECT'
-        return {'appointment': apt.appointment_number, 'created': created, 'charge': charge_state, 'released': released}
+            from apps.opd.services import sync_from_desk
+            visit = sync_from_desk(apt, token, user=user)
+        return {'appointment': apt.appointment_number, 'created': created, 'charge': charge_state, 'released': released,
+                'visit': visit.visit_number if visit else None, 'visit_id': str(visit.id) if visit else None}
 
     @classmethod
     def sync_tokens(cls, tokens: list, user=None) -> dict:

@@ -5,6 +5,7 @@ import React, { useState } from 'react';
 import { Activity, ArrowRightLeft, CalendarX2 } from 'lucide-react';
 import { HmsMasterDetail, HmsListRow, HmsBadge, HmsButton, HmsDetailHeader, HmsStatStrip, HmsDetailBody, HmsDetailFooter, HmsSection, HmsRow, HmsNotice, HmsEmpty, HmsModal, HmsField, INPUT, HMS } from '../../components/hms';
 import { patientJourneyService, SharedQueueToken } from '../../services/patientJourneyService';
+import { opdActions } from '../../services/opdActions';
 import { DeskDoctor, LONG_WAIT_MIN, fmtWait, isWaiting, todayIso, tokenLabel, waitMinutes, sameDoctor } from '../reception/receptionData';
 import { OpdAdminActions, OpdAdminData, doctorState, logChange, recordOf, tokensOf } from './opdAdminData';
 
@@ -145,7 +146,7 @@ export const OaLiveView: React.FC<OaLiveViewProps> = ({ data, act, initialFilter
                 disabled={!targetDoc || picked.length === 0}
                 onClick={() => {
                   if (!targetDoc) return;
-                  moveFrom.filter((t: SharedQueueToken) => picked.includes(t.id)).forEach((t) => patientJourneyService.updateQueueToken(t.token, { doctor: targetDoc.name, room: targetDoc.room?.roomNumber || t.room, callingStatus: 'IDLE' }));
+                  moveFrom.filter((t: SharedQueueToken) => picked.includes(t.id)).forEach((t) => void opdActions.reassign(t, targetDoc.id, targetDoc.name, targetDoc.room?.roomNumber || t.room));
                   logChange(act.userName, 'LIVE', moving.name, `Moved ${picked.length} waiting patient${picked.length === 1 ? '' : 's'} to ${targetDoc.name}`);
                   const n = picked.length;
                   setMoving(null);

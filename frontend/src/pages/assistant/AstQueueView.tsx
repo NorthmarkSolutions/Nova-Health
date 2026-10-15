@@ -5,6 +5,7 @@ import React, { useState } from 'react';
 import { Megaphone, UserCheck, PauseCircle, PlayCircle, UserX, Activity, FileUp, Check, X } from 'lucide-react';
 import { HmsMasterDetail, HmsListRow, HmsBadge, HmsButton, HmsDetailHeader, HmsStatStrip, HmsDetailBody, HmsDetailFooter, HmsSection, HmsRow, HmsNotice, HmsEmpty, initialsOf } from '../../components/hms';
 import { patientJourneyService, SharedQueueToken } from '../../services/patientJourneyService';
+import { opdActions } from '../../services/opdActions';
 import { ReasonModal } from '../reception/ReceptionModals';
 import { MONO, fmtWait, LONG_WAIT_MIN, tokenLabel, waitMinutes } from '../reception/receptionData';
 import { categoryOf } from '../nurse/nurseData';
@@ -112,7 +113,7 @@ export const AstQueueView: React.FC<AstQueueViewProps> = ({ data, act, initialFi
             )}
             {isCalledIn(t) && (
               <div style={{ gridColumn: '1 / -1' }}>
-                <HmsButton variant="primary" icon={UserCheck} block onClick={() => { patientJourneyService.updateQueueToken(t.token, { callingStatus: 'ACCEPTED', seatedAt: new Date().toISOString() }); data.reload(); act.notify(`${t.patient} seated with ${data.doctor?.name}`); }}>
+                <HmsButton variant="primary" icon={UserCheck} block onClick={() => { void opdActions.seat(t, t.room).then((done) => { data.reload(); if (done) act.notify(`${t.patient} seated with ${data.doctor?.name}`); }); }}>
                   Patient seated with doctor
                 </HmsButton>
               </div>
@@ -128,7 +129,7 @@ export const AstQueueView: React.FC<AstQueueViewProps> = ({ data, act, initialFi
               </HmsButton>
             )}
             {isOnHold(t) && (
-              <HmsButton icon={PlayCircle} block onClick={() => { patientJourneyService.updateQueueToken(t.token, { chamberHold: undefined }); data.reload(); act.notify(`${tokenLabel(t.token)} back in the queue`); }}>
+              <HmsButton icon={PlayCircle} block onClick={() => { void opdActions.resume(t).then((done) => { data.reload(); if (done) act.notify(`${tokenLabel(t.token)} back in the queue`); }); }}>
                 Back to queue
               </HmsButton>
             )}
@@ -203,10 +204,12 @@ export const AstQueueView: React.FC<AstQueueViewProps> = ({ data, act, initialFi
           options={['Gone for a test / X-ray', 'Gone to the cash counter', 'Stepped out — not answering', 'Waiting for reports', 'Patient asked to wait']}
           onClose={() => setHold(null)}
           onConfirm={(reason) => {
-            patientJourneyService.updateQueueToken(hold.token, { chamberHold: reason, callingStatus: 'IDLE', status: isCalledIn(hold) ? (hold.vitals?.bp ? 'READY_FOR_DOCTOR' : 'WAITING') : hold.status });
+            const t = hold;
             setHold(null);
-            data.reload();
-            act.notify(`${tokenLabel(hold.token)} on hold · ${reason.toLowerCase()}`);
+            void opdActions.chamberHold(t, reason, isCalledIn(t) ? (t.vitals?.bp ? 'READY_FOR_DOCTOR' : 'WAITING') : t.status).then((done) => {
+              data.reload();
+              if (done) act.notify(`${tokenLabel(t.token)} on hold · ${reason.toLowerCase()}`);
+            });
           }}
         />
       )}
@@ -220,10 +223,12 @@ export const AstQueueView: React.FC<AstQueueViewProps> = ({ data, act, initialFi
           options={['Called three times — no answer', 'Patient left without being seen', 'Patient asked to cancel']}
           onClose={() => setNoShow(null)}
           onConfirm={(reason) => {
-            patientJourneyService.updateQueueToken(noShow.token, { status: 'NO_SHOW', callingStatus: 'IDLE', chamberHold: undefined, triageNotes: `No-show: ${reason}` });
+            const t = noShow;
             setNoShow(null);
-            data.reload();
-            act.notify(`${tokenLabel(noShow.token)} marked as a no-show`);
+            void opdActions.noShow(t, reason).then((done) => {
+              data.reload();
+              if (done) act.notify(`${tokenLabel(t.token)} marked as a no-show`);
+            });
           }}
         />
       )}

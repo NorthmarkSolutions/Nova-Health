@@ -5578,25 +5578,53 @@ class GSTService:
 class DailyCloseService:
     """Manages Supervisor daily operations close, blocker evaluation, and date locking"""
 
+    @staticmethod
+    def billing_reconciliation(business_date: date) -> dict:
+        """Money Billing collected on the date vs the receipts Accounts posted for it (front-desk fees shown apart)."""
+        from django.db.models import Sum
+        from apps.billing.models import Payment
+        billed = Payment.objects.filter(payment_date__date=business_date, payment_status='SUCCESS').aggregate(s=Sum('amount'))['s'] or Decimal('0.00')
+        posted = FinancialEvent.objects.filter(
+            business_date=business_date, source_department='billing', status=EventStatus.POSTED,
+            event_type__in=['billing.payment.collected', 'billing.advance.adjusted'],
+        ).aggregate(s=Sum('amount'))['s'] or Decimal('0.00')
+        desk = FinancialEvent.objects.filter(business_date=business_date, source_department='opd', status=EventStatus.POSTED,
+                                             event_type='billing.payment.collected').aggregate(s=Sum('amount'))['s'] or Decimal('0.00')
+        return {'billing_collected': billed, 'accounts_posted': posted, 'difference': billed - posted, 'front_desk_posted': desk}
+
     @classmethod
     def evaluate_blockers(cls, business_date: date, branch_id: str = 'MAIN') -> list:
         from .models import ApprovalRequest, Escalation, ApprovalStatus
         blockers = []
-        # Rule 1: All approvals for operations must be cleared
-        pending_count = ApprovalRequest.objects.filter(status=ApprovalStatus.PENDING).count()
+        # Rule 1: approvals raised on or before this date must be cleared (later ones belong to later days)
+        pending_count = ApprovalRequest.objects.filter(status=ApprovalStatus.PENDING, submitted_at__date__lte=business_date).count()
         if pending_count > 0:
             blockers.append(f"{pending_count} pending approvals across queues")
 
-        # Rule 2: All escalations must be forwarded or resolved
-        open_esc = Escalation.objects.filter(status='open').count()
+        # Rule 2: escalations raised on or before this date must be forwarded or resolved
+        open_esc = Escalation.objects.filter(status='open', created_at__date__lte=business_date).count()
         if open_esc > 0:
             blockers.append(f"{open_esc} escalations not yet forwarded to Accounts Manager")
 
+        # Rule 3: every rupee Billing collected that day is posted in Accounts
+        rec = cls.billing_reconciliation(business_date)
+        if rec['difference'] != Decimal('0.00'):
+            blockers.append(f"Billing collected {rec['billing_collected']:,.2f} but Accounts posted {rec['accounts_posted']:,.2f} "
+                            f"(difference {rec['difference']:,.2f})")
         return blockers
+
+    @staticmethod
+    def _section(title, screen, done, total, empty_note, pending_word='pending review'):
+        if not total:
+            return {'title': title, 'screen': screen, 'done': 0, 'total': 0, 'pct': '—', 'note': empty_note}
+        done = min(done, total)
+        return {'title': title, 'screen': screen, 'done': done, 'total': total, 'pct': f"{int(done / total * 100)}%",
+                'note': 'All reviewed' if done == total else f"{total - done} {pending_word}"}
 
     @classmethod
     def get_daily_close_status(cls, business_date: date, branch_id: str = 'MAIN') -> dict:
-        from .models import DailyCloseRun, ApprovalRequest, Escalation, Journal, VendorBill, BankTransaction, GSTBatch, CollectionCase
+        from .models import DailyCloseRun, ApprovalRequest, Escalation, Journal, VendorBill, BankTransaction, GSTBatch, CollectionCase, BankStatement
+        from django.db.models import Sum, Count, Max
         close_run, _ = DailyCloseRun.objects.get_or_create(
             branch_id=branch_id,
             business_date=business_date,
@@ -5604,55 +5632,70 @@ class DailyCloseService:
         )
         blockers = cls.evaluate_blockers(business_date, branch_id)
 
-        j_total = Journal.objects.filter(journal_date=business_date).count() or 5
-        j_done = Journal.objects.filter(journal_date=business_date, status__in=['posted', 'in_approval', 'approved', 'returned']).count() or 4
-
-        b_total = VendorBill.objects.all().count() or 6
-        b_done = VendorBill.objects.filter(status__in=['approved', 'with_manager', 'in_approval', 'returned']).count() or 5
-
-        r_total = BankTransaction.objects.all().count() or 10
-        r_done = BankTransaction.objects.filter(match_status='matched').count() or 7
-
-        c_cases = CollectionCase.objects.all()
-        c_due_esc = c_cases.filter(stage__in=['due_today', 'escalated']).count() or 4
-
-        gst_batches = GSTBatch.objects.all().count() or 3
-        gst_done = GSTBatch.objects.filter(status__in=['submitted', 'approved']).count() or 2
+        journals = Journal.objects.filter(journal_date=business_date).exclude(status__in=['cancelled', 'reversed'])
+        bills = VendorBill.objects.filter(invoice_date__lte=business_date).exclude(status__in=['cancelled', 'rejected'])
+        bank = BankTransaction.objects.filter(txn_date=business_date)
+        cases = CollectionCase.objects.filter(stage__in=['due_today', 'escalated'])
+        gst = GSTBatch.objects.filter(period_from__lte=business_date, period_to__gte=business_date)
+        rec = cls.billing_reconciliation(business_date)
+        matched = rec['difference'] == Decimal('0.00')
 
         sections = [
-            {'title': 'Journal Completion', 'screen': 'journals', 'done': j_done, 'total': j_total, 'pct': f"{int(j_done/j_total*100)}%", 'note': 'All reviewed' if j_done == j_total else f"{j_total - j_done} pending review"},
-            {'title': 'Vendor Bills Completion', 'screen': 'bills', 'done': b_done, 'total': b_total, 'pct': f"{int(b_done/b_total*100)}%", 'note': 'All reviewed' if b_done == b_total else f"{b_total - b_done} pending review"},
-            {'title': 'Bank Reconciliation Status', 'screen': 'recon', 'done': r_done, 'total': r_total, 'pct': f"{int(r_done/r_total*100)}%", 'note': f"{r_total - r_done} statement lines unmatched by executives"},
-            {'title': 'Receivable Review Status', 'screen': 'collections', 'done': max(0, c_due_esc - 1), 'total': c_due_esc, 'pct': '75%', 'note': '1 due/escalated account not reviewed'},
-            {'title': 'GST Review Status', 'screen': 'gst', 'done': gst_done, 'total': gst_batches, 'pct': f"{int(gst_done/gst_batches*100)}%", 'note': 'Ready for review'},
+            cls._section('Journal Completion', 'journals', journals.filter(status='posted').count(), journals.count(),
+                         'No journals dated today', 'not yet posted'),
+            cls._section('Vendor Bills Completion', 'bills', bills.filter(status__in=['approved', 'posted', 'paid', 'scheduled']).count(),
+                         bills.count(), 'No vendor bills due for review'),
+            cls._section('Bank Reconciliation Status', 'recon', bank.filter(match_status='matched').count(), bank.count(),
+                         'No bank statement lines for today', 'statement lines unmatched'),
+            cls._section('Receivable Review Status', 'collections', cases.filter(updated_at__date=business_date).count(), cases.count(),
+                         'No due or escalated accounts', 'due/escalated accounts not reviewed today'),
+            cls._section('GST Review Status', 'gst', gst.filter(status__in=['submitted', 'approved', 'filed']).count(), gst.count(),
+                         'No GST batch covers today', 'batches not submitted'),
+            {'title': 'Billing → Accounts', 'screen': 'journals', 'done': 1 if matched else 0, 'total': 1,
+             'pct': '100%' if matched else '0%',
+             'note': (f"Collected {rec['billing_collected']:,.2f} = posted {rec['accounts_posted']:,.2f}"
+                      + (f" · front desk {rec['front_desk_posted']:,.2f}" if rec['front_desk_posted'] else ''))
+             if matched else f"{rec['difference']:,.2f} collected but not posted"},
         ]
 
-        crit_count = ApprovalRequest.objects.filter(status='pending').exclude(risk_flags=[]).count()
-
+        pending = ApprovalRequest.objects.filter(status='pending', submitted_at__date__lte=business_date)
+        pending_n = pending.count()
+        crit_count = pending.exclude(risk_flags=[]).count()
+        open_esc = Escalation.objects.filter(status='open', created_at__date__lte=business_date).count()
         checks = [
-            {
-                'title': 'All approvals completed',
-                'ok': len(blockers) == 0 or 'pending approvals' not in str(blockers),
-                'desc': 'Every queue is clear' if 'pending approvals' not in str(blockers) else f"{ApprovalRequest.objects.filter(status='pending').count()} items still pending across queues"
-            },
-            {
-                'title': 'No pending critical items',
-                'ok': crit_count == 0,
-                'desc': 'No critical warnings open' if crit_count == 0 else f"{crit_count} pending items carry critical warnings"
-            },
-            {
-                'title': 'No unresolved exceptions',
-                'ok': Escalation.objects.filter(status='open').count() == 0,
-                'desc': 'All escalations forwarded or resolved' if Escalation.objects.filter(status='open').count() == 0 else f"{Escalation.objects.filter(status='open').count()} escalations not yet forwarded to Manager"
-            }
+            {'title': 'All approvals completed', 'ok': pending_n == 0,
+             'desc': 'Every queue is clear' if not pending_n else f"{pending_n} items still pending across queues"},
+            {'title': 'No pending critical items', 'ok': crit_count == 0,
+             'desc': 'No critical warnings open' if crit_count == 0 else f"{crit_count} pending items carry critical warnings"},
+            {'title': 'No unresolved exceptions', 'ok': open_esc == 0,
+             'desc': 'All escalations forwarded or resolved' if open_esc == 0 else f"{open_esc} escalations not yet forwarded to Manager"},
+            {'title': 'Billing fully posted', 'ok': matched,
+             'desc': 'Every collection is in the ledger' if matched else f"{rec['difference']:,.2f} not yet posted"},
         ]
 
-        timeline = [
-            {'t': f"Daily close status: {close_run.status.title()}", 'who': close_run.run_by.username if close_run.run_by else 'System', 'when': close_run.run_at.strftime('%H:%M') if close_run.run_at else '09:45'},
-            {'t': 'Billing shift 1 revenue batch received', 'who': 'Billing', 'when': '08:30'},
-            {'t': 'Bank statement imported · HDFC ••4417', 'who': 'System', 'when': '08:10'},
-            {'t': 'Day opened', 'who': 'System', 'when': '00:00'},
-        ]
+        # Timeline: only what actually happened on this date, newest first
+        def hhmm(dt):
+            return timezone.localtime(dt).strftime('%H:%M') if dt else ''
+
+        def who(user):
+            return (user.get_full_name() or user.username) if user else 'System'
+
+        timeline = []
+        if close_run.run_at:
+            timeline.append({'t': f"Daily close status: {close_run.status.title()}", 'who': who(close_run.run_by), 'when': hhmm(close_run.run_at)})
+        if close_run.locked_at:
+            timeline.append({'t': 'Operations locked', 'who': who(close_run.locked_by), 'when': hhmm(close_run.locked_at)})
+        for src, label in (('billing', 'Billing'), ('opd', 'Front desk'), ('pharmacy', 'Pharmacy'), ('lab', 'Lab')):
+            agg = FinancialEvent.objects.filter(business_date=business_date, source_department=src).aggregate(
+                n=Count('id'), s=Sum('amount'), last=Max('created_at'))
+            if agg['n']:
+                timeline.append({'t': f"{label}: {agg['n']} financial events received ({agg['s']:,.2f})", 'who': label, 'when': hhmm(agg['last'])})
+        for st in BankStatement.objects.filter(imported_at__date=business_date).select_related('bank_account', 'imported_by'):
+            timeline.append({'t': f"Bank statement imported · {st.bank_account} ({st.line_count} lines)", 'who': who(st.imported_by),
+                             'when': hhmm(st.imported_at)})
+        timeline.sort(key=lambda x: x['when'], reverse=True)
+        if not timeline:
+            timeline.append({'t': 'Nothing recorded for this date yet', 'who': 'System', 'when': ''})
 
         return {
             'business_date': business_date.strftime('%Y-%m-%d'),
@@ -5663,6 +5706,7 @@ class DailyCloseService:
             'sections': sections,
             'checks': checks,
             'timeline': timeline,
+            'billing_reconciliation': {k: str(v) for k, v in rec.items()},
         }
 
     @classmethod

@@ -2,6 +2,7 @@
 // documents, prescriptions, doctor status) comes from the chamber-desk hook, scoped to the signed-in doctor (matched
 // by name to the OPD doctor list; admins choose a doctor). Adds what only the doctor works with: emergency calls,
 // admitted / day-care patients under this doctor, ward-round notes, unavailable blocks and the nursing chart.
+import { opdApiMode } from '../../services/opdService';
 import { useCallback, useEffect, useState } from 'react';
 import {
   patientJourneyService,
@@ -174,7 +175,8 @@ export const localAllergyHit = (allergies: string[], line: RxLine) => {
 /* ---------------- emergency calls ---------------- */
 
 /** Calls raised in this system (nurse station); the seeded demo alerts are not shown as live. */
-export const liveAlerts = (alerts: SharedEmergencyAlert[]) => alerts.filter((a) => /^eal-\d{13}$/.test(a.id));
+// Signed in, every alert comes from the server and is live
+export const liveAlerts = (alerts: SharedEmergencyAlert[]) => (opdApiMode() ? alerts : alerts.filter((a) => /^eal-\d{13}$/.test(a.id)));
 
 /* ---------------- actions the views share ---------------- */
 

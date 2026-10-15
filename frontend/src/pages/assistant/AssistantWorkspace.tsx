@@ -7,6 +7,7 @@ import { useSearchParams } from 'react-router-dom';
 import { ListOrdered, CalendarCheck, Clock, FileText, FlaskConical, CalendarHeart, LogOut, Megaphone, FileUp, CalendarPlus, RefreshCw, Stethoscope, UserCheck } from 'lucide-react';
 import { HmsShell, HmsNavGroup, HmsPageHeader, HmsKpiRow, HmsToast, useHmsToast, HmsBadge, HmsNotice, HmsField, INPUT, HMS, PANEL } from '../../components/hms';
 import { patientJourneyService, SharedAppointment, SharedQueueToken } from '../../services/patientJourneyService';
+import { opdActions, useOpdApiErrors } from '../../services/opdActions';
 import { useAuth } from '../../context/AuthContext';
 import { BookingModal } from '../reception/ReceptionModals';
 import { LONG_WAIT_MIN, fmtWait, slotMinutes, todayIso, tokenLabel, waitMinutes, sameDoctor } from '../reception/receptionData';
@@ -59,6 +60,7 @@ export const AssistantWorkspace: React.FC = () => {
   const initialSelect = params.get('select') || undefined;
   const data = useAssistantData(user?.id ? String(user.id) : user?.username || '');
   const { toast, show, clear } = useHmsToast();
+  useOpdApiErrors(show);
   const [dialog, setDialog] = useState<Dialog>(null);
   const userName = (user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username : '') || 'Chamber desk';
   const doc = data.doctor;
@@ -72,10 +74,12 @@ export const AssistantWorkspace: React.FC = () => {
   };
 
   const callIn = (t: SharedQueueToken) => {
-    patientJourneyService.updateQueueToken(t.token, { status: 'IN_CONSULTATION', callingStatus: 'CALLING', callPoint: undefined, chamberHold: undefined, calledAt: new Date().toISOString(), room: doc?.room?.roomNumber || t.room });
-    chime();
-    data.reload();
-    show(`${tokenLabel(t.token)} · ${t.patient} called to ${doc?.room?.roomNumber || t.room}`);
+    void opdActions.callIn(t, doc?.room?.roomNumber || t.room).then((done) => {
+      data.reload();
+      if (!done) return;
+      chime();
+      show(`${tokenLabel(t.token)} · ${t.patient} called to ${doc?.room?.roomNumber || t.room}`);
+    });
   };
 
   const act: AssistantActions = {

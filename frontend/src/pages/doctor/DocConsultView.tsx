@@ -7,6 +7,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Megaphone, Save, FlaskConical, Send, CheckCircle2, Trash2, Plus, Repeat, AlertTriangle, ShieldCheck, Search, Eye, Play } from 'lucide-react';
 import { HmsBadge, HmsButton, HmsSection, HmsRow, HmsNotice, HmsEmpty, HmsField, HmsModal, HmsToggle, INPUT, TEXTAREA, HMS, PANEL, initialsOf } from '../../components/hms';
 import { patientJourneyService, SharedLabOrder, SharedPrescription, SharedQueueToken } from '../../services/patientJourneyService';
+import { OpdApi } from '../../services/opdService';
+import { opdActions } from '../../services/opdActions';
 import { pharmacyInventoryService, AllergyEvaluationResponse, MedicineItem } from '../../services/pharmacyInventoryService';
 import { LabApi, labApiMode } from '../../services/labService';
 import { MONO, tokenLabel, fmtDate } from '../reception/receptionData';
@@ -197,13 +199,13 @@ const ConsultForm: React.FC<{ t: SharedQueueToken; data: DoctorData; act: Doctor
   const labHits = labQ.trim() ? catalog.filter((n) => n.toLowerCase().includes(labQ.trim().toLowerCase()) && !d.labTests.includes(n)).slice(0, 8) : [];
 
   const saveDraft = (msg = true) => {
-    patientJourneyService.saveConsultDraft(t.id, d);
+    void opdActions.saveDraft(t, d);
     setDirty(false);
     if (msg) act.notify(`Draft saved for ${t.patient}`);
   };
 
-  const sendOrders = () => {
-    const all = [...d.labTests.map((n) => ({ n, radio: false })), ...d.radiology.map((n) => ({ n, radio: true }))];
+  const sendOrders = (radiologyOnly = false) => {
+    const all = [...(radiologyOnly ? [] : d.labTests.map((n) => ({ n, radio: false }))), ...d.radiology.map((n) => ({ n, radio: true }))];
     all.forEach(({ n, radio }, i) => {
       const order = patientJourneyService.addLabOrder(
         {
@@ -243,6 +245,19 @@ const ConsultForm: React.FC<{ t: SharedQueueToken; data: DoctorData; act: Doctor
 
   const sendForTests = () => {
     if (!d.labTests.length && !d.radiology.length) return act.notify('Choose the tests first', 'error');
+    if (opdActions.server()) {
+      // Lab tests go to the server with the visit (charges staged, visit waits for the reports); imaging stays a local order
+      const radio = d.radiology.length ? sendOrders(true) : 0;
+      const tests = d.labTests.map((name) => ({ name, priority: d.orderPriority, notes: [d.diagnosis, d.complaint].filter(Boolean).join(' — ') }));
+      void (tests.length ? OpdApi.sendForTests(t, tests, { ...d, labTests: [], radiology: [] }) : Promise.resolve(null)).then((v) => {
+        data.reload();
+        if (tests.length && !v) return;
+        const n = tests.length + radio;
+        act.notify(`${n} test${n === 1 ? '' : 's'} ordered · ${t.patient} will come back with the reports`);
+        act.goTo('queue');
+      });
+      return;
+    }
     const n = sendOrders();
     patientJourneyService.saveConsultDraft(t.id, { ...d, labTests: [], radiology: [] });
     patientJourneyService.updateQueueToken(t.token, { status: 'READY_FOR_DOCTOR', callingStatus: 'IDLE', chamberHold: `Sent for ${n} test${n === 1 ? '' : 's'} — review with reports` });
@@ -280,6 +295,31 @@ const ConsultForm: React.FC<{ t: SharedQueueToken; data: DoctorData; act: Doctor
       isDispensed: false,
       tokenId: t.id,
     };
+    if (opdActions.server()) {
+      // One server transaction: consultation, prescription, pharmacy order and lab orders, all on this visit
+      const radio = d.radiology.length ? sendOrders(true) : 0;
+      const v = await OpdApi.complete(t, {
+        diagnosis: rx.diagnosis, chief_complaint: rx.chiefComplaints, history: rx.clinicalNotes || '', examination: rx.examination || '',
+        icd10_codes: rx.diagnosisCode ? [rx.diagnosisCode] : [], advice: rx.advice || '',
+        referral: d.referTo ? { department: d.referTo, reason: d.referReason.trim() } : null,
+        follow_up_date: d.followUpDate || null, follow_up_reason: d.followUpReason.trim() || d.diagnosis.trim(), allergy_override_reason: override ? 'Allergy warning confirmed by the doctor' : '',
+        medicines: rx.items.map((i) => ({ name: i.medicineName, dose: i.dosage, frequency: i.frequency, days: i.durationDays, timing: i.timing || '', instructions: i.instructions || '' })),
+        tests: d.labTests.map((name) => ({ name, priority: d.orderPriority })),
+      });
+      setBusy(false);
+      if (!v) return; // refused: the reason is shown and the consultation stays open
+      const serverRx = v.prescriptions?.[0];
+      // Keep a copy for the print and checkout screens (the server holds the record)
+      patientJourneyService.addPrescription({ ...rx, prescriptionNo: serverRx?.number || rx.prescriptionNo });
+      if (d.followUpDate) patientJourneyService.addFollowUp({ id: `fu-${now.getTime()}`, uhid: t.uhid, patientName: t.patient, phone: t.phone, doctorName: doctor.name, prescribedOn: rx.date, followUpDate: d.followUpDate, reason: d.followUpReason.trim() || d.diagnosis.trim(), status: 'PENDING_BOOKING' });
+      patientJourneyService.saveConsultDraft(t.id, null);
+      data.reload();
+      const disp = serverRx?.dispenseOrders?.[0];
+      const n = d.labTests.length + radio;
+      act.notify(`${t.patient}: ${serverRx?.number || 'consultation saved'}${n ? ` · ${n} test${n === 1 ? '' : 's'} ordered` : ''}${d.followUpDate ? ` · follow-up ${fmtDate(d.followUpDate)}` : ''}${disp ? ` · pharmacy order ${disp.number}` : ''}`);
+      act.goTo('queue');
+      return;
+    }
     patientJourneyService.addPrescription(rx);
     const orders = sendOrders();
     if (d.followUpDate) patientJourneyService.addFollowUp({ id: `fu-${now.getTime()}`, uhid: t.uhid, patientName: t.patient, phone: t.phone, doctorName: doctor.name, prescribedOn: rx.date, followUpDate: d.followUpDate, reason: d.followUpReason.trim() || d.diagnosis.trim(), status: 'PENDING_BOOKING' });

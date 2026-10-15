@@ -5,6 +5,7 @@ import React, { useState } from 'react';
 import { LogOut, Printer, CalendarPlus, Check, ArrowRight } from 'lucide-react';
 import { HmsMasterDetail, HmsListRow, HmsBadge, HmsButton, HmsDetailHeader, HmsStatStrip, HmsDetailBody, HmsDetailFooter, HmsSection, HmsRow, HmsNotice, HmsEmpty, HmsField, INPUT, initialsOf } from '../../components/hms';
 import { patientJourneyService, SharedQueueToken } from '../../services/patientJourneyService';
+import { opdActions } from '../../services/opdActions';
 import { MONO, fmtWait, sameDoctor, tokenLabel } from '../reception/receptionData';
 import { AssistantActions, AssistantData, consultMinutes, isSeen, isTodayToken, nextStops, printRx, rxFor } from './assistantData';
 
@@ -89,10 +90,13 @@ export const AstCheckoutView: React.FC<AstCheckoutViewProps> = ({ data, act, ini
                   block
                   onClick={() => {
                     const routes = todo.filter((s) => s.key !== 'followup' || !!fu).map((s) => s.label);
-                    patientJourneyService.updateQueueToken(t.token, { handoff: { at: new Date().toISOString(), by: act.userName, routes, note: note.trim() || undefined } });
-                    setNote('');
-                    data.reload();
-                    act.notify(`${t.patient} checked out${routes.length ? ` → ${routes.join(', ')}` : ' — home'}`);
+                    const n = note.trim() || undefined;
+                    void opdActions.checkout(t, routes, act.userName, n).then((done) => {
+                      data.reload();
+                      if (!done) return;
+                      setNote('');
+                      act.notify(`${t.patient} checked out${routes.length ? ` → ${routes.join(', ')}` : ' — home'}`);
+                    });
                   }}
                 >
                   {todo.length ? `Check out → ${todo.map((s) => s.label).join(', ')}` : 'Check out — patient can go home'}

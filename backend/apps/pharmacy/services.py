@@ -847,7 +847,8 @@ class PharmacyClinicalHandoffService:
             has_allergy_alert = False
             allergy_warnings = []
 
-            for item in prescription.items.all():
+            # clinic doses (injections, drips, nebulisation) are given in the OPD treatment room, not dispensed
+            for item in prescription.items.filter(is_clinic_dose=False):
                 med = cls.match_formulary_medicine(item.medication_name, item.generic_name)
                 qty = cls.parse_prescribed_quantity(item.dosage, item.frequency, item.duration_days)
 

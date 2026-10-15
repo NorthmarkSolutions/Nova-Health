@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { CalendarCheck, LogIn, CalendarClock, X, UserX, Copy, CalendarPlus } from 'lucide-react';
 import { HmsMasterDetail, HmsListRow, HmsBadge, HmsButton, HmsDetailHeader, HmsStatStrip, HmsDetailBody, HmsDetailFooter, HmsSection, HmsRow, HmsNotice, HmsEmpty, HmsField, HmsTone, INPUT } from '../../components/hms';
 import { patientJourneyService, SharedAppointment, SharedQueueToken } from '../../services/patientJourneyService';
+import { opdActions } from '../../services/opdActions';
 import { useCurrency } from '../../config/currency';
 import { ReasonModal } from './ReceptionModals';
 import { DeskActions, ReceptionData, MONO, fmtDate, nextTokenNo, slotMinutes, todayIso, tokenLabel } from './receptionData';
@@ -85,10 +86,15 @@ export const RecAppointmentsView: React.FC<RecAppointmentsViewProps> = ({ data, 
       chronicConditions: p?.chronicConditions || [],
       triageNotes: a.notes,
     };
-    patientJourneyService.addQueueToken(t);
-    patientJourneyService.updateAppointment(a.id, { status: 'CHECKED_IN', token: no });
-    data.reload();
-    act.notify(`${a.patient} checked in · token ${tokenLabel(no)}`);
+    const local = async () => {
+      patientJourneyService.addQueueToken(t);
+      patientJourneyService.updateAppointment(a.id, { status: 'CHECKED_IN', token: no });
+      return no;
+    };
+    void opdActions.checkIn(a, a.fee + triage, local).then((token) => {
+      data.reload();
+      if (token !== null) act.notify(`${a.patient} checked in · token ${tokenLabel(token)}`);
+    });
   };
 
   const message = (a: SharedAppointment) =>
@@ -146,7 +152,7 @@ export const RecAppointmentsView: React.FC<RecAppointmentsViewProps> = ({ data, 
                 <HmsButton icon={CalendarClock} block onClick={() => act.reschedule(a)}>
                   Reschedule
                 </HmsButton>
-                <HmsButton variant="danger" icon={UserX} block disabled={!late(a)} title={late(a) ? undefined : 'Only after the slot has passed'} onClick={() => { patientJourneyService.updateAppointment(a.id, { status: 'NO_SHOW' }); data.reload(); act.notify(`${a.ref} marked no-show`); }}>
+                <HmsButton variant="danger" icon={UserX} block disabled={!late(a)} title={late(a) ? undefined : 'Only after the slot has passed'} onClick={() => { void opdActions.bookingNoShow(a).then((ok) => { data.reload(); if (ok) act.notify(`${a.ref} marked no-show`); }); }}>
                   No-show
                 </HmsButton>
                 <HmsButton variant="danger" icon={X} block onClick={() => setCancel(a)}>
@@ -215,11 +221,12 @@ export const RecAppointmentsView: React.FC<RecAppointmentsViewProps> = ({ data, 
           options={['Patient request', 'Doctor unavailable', 'Booked in error', 'Rescheduled by phone', 'Other']}
           onClose={() => setCancel(null)}
           onConfirm={(reason) => {
-            patientJourneyService.updateAppointment(cancel.id, { status: 'CANCELLED', cancelReason: reason });
-            if (cancel.followUpId) patientJourneyService.updateFollowUpStatus(cancel.followUpId, 'PENDING_BOOKING');
-            act.notify(`${cancel.ref} cancelled`);
+            const c = cancel;
             setCancel(null);
-            data.reload();
+            void opdActions.cancelBooking(c, reason).then((ok) => {
+              data.reload();
+              if (ok) act.notify(`${c.ref} cancelled`);
+            });
           }}
         />
       )}

@@ -4,6 +4,8 @@ import React, { useState } from 'react';
 import { Siren, Check } from 'lucide-react';
 import { HmsMasterDetail, HmsListRow, HmsBadge, HmsButton, HmsDetailHeader, HmsStatStrip, HmsDetailBody, HmsDetailFooter, HmsSection, HmsRow, HmsNotice, HmsEmpty } from '../../components/hms';
 import { patientJourneyService, SharedEmergencyAlert } from '../../services/patientJourneyService';
+import { opdApiMode } from '../../services/opdService';
+import { opdActions } from '../../services/opdActions';
 import { DoctorActions, DoctorData, liveAlerts } from './doctorData';
 
 export interface DocAlertsViewProps {
@@ -19,7 +21,8 @@ export const DocAlertsView: React.FC<DocAlertsViewProps> = ({ data, act, initial
   const [search, setSearch] = useState('');
   const [pill, setPill] = useState(initialFilter && PILLS.includes(initialFilter) ? initialFilter : 'active');
   const [selected, setSelected] = useState<string | null>(null);
-  const all = liveAlerts(data.alerts).sort((a, b) => b.id.localeCompare(a.id));
+  // server order: active first, newest first; browser alerts carry their time in the id
+  const all = opdApiMode() ? liveAlerts(data.alerts) : liveAlerts(data.alerts).sort((a, b) => b.id.localeCompare(a.id));
   const match: Record<string, (a: SharedEmergencyAlert) => boolean> = { active: (a) => a.status === 'ACTIVE', attended: (a) => a.status === 'ATTENDED', all: () => true };
   const q = search.trim().toLowerCase();
   const list = all.filter((a) => match[pill](a) && (!q || [a.patientName, a.location, a.presentingCondition].some((v) => (v || '').toLowerCase().includes(q))));
@@ -52,7 +55,8 @@ export const DocAlertsView: React.FC<DocAlertsViewProps> = ({ data, act, initial
           {a.status === 'ACTIVE' && <HmsNotice tone="red">Nobody has taken this call yet.</HmsNotice>}
           <HmsSection title="Call">
             <HmsRow label="Condition" value={a.presentingCondition} />
-            <HmsRow label="Location" value={a.location} last />
+            <HmsRow label="Location" value={a.location} last={!a.attendedBy} />
+            {a.attendedBy && <HmsRow label="Attended by" value={a.attendedBy} last />}
           </HmsSection>
         </HmsDetailBody>
         {a.status === 'ACTIVE' && (
@@ -62,9 +66,10 @@ export const DocAlertsView: React.FC<DocAlertsViewProps> = ({ data, act, initial
               icon={Check}
               block
               onClick={() => {
-                patientJourneyService.markEmergencyAlertAttended(a.id);
-                data.reload();
-                act.notify(`You are attending ${a.location}`);
+                void opdActions.attendAlert(a.id).then((ok) => {
+                  data.reload();
+                  if (ok) act.notify(`You are attending ${a.location}`);
+                });
               }}
             >
               I'm attending

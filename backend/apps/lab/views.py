@@ -836,6 +836,12 @@ class LabReportViewSet(viewsets.ReadOnlyModelViewSet):
             if not created and callback.status == CallbackStatus.PENDING:
                 callback.report, callback.critical_values = report, values
                 callback.save(update_fields=['report', 'critical_values'])
+        try:
+            from apps.opd.services import on_lab_report_signed
+            on_lab_report_signed(order)
+        except Exception:  # OPD queue update never blocks the signed report
+            import logging
+            logging.getLogger(__name__).exception('OPD hand-back failed for %s', order.order_number)
         audit(request, 'REPORT_SIGNED', order, reportNumber=report.report_number, critical=order.is_flagged_critical, signature=report.signature_hash[:12])
         return Response(LabReportSerializer(report).data)
 
